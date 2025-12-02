@@ -10,5 +10,11 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: AZURE_ORG
+        value: datasystemsoftwares
+      - key: AZURE_PROJECT
+        value: USE
       - key: AZURE_PAT
         sync: false
+      - key: PORT
+        value: 10000
