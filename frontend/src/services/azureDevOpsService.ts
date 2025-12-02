@@ -1,7 +1,8 @@
 import { WorkItem } from '../types.ts';
 import { SyncStatus } from '../hooks/useAzureDevOpsData.ts';
 
-const API_BASE_URL = 'http://localhost:3001';
+// Permite usar URL pública do backend via variável de ambiente ou localhost
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 // Função para transformar os dados brutos da API no tipo WorkItem
 const transformApiDataToWorkItem = (apiItem: any): WorkItem => {
