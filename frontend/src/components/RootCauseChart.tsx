@@ -1,10 +1,8 @@
-import React, { useMemo, useState } from 'react';
-import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { WorkItem } from '../types.ts';
-import { CHART_COLORS } from '../constants.ts';
-import { EmptyState } from './ChartStates.tsx';
+import React, { useState } from 'react';
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
+import { WorkItem } from '../types';
 
-interface ClientItemDistributionChartProps {
+interface RootCauseChartProps {
   data: WorkItem[];
 }
 
@@ -38,12 +36,12 @@ const ItemListModal: React.FC<{ data: ModalData | null; onClose: () => void }> =
             ×
           </button>
         </div>
-        
+
         <div className="p-4 overflow-y-auto flex-1">
           <div className="text-ds-text mb-3 text-sm">
             Total: <span className="font-bold text-white">{data.items.length}</span> itens
           </div>
-          
+
           <ul className="space-y-2">
             {data.items.map((item, idx) => (
               <li
@@ -76,7 +74,7 @@ const ItemListModal: React.FC<{ data: ModalData | null; onClose: () => void }> =
             ))}
           </ul>
         </div>
-        
+
         <div className="p-4 border-t border-ds-border">
           <button
             onClick={onClose}
@@ -90,62 +88,57 @@ const ItemListModal: React.FC<{ data: ModalData | null; onClose: () => void }> =
   );
 };
 
-const ClientItemDistributionChart: React.FC<ClientItemDistributionChartProps> = ({ data }) => {
+const COLORS = [
+  '#FFD600', '#00B8A9', '#F6416C', '#43A047', '#FF9800', '#1E88E5', '#8E24AA', '#FDD835', '#00C853', '#FF6F00'
+];
+
+const RootCauseChart: React.FC<RootCauseChartProps> = ({ data }) => {
   const [modalData, setModalData] = useState<ModalData | null>(null);
+  // Agrupa por rootCause
+  const rootCauseCounts = data.reduce((acc, item) => {
+    const cause = item.causaRaiz || 'Não informado';
+    acc[cause] = (acc[cause] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
 
-  const chartData = useMemo(() => {
-    const itemsByClient = data.reduce((acc, item) => {
-      const client = item.tipoCliente || 'Não especificado';
-      acc[client] = (acc[client] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
-
-    return Object.entries(itemsByClient)
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => (b.value as number) - (a.value as number));
-  }, [data]);
-
-  const handleClick = (entry: any) => {
-    const items = data.filter(item => (item.tipoCliente || 'Não especificado') === entry.name);
-    const colorIndex = chartData.findIndex(d => d.name === entry.name);
-    setModalData({
-      title: `Cliente: ${entry.name}`,
-      items,
-      color: CHART_COLORS.palette[colorIndex % CHART_COLORS.palette.length]
-    });
-  };
+  const chartData = Object.entries(rootCauseCounts).map(([name, value]) => ({ name, value }));
 
   if (chartData.length === 0) {
-    return <EmptyState message="Nenhum dado de cliente para exibir." />;
+    return <div className="text-ds-light-text">Nenhuma Issue fechada com Root Cause informada.</div>;
   }
 
   return (
     <>
-      <ItemListModal data={modalData} onClose={() => setModalData(null)} />
-      <ResponsiveContainer width="100%" height={300}>
+      <ResponsiveContainer width="100%" height={320}>
         <PieChart>
           <Pie
             data={chartData}
             cx="50%"
             cy="50%"
-            labelLine={false}
-            outerRadius={80}
-            fill="#8884d8"
+            outerRadius={100}
+            label={({ name, value }) => `${name}: ${value}`}
             dataKey="value"
-            nameKey="name"
             cursor="pointer"
-            onClick={handleClick}
+            onClick={(entry: any, index: number) => {
+              const causeName = entry?.name as string;
+              const items = data.filter(w => (w.causaRaiz || 'Não informado') === causeName);
+              setModalData({
+                title: `Itens - Causa Raiz: ${causeName}`,
+                items,
+                color: COLORS[index % COLORS.length]
+              });
+            }}
           >
-            {chartData.map((entry, index) => (
-              <Cell key={`cell-${index}`} fill={CHART_COLORS.palette[index % CHART_COLORS.palette.length]} />
+            {chartData.map((entry, idx) => (
+              <Cell key={`cell-${entry.name}`} fill={COLORS[idx % COLORS.length]} />
             ))}
           </Pie>
-          <Tooltip formatter={(value: number, name: string) => [value, `${name} (clique para ver)`]} />
-          <Legend />
+          <Tooltip />
         </PieChart>
       </ResponsiveContainer>
+      <ItemListModal data={modalData} onClose={() => setModalData(null)} />
     </>
   );
 };
 
-export default ClientItemDistributionChart;
+export default RootCauseChart;

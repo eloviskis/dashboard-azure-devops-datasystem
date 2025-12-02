@@ -3,7 +3,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 import { WorkItem } from '../types.ts';
 import { CHART_COLORS } from '../constants.ts';
 import { EmptyState } from './ChartStates.tsx';
-import { getWeek, getYear } from 'date-fns';
+import { getWeek, getYear } from 'date-fns'; // Updated to named imports
 import { COMPLETED_STATES } from '../utils/metrics.ts';
 
 interface TeamThroughputTrendChartProps {
@@ -24,7 +24,7 @@ const TeamThroughputTrendChart: React.FC<TeamThroughputTrendChartProps> = ({ dat
       if (!acc[weekKey]) {
         acc[weekKey] = {};
       }
-      acc[weekKey][item.team] = (acc[weekKey][item.team] || 0) + 1;
+      acc[weekKey][item.team] = (acc[weekKey][item.team] || 0) + 1; // Updated to named imports
       return acc;
     }, {} as Record<string, Record<string, number>>);
 
@@ -48,11 +48,8 @@ const TeamThroughputTrendChart: React.FC<TeamThroughputTrendChartProps> = ({ dat
         <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
         <XAxis dataKey="week" stroke={CHART_COLORS.text} />
         <YAxis stroke={CHART_COLORS.text} allowDecimals={false} />
-        <Tooltip
-          cursor={{ fill: 'rgba(100, 255, 218, 0.1)' }}
-          contentStyle={{ backgroundColor: CHART_COLORS.tooltipBg, borderColor: CHART_COLORS.grid }}
-        />
-        <Legend wrapperStyle={{ color: CHART_COLORS.text, fontSize: '12px' }} />
+        <Tooltip cursor={{ fill: 'rgba(100, 255, 218, 0.1)' }} />
+        <Legend />
         {teams.map((team, index) => (
           <Bar 
             key={team} 

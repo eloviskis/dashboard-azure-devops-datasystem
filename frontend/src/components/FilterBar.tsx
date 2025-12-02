@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import './FilterBar.css';
 import { WorkItem, WorkItemFilters, WorkItemTypes, WorkItemStates } from '../types.ts';
 
 interface FilterBarProps {
@@ -17,13 +18,14 @@ const FilterSelect: React.FC<{
   multiple?: boolean;
 }> = ({ label, value, onChange, options, multiple = false }) => (
   <div>
-    <label className="block text-ds-text text-sm mb-1">{label}:</label>
+    <label className="block text-ds-text text-sm mb-1" htmlFor={`filter-select-${label}`}>{label}:</label>
     <select
+      id={`filter-select-${label}`}
+      title={label}
       value={value}
       onChange={onChange}
       multiple={multiple}
-      className="bg-ds-navy border border-ds-border text-ds-light-text text-sm rounded-md focus:ring-ds-green focus:border-ds-green block w-full p-2.5"
-      style={{ height: multiple ? '100px' : 'auto' }}
+      className={`bg-ds-navy border border-ds-border text-ds-light-text text-sm rounded-md focus:ring-ds-green focus:border-ds-green block w-full p-2.5${multiple ? ' filter-select-multi' : ''}`}
     >
       {!multiple && <option value="All">Todos</option>}
       {options.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
@@ -78,9 +80,14 @@ const FilterBar: React.FC<FilterBarProps> = ({
   
   const renderWorkItemFilters = () => (
     <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
-      <FilterSelect label="Período" value={String(workItemFilters.period)} onChange={e => onWorkItemFiltersChange({...workItemFilters, period: Number(e.target.value)})} options={[
-          {value: '7', label: 'Últimos 7 dias'}, {value: '15', label: 'Últimos 15 dias'}, {value: '30', label: 'Últimos 30 dias'}, {value: '90', label: 'Últimos 90 dias'}, {value: '180', label: 'Últimos 180 dias'}
-      ]} />
+        <FilterSelect label="Período" value={String(workItemFilters.period)} onChange={e => onWorkItemFiltersChange({...workItemFilters, period: Number(e.target.value)})} options={[
+          {value: '7', label: 'Últimos 7 dias'},
+          {value: '8', label: 'Última semana + Hoje'},
+          {value: '15', label: 'Últimos 15 dias'},
+          {value: '30', label: 'Últimos 30 dias'},
+          {value: '90', label: 'Últimos 90 dias'},
+          {value: '180', label: 'Últimos 180 dias'}
+        ]} />
       <FilterSelect label="Equipe" value={workItemFilters.teams} onChange={e => onWorkItemFiltersChange({...workItemFilters, teams: Array.from(e.target.selectedOptions, (option: HTMLOptionElement) => option.value)})} options={options.teams} multiple />
       <FilterSelect label="Responsável" value={workItemFilters.assignedTos} onChange={e => onWorkItemFiltersChange({...workItemFilters, assignedTos: Array.from(e.target.selectedOptions, (option: HTMLOptionElement) => option.value)})} options={options.assignedTos} multiple />
       <FilterSelect label="Tipo de Item" value={workItemFilters.types} onChange={e => onWorkItemFiltersChange({...workItemFilters, types: Array.from(e.target.selectedOptions, (option: HTMLOptionElement) => option.value)})} options={options.types} multiple />

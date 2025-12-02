@@ -6,8 +6,7 @@ import { WorkItem, WorkItemStatus } from '../types.ts';
 import { CHART_COLORS } from '../constants.ts';
 import { EmptyState } from './ChartStates.tsx';
 // Fix: Import date-fns functions from their respective submodules for v2 compatibility and remove unused imports.
-import getWeek from 'date-fns/getWeek';
-import getYear from 'date-fns/getYear';
+import { getWeek, getYear } from 'date-fns';
 
 interface TeamThroughputTrendChartProps {
   data: WorkItem[];

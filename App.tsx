@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 // Fix: Import `subDays` from its submodule `date-fns/subDays` to resolve the export error.
-import subDays from 'date-fns/subDays';
+import { subDays } from 'date-fns';
 import { GoogleGenAI } from '@google/genai';
 
 // Import Hooks

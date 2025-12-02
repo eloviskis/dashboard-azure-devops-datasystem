@@ -5,10 +5,7 @@ import { WorkItem } from '../types.ts';
 import { CHART_COLORS } from '../constants.ts';
 import { EmptyState } from './ChartStates.tsx';
 // Fix: Import date-fns functions from their respective submodules for v2 compatibility.
-import format from 'date-fns/format';
-import subDays from 'date-fns/subDays';
-import eachDayOfInterval from 'date-fns/eachDayOfInterval';
-import endOfDay from 'date-fns/endOfDay';
+import { format, subDays, eachDayOfInterval, endOfDay } from 'date-fns';
 import { COMPLETED_STATES } from '../utils/metrics.ts';
 
 interface CumulativeFlowDiagramProps {

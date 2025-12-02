@@ -59,13 +59,8 @@ const ThroughputHistogram: React.FC<ThroughputHistogramProps> = ({ data }) => {
         <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
         <XAxis dataKey="range" name="Itens por semana" stroke={CHART_COLORS.text} />
         <YAxis dataKey="Semanas" name="Nº de Semanas" stroke={CHART_COLORS.text} allowDecimals={false} />
-        <Tooltip
-          cursor={{ fill: 'rgba(100, 255, 218, 0.1)' }}
-          contentStyle={{ backgroundColor: CHART_COLORS.tooltipBg, borderColor: CHART_COLORS.grid }}
-          formatter={(value: number) => [`${value} semanas`, 'Frequência']}
-           labelFormatter={(label: string) => `Itens/semana: ${label}`}
-        />
-        <Legend wrapperStyle={{ color: CHART_COLORS.text }} />
+          <Tooltip cursor={{ stroke: CHART_COLORS.primary, strokeWidth: 1 }} />
+          <Legend />
         <Bar dataKey="Semanas" fill={CHART_COLORS.secondary} />
       </BarChart>
     </ResponsiveContainer>

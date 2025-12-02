@@ -5,9 +5,7 @@ import { WorkItem } from '../types.ts';
 import { CHART_COLORS } from '../constants.ts';
 import { EmptyState } from './ChartStates.tsx';
 // Fix: Import date-fns functions from their respective submodules for v2 compatibility.
-import format from 'date-fns/format';
-import subDays from 'date-fns/subDays';
-import eachDayOfInterval from 'date-fns/eachDayOfInterval';
+import { format, subDays, eachDayOfInterval } from 'date-fns';
 import { COMPLETED_STATES } from '../utils/metrics.ts';
 
 interface DeliveryTrendLineChartProps {
@@ -49,11 +47,11 @@ const DeliveryTrendLineChart: React.FC<DeliveryTrendLineChartProps> = ({ data, p
         <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
         <XAxis dataKey="date" stroke={CHART_COLORS.text} />
         <YAxis stroke={CHART_COLORS.text} />
-        <Tooltip
-          cursor={{ stroke: CHART_COLORS.primary, strokeWidth: 1 }}
-          contentStyle={{ backgroundColor: CHART_COLORS.tooltipBg, borderColor: CHART_COLORS.grid }}
-        />
-        <Legend wrapperStyle={{ color: CHART_COLORS.text }} />
+          <Tooltip
+            cursor={{ stroke: CHART_COLORS.primary, strokeWidth: 1 }}
+            formatter={(value: number) => [value, 'Entregas']}
+          />
+          <Legend />
         <Line type="monotone" dataKey="entregas" name="Entregas" stroke={CHART_COLORS.primary} strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 8 }} />
       </LineChart>
     </ResponsiveContainer>

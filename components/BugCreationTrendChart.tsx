@@ -6,9 +6,7 @@ import { WorkItem, WorkItemType } from '../types.ts';
 import { CHART_COLORS } from '../constants.ts';
 import { EmptyState } from './ChartStates.tsx';
 // Fix: Import date-fns functions from their respective submodules for v2 compatibility.
-import format from 'date-fns/format';
-import subDays from 'date-fns/subDays';
-import eachDayOfInterval from 'date-fns/eachDayOfInterval';
+import { format, subDays, eachDayOfInterval } from 'date-fns';
 
 interface BugCreationTrendChartProps {
   data: WorkItem[];

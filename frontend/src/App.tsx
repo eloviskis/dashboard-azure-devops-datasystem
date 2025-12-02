@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo } from 'react';
 // Fix: Import `subDays` from its submodule `date-fns/subDays` to resolve the export error.
-import subDays from 'date-fns/subDays';
+import { subDays } from 'date-fns';
 import { GoogleGenAI } from '@google/genai';
 
 // Import Hooks
@@ -11,6 +11,7 @@ import { useAzureDevOpsData } from './hooks/useAzureDevOpsData.ts';
 // Import Components
 import Header from './components/Header.tsx';
 import FilterBar from './components/FilterBar.tsx';
+import ChartInfoLamp from './components/ChartInfoLamp';
 import SummaryCard from './components/SummaryCard.tsx';
 import StatusPieChart from './components/StatusPieChart.tsx';
 import TeamPerformanceBarChart from './components/TeamPerformanceBarChart.tsx';
@@ -27,6 +28,11 @@ import MonteCarloSimulation from './components/MonteCarloSimulation.tsx';
 import TeamThroughputTrendChart from './components/TeamThroughputTrendChart.tsx';
 import ThroughputBreakdownChart from './components/ThroughputBreakdownChart.tsx';
 import BottleneckAnalysisChart from './components/BottleneckAnalysisChart.tsx';
+import RootCauseChart from './components/RootCauseChart.tsx';
+import { RootCauseDashboardWithErrorBoundary } from './components/RootCauseDashboard';
+import BacklogAnalysisDashboard from './components/BacklogAnalysisDashboard.tsx';
+import ImpedimentosDashboard from './components/ImpedimentosDashboard.tsx';
+import POAnalysisDashboard from './components/POAnalysisDashboard.tsx';
 import TopTagsChart from './components/TopTagsChart.tsx';
 import CycleTimeByTagChart from './components/CycleTimeByTagChart.tsx';
 import WorkItemTable from './components/WorkItemTable.tsx';
@@ -40,7 +46,7 @@ import { WorkItem, WorkItemFilters } from './types.ts';
 // Import Metrics
 import { calculatePerformanceMetrics, calculateQualityMetrics } from './utils/metrics.ts';
 
-type Tab = 'performance' | 'quality' | 'kanban' | 'detailed-throughput' | 'bottlenecks' | 'tags' | 'clients' | 'montecarlo' | 'item-list';
+type Tab = 'performance' | 'quality' | 'kanban' | 'detailed-throughput' | 'bottlenecks' | 'tags' | 'clients' | 'montecarlo' | 'item-list' | 'rootcause' | 'backlog' | 'impedimentos' | 'po-analysis';
 
 const App = () => {
   const [activeTab, setActiveTab] = useState<Tab>('performance');
@@ -65,7 +71,8 @@ const App = () => {
 
   const filteredWorkItems = useMemo(() => {
     const now = new Date();
-    const startDate = subDays(now, workItemFilters.period);
+    // Se o período for 8, considera 7 dias atrás + hoje (total 8 dias)
+    const startDate = workItemFilters.period === 8 ? subDays(now, 7) : subDays(now, workItemFilters.period);
 
     return workItems.filter(item => {
       const itemDate = new Date(item.createdDate);
@@ -75,7 +82,8 @@ const App = () => {
       if (workItemFilters.types.length > 0 && !workItemFilters.types.includes(item.type)) return false;
       if (workItemFilters.states.length > 0 && !workItemFilters.states.includes(item.state)) return false;
       if (workItemFilters.clients.length > 0 && item.tipoCliente && !workItemFilters.clients.includes(item.tipoCliente)) return false;
-      if (workItemFilters.tags.length > 0 && (!item.tags || !item.tags.some(t => workItemFilters.tags.includes(t)))) return false;
+      const itemTags = Array.isArray(item.tags) ? item.tags : (item.tags ? item.tags.split(';').map(t => t.trim()) : []);
+      if (workItemFilters.tags.length > 0 && (!itemTags.length || !itemTags.some(t => workItemFilters.tags.includes(t)))) return false;
       return true;
     });
   }, [workItems, workItemFilters]);
@@ -108,7 +116,7 @@ const App = () => {
         } else if (activeTab === 'item-list') {
             prompt += `\nFoco em: resumir as características principais da lista de itens de trabalho fornecida. Identifique padrões comuns, como o tipo de trabalho mais frequente, o status predominante, ou times/pessoas com mais itens atribuídos.`;
         } else { // performance or quality
-            prompt += `\nFoco em: vazão, cycle time, gargalos, e análise de qualidade (Bugs vs. Incidentes).`;
+            prompt += `\nFoco em: vazão, cycle time, gargalos, e análise de qualidade (Bugs vs. Issues).`;
         }
         
         prompt += `\n\nDados: ${contextData}`;
@@ -173,10 +181,26 @@ const App = () => {
               <SummaryCard title="Cycle Time Médio" value={avgCycleTime} unit="dias" />
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="bg-ds-navy p-4 rounded-lg border border-ds-border"><h3 className="text-ds-light-text font-bold text-lg mb-4">Status Geral</h3><StatusPieChart data={filteredWorkItems} /></div>
-              <div className="bg-ds-navy p-4 rounded-lg border border-ds-border"><h3 className="text-ds-light-text font-bold text-lg mb-4">Performance dos Times</h3><TeamPerformanceBarChart data={filteredWorkItems} /></div>
-              <div className="bg-ds-navy p-4 rounded-lg border border-ds-border"><h3 className="text-ds-light-text font-bold text-lg mb-4">Tendência de Entregas</h3><DeliveryTrendLineChart data={filteredWorkItems} period={workItemFilters.period} /></div>
-              <div className="bg-ds-navy p-4 rounded-lg border border-ds-border"><h3 className="text-ds-light-text font-bold text-lg mb-4">Top 10 - Performance Individual</h3><IndividualPerformanceChart data={filteredWorkItems} /></div>
+              <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
+                <ChartInfoLamp info="Este gráfico mostra a distribuição dos status dos itens de trabalho. Ajuda a identificar gargalos e priorizar ações para melhorar o fluxo de trabalho." />
+                <h3 className="text-ds-light-text font-bold text-lg mb-4">Status Geral</h3>
+                <StatusPieChart data={filteredWorkItems} />
+              </div>
+              <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
+                <ChartInfoLamp info="Este gráfico apresenta a performance dos times, mostrando entregas e itens em progresso. Auxilia na comparação entre equipes e na tomada de decisão sobre alocação de recursos." />
+                <h3 className="text-ds-light-text font-bold text-lg mb-4">Performance dos Times</h3>
+                <TeamPerformanceBarChart data={filteredWorkItems} />
+              </div>
+              <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
+                <ChartInfoLamp info="A tendência de entregas mostra o ritmo de conclusão dos itens ao longo do tempo. Ajuda a prever entregas futuras e identificar períodos de alta ou baixa produtividade." />
+                <h3 className="text-ds-light-text font-bold text-lg mb-4">Tendência de Entregas</h3>
+                <DeliveryTrendLineChart data={filteredWorkItems} period={workItemFilters.period} />
+              </div>
+              <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
+                <ChartInfoLamp info="Este gráfico destaca os colaboradores com maior número de entregas. Facilita reconhecer talentos, identificar sobrecarga e promover ações de reconhecimento ou equilíbrio de trabalho." />
+                <h3 className="text-ds-light-text font-bold text-lg mb-4">Top 10 - Performance Individual</h3>
+                <IndividualPerformanceChart data={filteredWorkItems} />
+              </div>
             </div>
           </>
         );
@@ -186,14 +210,26 @@ const App = () => {
             <SectionHeader title="Análise de Qualidade" />
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
                 <SummaryCard title="Bugs Abertos (Retrabalho)" value={openBugs} />
-                <SummaryCard title="Incidentes em Aberto (Prod.)" value={openIssues} />
+                <SummaryCard title="Issues em Aberto (Prod.)" value={openIssues} />
                 <SummaryCard title="Tempo Médio de Resolução" value={avgResolutionTime} unit="dias" />
                 <SummaryCard title="Itens de Qualidade Abertos" value={openBugs + openIssues} />
             </div>
              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="bg-ds-navy p-4 rounded-lg border border-ds-border"><h3 className="text-ds-light-text font-bold text-lg mb-4">Bugs vs. Incidentes</h3><BugVsIssuePieChart data={filteredWorkItems} /></div>
-                <div className="bg-ds-navy p-4 rounded-lg border border-ds-border"><h3 className="text-ds-light-text font-bold text-lg mb-4">Bugs e Incidentes por Time</h3><TeamBugChart data={filteredWorkItems} /></div>
-                <div className="col-span-1 lg:col-span-2 bg-ds-navy p-4 rounded-lg border border-ds-border"><h3 className="text-ds-light-text font-bold text-lg mb-4">Tendência de Criação</h3><BugCreationTrendChart data={filteredWorkItems} period={workItemFilters.period} /></div>
+                <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
+                  <ChartInfoLamp info="Este gráfico compara a quantidade de bugs e issues abertas. Ajuda a entender o perfil dos problemas e priorizar ações corretivas ou preventivas." />
+                  <h3 className="text-ds-light-text font-bold text-lg mb-4">Bugs vs. Issues</h3>
+                  <BugVsIssuePieChart data={filteredWorkItems} />
+                </div>
+                <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
+                  <ChartInfoLamp info="Mostra a distribuição de bugs e issues por time. Permite identificar áreas com maior incidência de problemas e direcionar treinamentos ou melhorias." />
+                  <h3 className="text-ds-light-text font-bold text-lg mb-4">Bugs e Issues por Time</h3>
+                  <TeamBugChart data={filteredWorkItems} />
+                </div>
+                <div className="col-span-1 lg:col-span-2 bg-ds-navy p-4 rounded-lg border border-ds-border">
+                  <ChartInfoLamp info="A tendência de criação mostra o surgimento de bugs e issues ao longo do tempo. Ajuda a identificar picos de problemas e avaliar o impacto de mudanças ou releases." />
+                  <h3 className="text-ds-light-text font-bold text-lg mb-4">Tendência de Criação</h3>
+                  <BugCreationTrendChart data={filteredWorkItems} period={workItemFilters.period} />
+                </div>
             </div>
           </>
         );
@@ -203,16 +239,19 @@ const App = () => {
             <SectionHeader title="Análise por Cliente" />
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
-                    <h3 className="text-ds-light-text font-bold text-lg mb-4">Distribuição de Itens por Cliente</h3>
-                    <ClientItemDistributionChart data={filteredWorkItems} />
+                  <ChartInfoLamp info="Mostra a quantidade de itens por cliente, ajudando a identificar clientes mais ativos e oportunidades de relacionamento." />
+                  <h3 className="text-ds-light-text font-bold text-lg mb-4">Distribuição de Itens por Cliente</h3>
+                  <ClientItemDistributionChart data={filteredWorkItems} />
                 </div>
                 <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
-                    <h3 className="text-ds-light-text font-bold text-lg mb-4">Cycle Time Médio por Cliente (Dias)</h3>
-                    <ClientCycleTimeChart data={filteredWorkItems} />
+                  <ChartInfoLamp info="Exibe o tempo médio de ciclo por cliente, útil para identificar gargalos e oportunidades de melhoria no atendimento." />
+                  <h3 className="text-ds-light-text font-bold text-lg mb-4">Cycle Time Médio por Cliente (Dias)</h3>
+                  <ClientCycleTimeChart data={filteredWorkItems} />
                 </div>
                  <div className="col-span-1 lg:col-span-2 bg-ds-navy p-4 rounded-lg border border-ds-border">
-                    <h3 className="text-ds-light-text font-bold text-lg mb-4">Itens Concluídos por Cliente</h3>
-                    <ClientThroughputChart data={filteredWorkItems} />
+                  <ChartInfoLamp info="Mostra a quantidade de itens concluídos por cliente, facilitando a análise de produtividade e entrega." />
+                  <h3 className="text-ds-light-text font-bold text-lg mb-4">Itens Concluídos por Cliente</h3>
+                  <ClientThroughputChart data={filteredWorkItems} />
                 </div>
             </div>
           </>
@@ -223,16 +262,19 @@ const App = () => {
             <SectionHeader title="Métricas de Fluxo e Kanban" />
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="lg:col-span-2 bg-ds-navy p-4 rounded-lg border border-ds-border">
-                    <h3 className="text-ds-light-text font-bold text-lg mb-4">Diagrama de Fluxo Cumulativo (WIP)</h3>
-                    <CumulativeFlowDiagram data={filteredWorkItems} period={workItemFilters.period} />
+                  <ChartInfoLamp info="O diagrama de fluxo cumulativo mostra o volume de trabalho em cada etapa do processo. Ajuda a visualizar gargalos e o andamento do fluxo." />
+                  <h3 className="text-ds-light-text font-bold text-lg mb-4">Diagrama de Fluxo Cumulativo (WIP)</h3>
+                  <CumulativeFlowDiagram data={filteredWorkItems} period={workItemFilters.period} />
                 </div>
                 <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
-                    <h3 className="text-ds-light-text font-bold text-lg mb-4">Lead Time vs. Cycle Time por Time (Dias)</h3>
-                    <LeadVsCycleTimeChart data={filteredWorkItems} />
+                  <ChartInfoLamp info="Compara o lead time e o cycle time por time, permitindo identificar equipes mais ágeis e oportunidades de melhoria." />
+                  <h3 className="text-ds-light-text font-bold text-lg mb-4">Lead Time vs. Cycle Time por Time (Dias)</h3>
+                  <LeadVsCycleTimeChart data={filteredWorkItems} />
                 </div>
                 <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
-                    <h3 className="text-ds-light-text font-bold text-lg mb-4">Vazão Semanal (Histograma)</h3>
-                    <ThroughputHistogram data={filteredWorkItems} />
+                  <ChartInfoLamp info="O histograma de vazão semanal mostra a quantidade de entregas por semana, útil para acompanhar a evolução da produtividade." />
+                  <h3 className="text-ds-light-text font-bold text-lg mb-4">Vazão Semanal (Histograma)</h3>
+                  <ThroughputHistogram data={filteredWorkItems} />
                 </div>
             </div>
           </>
@@ -243,18 +285,21 @@ const App = () => {
                 <SectionHeader title="Análise Detalhada de Vazão (Throughput)" />
                 <div className="grid grid-cols-1 gap-6">
                     <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
-                        <h3 className="text-ds-light-text font-bold text-lg mb-4">Tendência de Vazão Semanal por Time</h3>
-                        <TeamThroughputTrendChart data={filteredWorkItems} />
+                      <ChartInfoLamp info="Mostra a tendência de vazão semanal por time, facilitando a análise de desempenho e previsibilidade das equipes." />
+                      <h3 className="text-ds-light-text font-bold text-lg mb-4">Tendência de Vazão Semanal por Time</h3>
+                      <TeamThroughputTrendChart data={filteredWorkItems} />
                     </div>
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
-                            <h3 className="text-ds-light-text font-bold text-lg mb-4">Vazão por Responsável</h3>
-                            <ThroughputBreakdownChart data={filteredWorkItems} groupBy="assignedTo" />
-                        </div>
-                         <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
-                            <h3 className="text-ds-light-text font-bold text-lg mb-4">Vazão por Tipo de Item</h3>
-                            <ThroughputBreakdownChart data={filteredWorkItems} groupBy="type" />
-                        </div>
+                      <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
+                        <ChartInfoLamp info="Apresenta a vazão por responsável, útil para identificar colaboradores mais produtivos e equilibrar demandas." />
+                        <h3 className="text-ds-light-text font-bold text-lg mb-4">Vazão por Responsável</h3>
+                        <ThroughputBreakdownChart data={filteredWorkItems} groupBy="assignedTo" />
+                      </div>
+                       <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
+                        <ChartInfoLamp info="Mostra a vazão por tipo de item, ajudando a entender o perfil das entregas e priorizar tipos de trabalho." />
+                        <h3 className="text-ds-light-text font-bold text-lg mb-4">Vazão por Tipo de Item</h3>
+                        <ThroughputBreakdownChart data={filteredWorkItems} groupBy="type" />
+                      </div>
                     </div>
                 </div>
             </>
@@ -265,8 +310,9 @@ const App = () => {
                     <SectionHeader title="Análise de Gargalos" />
                      <div className="grid grid-cols-1 gap-6">
                         <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
-                            <h3 className="text-ds-light-text font-bold text-lg mb-4">Tempo Médio em Cada Status (Dias)</h3>
-                            <BottleneckAnalysisChart data={filteredWorkItems} />
+                          <ChartInfoLamp info="Mostra o tempo médio em cada status, facilitando a identificação de gargalos e etapas que precisam de atenção." />
+                          <h3 className="text-ds-light-text font-bold text-lg mb-4">Tempo Médio em Cada Status (Dias)</h3>
+                          <BottleneckAnalysisChart data={filteredWorkItems} />
                         </div>
                     </div>
                 </>
@@ -277,12 +323,14 @@ const App = () => {
                     <SectionHeader title="Análise por Tags" />
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
-                            <h3 className="text-ds-light-text font-bold text-lg mb-4">Top 10 Tags Mais Utilizadas</h3>
-                            <TopTagsChart data={filteredWorkItems} />
+                          <ChartInfoLamp info="Exibe as tags mais utilizadas, útil para identificar temas recorrentes e oportunidades de padronização." />
+                          <h3 className="text-ds-light-text font-bold text-lg mb-4">Top 10 Tags Mais Utilizadas</h3>
+                          <TopTagsChart data={filteredWorkItems} />
                         </div>
                         <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
-                             <h3 className="text-ds-light-text font-bold text-lg mb-4">Cycle Time Médio por Tag (Dias)</h3>
-                            <CycleTimeByTagChart data={filteredWorkItems} />
+                           <ChartInfoLamp info="Mostra o cycle time médio por tag, ajudando a identificar tipos de trabalho que levam mais tempo para serem concluídos." />
+                           <h3 className="text-ds-light-text font-bold text-lg mb-4">Cycle Time Médio por Tag (Dias)</h3>
+                          <CycleTimeByTagChart data={filteredWorkItems} />
                         </div>
                     </div>
                 </>
@@ -302,6 +350,46 @@ const App = () => {
                     <WorkItemTable data={filteredWorkItems} />
                 </div>
             </>
+        );
+      case 'rootcause':
+        return (
+          <>
+            <SectionHeader title="Root Cause das Issues Fechadas" />
+            <div className="mb-6">
+              <ChartInfoLamp info="Esta aba avalia as causas raízes mais comuns em ISSUES fechadas, além de métricas e comparativos por tipo, prioridade e pessoa. Facilita a identificação de padrões e oportunidades de melhoria nos processos." />
+              <RootCauseDashboardWithErrorBoundary data={filteredWorkItems} />
+            </div>
+          </>
+        );
+      case 'backlog':
+        return (
+          <>
+            <SectionHeader title="Análise de Backlog e Capacidade" />
+            <div className="mb-6">
+              <ChartInfoLamp info="Esta aba analisa a velocidade dos times (vazão, cycle time, lead time) e calcula quantas tarefas devem ser refinadas por tipo para manter um desenvolvimento saudável baseado no histórico do time." />
+              <BacklogAnalysisDashboard data={filteredWorkItems} />
+            </div>
+          </>
+        );
+      case 'impedimentos':
+        return (
+          <>
+            <SectionHeader title="Análise de Impedimentos" />
+            <div className="mb-6">
+              <ChartInfoLamp info="Esta aba analisa todas as tarefas com tag [IMPEDIMENTO], mostrando há quantos dias estão paradas, último comentário, time responsável e tipo de work item. Clique nas barras para ver detalhes." />
+              <ImpedimentosDashboard data={filteredWorkItems} />
+            </div>
+          </>
+        );
+      case 'po-analysis':
+        return (
+          <>
+            <SectionHeader title="Análise de Product Owners" />
+            <div className="mb-6">
+              <ChartInfoLamp info="Esta aba analisa quem criou os work items no período, quantidade por pessoa e time, taxa de conclusão e ranking de melhor desempenho." />
+              <POAnalysisDashboard data={filteredWorkItems} />
+            </div>
+          </>
         );
       default:
         return null;
@@ -329,6 +417,10 @@ const App = () => {
                 <NavButton tabId="tags">Análise de Tags</NavButton>
                 <NavButton tabId="item-list">Lista de Itens</NavButton>
                 <NavButton tabId="montecarlo">Previsão (Monte Carlo)</NavButton>
+                <NavButton tabId="rootcause">Root Cause (Issues)</NavButton>
+                <NavButton tabId="backlog">Análise de Backlog</NavButton>
+                <NavButton tabId="impedimentos">Impedimentos</NavButton>
+                <NavButton tabId="po-analysis">Análise de PO</NavButton>
             </div>
         </div>
         

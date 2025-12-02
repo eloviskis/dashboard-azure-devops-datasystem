@@ -38,7 +38,6 @@ const ThroughputBreakdownChart: React.FC<ThroughputBreakdownChartProps> = ({ dat
         <YAxis type="category" dataKey="name" stroke={CHART_COLORS.text} width={100} fontSize={12} />
         <Tooltip
           cursor={{ fill: 'rgba(100, 255, 218, 0.1)' }}
-          contentStyle={{ backgroundColor: CHART_COLORS.tooltipBg, borderColor: CHART_COLORS.grid }}
           formatter={(value: number) => [value, 'Itens Concluídos']}
         />
         <Bar dataKey="value" name="Itens Concluídos" fill={groupBy === 'assignedTo' ? CHART_COLORS.primary : CHART_COLORS.secondary} />

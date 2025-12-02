@@ -11,11 +11,15 @@ interface CycleTimeByTagChartProps {
 
 const CycleTimeByTagChart: React.FC<CycleTimeByTagChartProps> = ({ data }) => {
   const chartData = useMemo(() => {
-    const completedItems = data.filter(item => COMPLETED_STATES.includes(item.state) && item.tags.length > 0 && item.cycleTime !== null);
+    const completedItems = data.filter(item => {
+      const tags = Array.isArray(item.tags) ? item.tags : (item.tags ? item.tags.split(';').map(t => t.trim()) : []);
+      return COMPLETED_STATES.includes(item.state) && tags.length > 0 && item.cycleTime !== null;
+    });
     const timeByTag: Record<string, { totalTime: number; count: number }> = {};
 
     completedItems.forEach(item => {
-      item.tags.forEach(tag => {
+      const tags = Array.isArray(item.tags) ? item.tags : (item.tags ? item.tags.split(';').map(t => t.trim()) : []);
+      tags.forEach(tag => {
         if (!timeByTag[tag]) {
           timeByTag[tag] = { totalTime: 0, count: 0 };
         }
@@ -45,7 +49,6 @@ const CycleTimeByTagChart: React.FC<CycleTimeByTagChartProps> = ({ data }) => {
         <YAxis stroke={CHART_COLORS.text} />
         <Tooltip
           cursor={{ fill: 'rgba(100, 255, 218, 0.1)' }}
-          contentStyle={{ backgroundColor: CHART_COLORS.tooltipBg, borderColor: CHART_COLORS.grid }}
           formatter={(value: number) => [`${value} dias`, 'Cycle Time Médio']}
         />
         <Bar dataKey="value" name="Cycle Time Médio" fill={CHART_COLORS.secondary} />

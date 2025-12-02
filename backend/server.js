@@ -3,7 +3,7 @@ const express = require('express');
 const axios = require('axios');
 const cors = require('cors');
 const schedule = require('node-schedule');
-const sqlite3 = require('sqlite3').verbose();
+const Database = require('better-sqlite3');
 const path = require('node:path');
 require('dotenv').config();
 
@@ -13,32 +13,28 @@ app.use(express.json());
 
 // SQLite setup
 const dbPath = path.join(__dirname, 'devops.db');
-const db = new sqlite3.Database(dbPath, (err) => {
-  if (err) {
-    console.error('❌ Error opening database:', err.message);
-  } else {
-    console.log('✅ Database connected:', dbPath);
-  }
-});
+const db = new Database(dbPath);
+console.log('✅ Database connected:', dbPath);
 
-// Promisify db.all for async/await
+// Helper functions for better-sqlite3
 const dbAllAsync = (query, params = []) => {
-  return new Promise((resolve, reject) => {
-    db.all(query, params, (err, rows) => {
-      if (err) reject(err);
-      else resolve(rows);
-    });
-  });
+  try {
+    return db.prepare(query).all(...params);
+  } catch (err) {
+    console.error('❌ Error in dbAllAsync:', err.message);
+    throw err;
+  }
 };
 
-// Promisify db.run for async/await
 const dbRunAsync = (query, params = []) => {
-  return new Promise((resolve, reject) => {
-    db.run(query, params, function(err) {
-      if (err) reject(err);
-      else resolve({ id: this.lastID, changes: this.changes });
-    });
-  });
+  try {
+    const stmt = db.prepare(query);
+    const info = stmt.run(...params);
+    return { id: info.lastInsertRowid, changes: info.changes };
+  } catch (err) {
+    console.error('❌ Error in dbRunAsync:', err.message);
+    throw err;
+  }
 };
 
 // Extract team from Area Path
@@ -75,9 +71,9 @@ function calculateAge(changedDate) {
 }
 
 // Initialize database
-db.serialize(async () => {
+(async () => {
   // Tabela de Work Items
-  await dbRunAsync(`
+  dbRunAsync(`
     CREATE TABLE IF NOT EXISTS work_items (
       id INTEGER PRIMARY KEY,
       workItemId INTEGER UNIQUE,
@@ -91,7 +87,7 @@ db.serialize(async () => {
       createdDate TEXT,
       changedDate TEXT,
       closedDate TEXT,
-      firstActivationDate TEXT, -- 🆕 Nova coluna para Cycle Time
+      firstActivationDate TEXT,
       storyPoints INTEGER,
       tags TEXT,
       codeReviewLevel1 TEXT,
@@ -100,26 +96,56 @@ db.serialize(async () => {
       codeReviewLevel2Raw TEXT,
       tipoCliente TEXT,
       url TEXT,
-      syncedAt TEXT
+      syncedAt TEXT,
+      priority TEXT,
+      customType TEXT,
+      rootCauseStatus TEXT,
+      squad TEXT,
+      area TEXT,
+      reincidencia TEXT,
+      performanceDays TEXT,
+      qa TEXT,
+      complexity TEXT,
+      causaRaiz TEXT
     )
   `);
   console.log('✅ work_items table ready');
   
-  // Adiciona a nova coluna se ela não existir (para bancos de dados existentes)
-  try {
-    await dbRunAsync('ALTER TABLE work_items ADD COLUMN firstActivationDate TEXT');
-    console.log('✅ "firstActivationDate" column added to work_items table.');
-  } catch (e) {
-    if (e.message.includes('duplicate column name')) {
-        // Coluna já existe, o que é esperado
-    } else {
-        console.error('❌ Error adding column:', e.message);
+  // Adiciona novas colunas se não existirem (para bancos de dados existentes)
+  const extraColumns = [
+    'firstActivationDate TEXT',
+    'priority TEXT',
+    'customType TEXT',
+    'rootCauseStatus TEXT',
+    'squad TEXT',
+    'area TEXT',
+    'reincidencia TEXT',
+    'performanceDays TEXT',
+    'qa TEXT',
+    'complexity TEXT',
+    'causaRaiz TEXT',
+    'createdBy TEXT',
+    'po TEXT',
+    'readyDate TEXT',
+    'doneDate TEXT'
+  ];
+  for (const col of extraColumns) {
+    const colName = col.split(' ')[0];
+    try {
+      dbRunAsync(`ALTER TABLE work_items ADD COLUMN ${col}`);
+      console.log(`✅ "${colName}" column added to work_items table.`);
+    } catch (e) {
+      if (e.message.includes('duplicate column name') || e.message.includes('already exists')) {
+        // Coluna já existe
+      } else {
+        console.error(`❌ Error adding column ${colName}:`, e.message);
+      }
     }
   }
 
 
   // Tabela de Pull Requests
-  await dbRunAsync(`
+  dbRunAsync(`
     CREATE TABLE IF NOT EXISTS pull_requests (
       id INTEGER PRIMARY KEY,
       pullRequestId INTEGER UNIQUE,
@@ -144,7 +170,7 @@ db.serialize(async () => {
   console.log('✅ pull_requests table ready');
 
   // Tabela de Commits
-  await dbRunAsync(`
+  dbRunAsync(`
     CREATE TABLE IF NOT EXISTS commits (
       id INTEGER PRIMARY KEY,
       commitId TEXT UNIQUE,
@@ -163,7 +189,7 @@ db.serialize(async () => {
   console.log('✅ commits table ready');
 
   // Tabela de Sync Log
-  await dbRunAsync(`
+  dbRunAsync(`
     CREATE TABLE IF NOT EXISTS sync_log (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       syncTime TEXT,
@@ -177,7 +203,7 @@ db.serialize(async () => {
   console.log('✅ sync_log table ready');
 
   console.log('✅ Database initialized');
-});
+})();
 
 // Azure DevOps configuration
 const AZURE_CONFIG = {
@@ -253,6 +279,7 @@ async function fetchWorkItems() {
         'System.State',
         'System.WorkItemType',
         'System.AssignedTo',
+        'System.CreatedBy',
         'System.AreaPath',
         'System.IterationPath',
         'System.CreatedDate',
@@ -262,7 +289,20 @@ async function fetchWorkItems() {
         'System.Tags',
         'Custom.ab075d4c-04f5-4f96-b294-4ad0f5987028',
         'Custom.60cee051-7e66-4753-99d6-4bc8717fae0e',
-        'Custom.Tipocliente'  // 🆕 Campo para Tipo de Cliente (c minúsculo!)
+        'Custom.Tipocliente',
+        'Microsoft.VSTS.Common.Priority',
+        'Custom.Type',
+        'Custom.RootCauseStatus',
+        'Custom.Squad',
+        'Custom.Area',
+        'Custom.Complexity',
+        'Custom.REINCIDENCIA',
+        'Custom.PerformanceDays',
+        'Custom.QA',
+        'Custom.PO',
+        'Custom.Rootcausetask',
+        'Microsoft.VSTS.CMMI.RootCause',
+        'Custom.DOR'
       ];
       
       const batchUrl = `https://dev.azure.com/${AZURE_CONFIG.organization}/${AZURE_CONFIG.project}/_apis/wit/workitems?ids=${batch.join(',')}&fields=${fields.join(',')}&api-version=7.1`;
@@ -327,11 +367,37 @@ async function processWorkItem(item) {
   
   const codeReviewLevel1Raw = fields['Custom.ab075d4c-04f5-4f96-b294-4ad0f5987028'];
   const codeReviewLevel2Raw = fields['Custom.60cee051-7e66-4753-99d6-4bc8717fae0e'];
-  const tipoClienteRaw = fields['Custom.Tipocliente'];  // ✅ CORRETO: c minúsculo
+  const tipoClienteRaw = fields['Custom.Tipocliente'];
   
   const codeReviewLevel1 = codeReviewLevel1Raw && typeof codeReviewLevel1Raw === 'object' ? codeReviewLevel1Raw.displayName : (codeReviewLevel1Raw || null);
   const codeReviewLevel2 = codeReviewLevel2Raw && typeof codeReviewLevel2Raw === 'object' ? codeReviewLevel2Raw.displayName : (codeReviewLevel2Raw || null);
   const tipoCliente = tipoClienteRaw && typeof tipoClienteRaw === 'object' ? tipoClienteRaw.displayName : (tipoClienteRaw || null);
+
+  // Campos customizados de Root Cause - nomes corretos do Azure DevOps
+  const priority = fields['Microsoft.VSTS.Common.Priority'] || null;
+  const customType = fields['Custom.Type'] || null;
+  const rootCauseStatus = fields['Custom.RootCauseStatus'] || null;
+  const squad = fields['Custom.Squad'] || null;
+  const area = fields['Custom.Area'] || null;
+  const complexity = fields['Custom.Complexity'] || null;
+  const reincidencia = fields['Custom.REINCIDENCIA'] || null;
+  const performanceDays = fields['Custom.PerformanceDays'] || null;
+  // Campo Causa Raiz - Microsoft.VSTS.CMMI.RootCause (campo padrão CMMI)
+  const causaRaiz = fields['Microsoft.VSTS.CMMI.RootCause'] || null;
+  // QA e PO são objetos com displayName
+  const qaRaw = fields['Custom.QA'];
+  const poRaw = fields['Custom.PO'];
+  const qa = qaRaw && typeof qaRaw === 'object' ? qaRaw.displayName : (qaRaw || null);
+  const po = poRaw && typeof poRaw === 'object' ? poRaw.displayName : (poRaw || null);
+  
+  // Campo System.CreatedBy (quem criou o work item)
+  const createdByRaw = fields['System.CreatedBy'];
+  const createdBy = createdByRaw && typeof createdByRaw === 'object' ? createdByRaw.displayName : (createdByRaw || null);
+  
+  // Campo DOR (Definition of Ready) - quando o item ficou pronto para ser desenvolvido
+  const readyDate = fields['Custom.DOR'] || null;
+  // Campo Done - quando o item foi concluído (usando System.ClosedDate como fallback)
+  const doneDate = fields['System.ClosedDate'] || null;
 
   const existing = await dbAllAsync('SELECT workItemId, firstActivationDate FROM work_items WHERE workItemId = ?', [item.id]);
   
@@ -340,7 +406,7 @@ async function processWorkItem(item) {
     firstActivationDate = existing[0].firstActivationDate;
   }
   
-  // 🆕 Busca a data de ativação apenas se o item estiver "Active" ou além, e se ainda não tivermos a data
+  // Busca a data de ativação apenas se o item estiver "Active" ou além, e se ainda não tivermos a data
   if (!firstActivationDate && fields['System.State'] !== 'New' && fields['System.State'] !== 'Para Desenvolver') {
     console.log(`   -> Fetching history for item ${item.id} to find activation date...`);
     firstActivationDate = await findFirstActivationDate(item.id);
@@ -357,7 +423,7 @@ async function processWorkItem(item) {
     fields['System.CreatedDate'],
     fields['System.ChangedDate'],
     fields['Microsoft.VSTS.Common.ClosedDate'] || null,
-    firstActivationDate, // 🆕 Adicionado
+    firstActivationDate,
     fields['Microsoft.VSTS.Scheduling.StoryPoints'] || null,
     fields['System.Tags'] || null,
     codeReviewLevel1,
@@ -366,7 +432,21 @@ async function processWorkItem(item) {
     JSON.stringify(codeReviewLevel2Raw),
     tipoCliente,
     item.url,
-    new Date().toISOString()
+    new Date().toISOString(),
+    priority,
+    customType,
+    rootCauseStatus,
+    squad,
+    area,
+    reincidencia,
+    performanceDays,
+    qa,
+    complexity,
+    causaRaiz,
+    createdBy,
+    po,
+    readyDate,
+    doneDate
   ];
 
   if (existing.length > 0) {
@@ -377,7 +457,10 @@ async function processWorkItem(item) {
         closedDate = ?, firstActivationDate = ?, storyPoints = ?, tags = ?,
         codeReviewLevel1 = ?, codeReviewLevel2 = ?,
         codeReviewLevel1Raw = ?, codeReviewLevel2Raw = ?, tipoCliente = ?,
-        url = ?, syncedAt = ?
+        url = ?, syncedAt = ?,
+        priority = ?, customType = ?, rootCauseStatus = ?, squad = ?,
+        area = ?, reincidencia = ?, performanceDays = ?, qa = ?, complexity = ?, causaRaiz = ?,
+        createdBy = ?, po = ?, readyDate = ?, doneDate = ?
       WHERE workItemId = ?
     `, [...commonParams, item.id]);
     return 'updated';
@@ -388,8 +471,9 @@ async function processWorkItem(item) {
       workItemId, title, state, type, assignedTo, team,
       areaPath, iterationPath, createdDate, changedDate,
       closedDate, firstActivationDate, storyPoints, tags, codeReviewLevel1, codeReviewLevel2,
-      codeReviewLevel1Raw, codeReviewLevel2Raw, tipoCliente, url, syncedAt
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      codeReviewLevel1Raw, codeReviewLevel2Raw, tipoCliente, url, syncedAt,
+      priority, customType, rootCauseStatus, squad, area, reincidencia, performanceDays, qa, complexity, causaRaiz, createdBy, po, readyDate, doneDate
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `, [item.id, ...commonParams]);
   return 'inserted';
 }
@@ -495,13 +579,27 @@ app.get('/api/items', async (req, res) => {
         closedDate: row.closedDate,
         storyPoints: row.storyPoints,
         tags: row.tags,
-        cycleTime, // 🆕 Corrigido
-        leadTime,  // 🆕 Corrigido
+        cycleTime,
+        leadTime,
         age,
         url: row.url,
         'Custom.ab075d4c-04f5-4f96-b294-4ad0f5987028': codeReviewLevel1Field,
         'Custom.60cee051-7e66-4753-99d6-4bc8717fae0e': codeReviewLevel2Field,
-        tipoCliente: row.tipoCliente
+        tipoCliente: row.tipoCliente,
+        priority: row.priority,
+        customType: row.customType,
+        rootCauseStatus: row.rootCauseStatus,
+        squad: row.squad,
+        area: row.area,
+        reincidencia: row.reincidencia,
+        performanceDays: row.performanceDays,
+        qa: row.qa,
+        complexity: row.complexity,
+        causaRaiz: row.causaRaiz,
+        createdBy: row.createdBy,
+        po: row.po,
+        readyDate: row.readyDate,
+        doneDate: row.doneDate
       };
     });
 
@@ -550,12 +648,7 @@ app.get('/api/items/period/:days', async (req, res) => {
 // Sync Status Endpoint
 app.get('/api/sync/status', async (req, res) => {
   try {
-    const row = await new Promise((resolve, reject) => {
-      db.get('SELECT * FROM sync_log ORDER BY syncTime DESC LIMIT 1', (err, row) => {
-        if (err) reject(err);
-        else resolve(row);
-      });
-    });
+    const row = db.prepare('SELECT * FROM sync_log ORDER BY syncTime DESC LIMIT 1').get();
     res.json(row || { status: 'No sync yet' });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -671,12 +764,11 @@ app.listen(PORT, () => {
 // Graceful shutdown
 process.on('SIGINT', () => {
   console.log('\n👋 Shutting down gracefully...');
-  db.close((err) => {
-    if (err) {
-      console.error('❌ Error closing database:', err.message);
-    } else {
-      console.log('✅ Database closed');
-    }
-    process.exit(0);
-  });
+  try {
+    db.close();
+    console.log('✅ Database closed');
+  } catch (err) {
+    console.error('❌ Error closing database:', err.message);
+  }
+  process.exit(0);
 });

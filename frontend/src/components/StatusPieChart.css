@@ -1,0 +1,11 @@
+.status-pie-tooltip {
+  background: #112240;
+  border: 1px solid #303C55;
+  padding: 8px;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+.status-pie-tooltip-text {
+  color: #fff;
+  font-weight: 500;
+}

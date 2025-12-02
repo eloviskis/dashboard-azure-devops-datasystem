@@ -1,9 +1,9 @@
 import React, { useMemo } from 'react';
 import { SyncStatus } from '../hooks/useAzureDevOpsData';
 // Fix: Import date-fns functions from their submodules for v2 compatibility.
-import formatDistanceToNow from 'date-fns/formatDistanceToNow';
+import { formatDistanceToNow } from 'date-fns'; // Updated to named imports
 // Fix: Import locale data with a default import from its specific path to resolve type errors.
-import ptBR from 'date-fns/locale/pt-BR';
+import { ptBR } from 'date-fns/locale/pt-BR'; // Updated to named imports
 
 interface HeaderProps {
     lastSyncStatus: SyncStatus | null;

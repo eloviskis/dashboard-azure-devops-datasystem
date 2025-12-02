@@ -31,11 +31,8 @@ const PRsByRepoChart: React.FC<PRsByRepoChartProps> = ({ data }) => {
         <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
         <XAxis dataKey="name" stroke={CHART_COLORS.text} />
         <YAxis stroke={CHART_COLORS.text} />
-        <Tooltip
-          cursor={{ fill: 'rgba(100, 255, 218, 0.1)' }}
-          contentStyle={{ backgroundColor: CHART_COLORS.tooltipBg, borderColor: CHART_COLORS.grid }}
-        />
-        <Legend wrapperStyle={{ color: CHART_COLORS.text }} />
+        <Tooltip cursor={{ fill: 'rgba(100, 255, 218, 0.1)' }} />
+        <Legend />
         <Bar dataKey="count" name="Pull Requests" fill={CHART_COLORS.primary} />
       </BarChart>
     </ResponsiveContainer>

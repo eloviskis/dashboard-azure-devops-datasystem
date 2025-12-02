@@ -62,10 +62,9 @@ const TimeInStatusChart: React.FC<TimeInStatusChartProps> = ({ data }) => {
         <YAxis stroke={CHART_COLORS.text} />
         <Tooltip
           cursor={{ fill: 'rgba(100, 255, 218, 0.1)' }}
-          contentStyle={{ backgroundColor: CHART_COLORS.tooltipBg, borderColor: CHART_COLORS.grid }}
           formatter={(value: number, name: string) => [`${value.toFixed(1)} dias`, name]}
         />
-        <Legend wrapperStyle={{ color: CHART_COLORS.text }} />
+        <Legend />
         {statusOrder.map((status, index) => (
             <Bar 
                 key={status} 

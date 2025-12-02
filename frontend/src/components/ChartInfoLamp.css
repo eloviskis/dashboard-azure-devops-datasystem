@@ -1,0 +1,42 @@
+.chart-info-lamp {
+  display: inline-block;
+  margin-bottom: 8px;
+}
+.chart-info-lamp-icon {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  position: relative;
+}
+.chart-info-lamp-svg {
+  margin-right: 6px;
+}
+.chart-info-tooltip {
+  visibility: hidden;
+  background: #222;
+  color: #FFD600;
+  text-align: left;
+  border-radius: 6px;
+  padding: 8px 12px;
+  position: absolute;
+  z-index: 10;
+  bottom: 120%;
+  left: 0;
+  transform: none;
+  min-width: 220px;
+  max-width: 90vw;
+  font-size: 13px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  transition: visibility 0.2s;
+  white-space: pre-line;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  overflow: visible;
+  pointer-events: none;
+  box-sizing: border-box;
+}
+.chart-info-lamp-icon:hover .chart-info-tooltip,
+.chart-info-lamp-icon:focus .chart-info-tooltip {
+  visibility: visible;
+  pointer-events: auto;
+}

@@ -38,11 +38,8 @@ const ClientThroughputChart: React.FC<ClientThroughputChartProps> = ({ data }) =
         <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
         <XAxis dataKey="name" stroke={CHART_COLORS.text} fontSize={12} interval={0} angle={-45} textAnchor="end" height={100} />
         <YAxis stroke={CHART_COLORS.text} />
-        <Tooltip
-          cursor={{ fill: 'rgba(100, 255, 218, 0.1)' }}
-          contentStyle={{ backgroundColor: CHART_COLORS.tooltipBg, borderColor: CHART_COLORS.grid }}
-        />
-        <Legend wrapperStyle={{ color: CHART_COLORS.text }} />
+        <Tooltip cursor={{ fill: 'rgba(100, 255, 218, 0.1)' }} />
+        <Legend />
         <Bar dataKey="completed" name="Concluídos" fill={CHART_COLORS.primary} />
         <Bar dataKey="inProgress" name="Em Progresso" fill={CHART_COLORS.secondary} />
       </BarChart>
