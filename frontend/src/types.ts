@@ -67,4 +67,8 @@ export interface WorkItemFilters {
   states: string[];
   clients: string[];
   tags: string[];
+  periodMode?: 'preset' | 'specific-month' | 'custom';
+  specificMonth?: string;
+  customStartDate?: string;
+  customEndDate?: string;
 }

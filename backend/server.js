@@ -314,18 +314,21 @@ async function syncData() {
         const tipoCliente = fields['Custom.TipoCliente'] || '';
         const priority = fields['Microsoft.VSTS.Common.Priority']?.toString() || '';
         const url = item._links?.html?.href || '';
+        const activatedDate = fields['Microsoft.VSTS.Common.ActivatedDate'] || '';
 
         await sql`
           INSERT INTO work_items (work_item_id, title, state, type, assigned_to, team, area_path, iteration_path,
-            created_date, changed_date, closed_date, story_points, tags, tipo_cliente, priority, url, synced_at)
+            created_date, changed_date, closed_date, story_points, tags, tipo_cliente, priority, url, first_activation_date, synced_at)
           VALUES (${workItemId}, ${title}, ${state}, ${type}, ${assignedTo}, ${team}, ${areaPath}, ${iterationPath},
-            ${createdDate}, ${changedDate}, ${closedDate}, ${storyPoints}, ${tags}, ${tipoCliente}, ${priority}, ${url}, ${new Date().toISOString()})
+            ${createdDate}, ${changedDate}, ${closedDate}, ${storyPoints}, ${tags}, ${tipoCliente}, ${priority}, ${url}, ${activatedDate || null}, ${new Date().toISOString()})
           ON CONFLICT (work_item_id) DO UPDATE SET
             title = EXCLUDED.title, state = EXCLUDED.state, type = EXCLUDED.type, assigned_to = EXCLUDED.assigned_to,
             team = EXCLUDED.team, area_path = EXCLUDED.area_path, iteration_path = EXCLUDED.iteration_path,
             created_date = EXCLUDED.created_date, changed_date = EXCLUDED.changed_date, closed_date = EXCLUDED.closed_date,
             story_points = EXCLUDED.story_points, tags = EXCLUDED.tags, tipo_cliente = EXCLUDED.tipo_cliente,
-            priority = EXCLUDED.priority, url = EXCLUDED.url, synced_at = EXCLUDED.synced_at
+            priority = EXCLUDED.priority, url = EXCLUDED.url, 
+            first_activation_date = COALESCE(EXCLUDED.first_activation_date, work_items.first_activation_date),
+            synced_at = EXCLUDED.synced_at
         `;
       }
 

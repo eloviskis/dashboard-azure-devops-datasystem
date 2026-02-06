@@ -45,6 +45,9 @@ import ClientCycleTimeChart from './components/ClientCycleTimeChart.tsx';
 import ClientThroughputChart from './components/ClientThroughputChart.tsx';
 import AgingItemsCard from './components/AgingItemsCard.tsx';
 import WIPLimits from './components/WIPLimits.tsx';
+import CycleTimeAnalyticsDashboard from './components/CycleTimeAnalyticsDashboard.tsx';
+import TeamInsightsDashboard from './components/TeamInsightsDashboard.tsx';
+import TabsConfigModal, { loadTabsConfig, saveTabsConfig } from './components/TabsConfigModal.tsx';
 
 // Import Types
 import { WorkItem, WorkItemFilters } from './types.ts';
@@ -52,17 +55,37 @@ import { WorkItem, WorkItemFilters } from './types.ts';
 // Import Metrics
 import { calculatePerformanceMetrics, calculateQualityMetrics } from './utils/metrics.ts';
 
-type Tab = 'performance' | 'quality' | 'kanban' | 'detailed-throughput' | 'bottlenecks' | 'tags' | 'clients' | 'montecarlo' | 'item-list' | 'rootcause' | 'backlog' | 'impedimentos' | 'po-analysis';
+type Tab = 'team-insights' | 'cycle-analytics' | 'performance' | 'quality' | 'kanban' | 'detailed-throughput' | 'bottlenecks' | 'tags' | 'clients' | 'montecarlo' | 'item-list' | 'rootcause' | 'backlog' | 'impedimentos' | 'po-analysis';
+
+const DEFAULT_TAB_CONFIG = [
+  { id: 'team-insights', label: 'Insights por Time', visible: true },
+  { id: 'cycle-analytics', label: 'Cycle Time Analytics', visible: true },
+  { id: 'performance', label: 'Performance Geral', visible: true },
+  { id: 'quality', label: 'Qualidade', visible: true },
+  { id: 'clients', label: 'Análise por Cliente', visible: true },
+  { id: 'kanban', label: 'Fluxo & Kanban', visible: true },
+  { id: 'detailed-throughput', label: 'Vazão Detalhada', visible: true },
+  { id: 'bottlenecks', label: 'Análise de Gargalos', visible: true },
+  { id: 'tags', label: 'Análise de Tags', visible: true },
+  { id: 'item-list', label: 'Lista de Itens', visible: true },
+  { id: 'montecarlo', label: 'Previsão (Monte Carlo)', visible: true },
+  { id: 'rootcause', label: 'Root Cause (Issues)', visible: true },
+  { id: 'backlog', label: 'Análise de Backlog', visible: true },
+  { id: 'impedimentos', label: 'Impedimentos', visible: true },
+  { id: 'po-analysis', label: 'Análise de PO', visible: true },
+];
 
 const App = () => {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
-  const [activeTab, setActiveTab] = useState<Tab>('performance');
+  const [activeTab, setActiveTab] = useState<Tab>('team-insights');
   const { workItems, loading: loadingWIs, error: errorWIs, lastSyncStatus } = useAzureDevOpsData();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [aiInsight, setAiInsight] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState('');
+  const [tabsConfig, setTabsConfig] = useState(() => loadTabsConfig(DEFAULT_TAB_CONFIG));
+  const [isTabsConfigOpen, setIsTabsConfigOpen] = useState(false);
 
   const initialWorkItemFilters: WorkItemFilters = {
     period: 30,
@@ -72,18 +95,34 @@ const App = () => {
     states: [],
     clients: [],
     tags: [],
+    periodMode: undefined,
+    specificMonth: undefined,
+    customStartDate: undefined,
+    customEndDate: undefined,
   };
 
   const [workItemFilters, setWorkItemFilters] = useState<WorkItemFilters>(initialWorkItemFilters);
 
   const filteredWorkItems = useMemo(() => {
     const now = new Date();
-    // Se o período for 8, considera 7 dias atrás + hoje (total 8 dias)
-    const startDate = workItemFilters.period === 8 ? subDays(now, 7) : subDays(now, workItemFilters.period);
+    let startDate: Date;
+    let endDate: Date = now;
+
+    if (workItemFilters.periodMode === 'specific-month' && workItemFilters.specificMonth) {
+      const [year, month] = workItemFilters.specificMonth.split('-').map(Number);
+      startDate = new Date(year, month - 1, 1);
+      endDate = new Date(year, month, 0, 23, 59, 59);
+    } else if (workItemFilters.periodMode === 'custom' && workItemFilters.customStartDate && workItemFilters.customEndDate) {
+      startDate = new Date(workItemFilters.customStartDate);
+      endDate = new Date(workItemFilters.customEndDate + 'T23:59:59');
+    } else {
+      // Se o período for 8, considera 7 dias atrás + hoje (total 8 dias)
+      startDate = workItemFilters.period === 8 ? subDays(now, 7) : subDays(now, workItemFilters.period);
+    }
 
     return workItems.filter(item => {
       const itemDate = new Date(item.createdDate);
-      if (itemDate < startDate) return false;
+      if (itemDate < startDate || itemDate > endDate) return false;
       if (workItemFilters.teams.length > 0 && !workItemFilters.teams.includes(item.team)) return false;
       if (workItemFilters.assignedTos.length > 0 && !workItemFilters.assignedTos.includes(item.assignedTo || '')) return false;
       if (workItemFilters.types.length > 0 && !workItemFilters.types.includes(item.type)) return false;
@@ -112,6 +151,10 @@ const App = () => {
 
         if (activeTab === 'kanban') {
             prompt += `\nFoco em: análise de fluxo (WIP, Throughput, Cycle Time, Lead Time), previsibilidade, e saúde do fluxo de trabalho. Compare Lead Time vs. Cycle Time para identificar gargalos no backlog.`;
+        } else if (activeTab === 'cycle-analytics') {
+            prompt += `\nFoco em: análise detalhada de Cycle Time. Compare times, identifique tendências, analise P85 e sugira melhorias.`;
+        } else if (activeTab === 'team-insights') {
+            prompt += `\nFoco em: gerar um relatório consolidado para o time selecionado. Analise throughput, cycle time, qualidade, e dê recomendações acionáveis.`;
         } else if (activeTab === 'detailed-throughput') {
              prompt += `\nFoco em: detalhar a vazão (throughput). Compare a performance entre times, identifique quem são as pessoas que mais entregam e quais tipos de item são mais comuns.`;
         } else if (activeTab === 'bottlenecks') {
@@ -177,6 +220,20 @@ const App = () => {
     if (errorWIs) return <div className="text-center p-10 text-red-500">Erro ao carregar dados do backend. Verifique se o servidor está rodando.</div>;
 
     switch (activeTab) {
+      case 'team-insights':
+        return (
+          <>
+            <SectionHeader title="Insights por Time" />
+            <TeamInsightsDashboard data={filteredWorkItems} />
+          </>
+        );
+      case 'cycle-analytics':
+        return (
+          <>
+            <SectionHeader title="Cycle Time Analytics" />
+            <CycleTimeAnalyticsDashboard data={filteredWorkItems} />
+          </>
+        );
       case 'performance':
         return (
           <>
@@ -442,22 +499,20 @@ const App = () => {
       <div className="p-6 md:p-10">
         <div className="mb-6">
             <div className="flex border-b border-ds-border overflow-x-auto">
-                <NavButton tabId="performance">Performance Geral</NavButton>
-                <NavButton tabId="quality">Qualidade</NavButton>
-                <NavButton tabId="clients">Análise por Cliente</NavButton>
-                <NavButton tabId="kanban">Fluxo & Kanban</NavButton>
-                <NavButton tabId="detailed-throughput">Vazão Detalhada</NavButton>
-                <NavButton tabId="bottlenecks">Análise de Gargalos</NavButton>
-                <NavButton tabId="tags">Análise de Tags</NavButton>
-                <NavButton tabId="item-list">Lista de Itens</NavButton>
-                <NavButton tabId="montecarlo">Previsão (Monte Carlo)</NavButton>
-                <NavButton tabId="rootcause">Root Cause (Issues)</NavButton>
-                <NavButton tabId="backlog">Análise de Backlog</NavButton>
-                <NavButton tabId="impedimentos">Impedimentos</NavButton>
-                <NavButton tabId="po-analysis">Análise de PO</NavButton>
+                {tabsConfig.filter(t => t.visible).map(tab => (
+                  <NavButton key={tab.id} tabId={tab.id as Tab}>{tab.label}</NavButton>
+                ))}
+                <button
+                  onClick={() => setIsTabsConfigOpen(true)}
+                  className="py-2 px-3 text-sm font-medium whitespace-nowrap text-ds-text hover:text-ds-green transition-colors"
+                  title="Configurar Abas"
+                >
+                  ⚙️
+                </button>
             </div>
         </div>
         
+        {activeTab !== 'cycle-analytics' && activeTab !== 'team-insights' && (
         <FilterBar 
             activeTab={activeTab}
             workItems={workItems}
@@ -467,6 +522,7 @@ const App = () => {
                 setWorkItemFilters(initialWorkItemFilters);
             }}
         />
+        )}
         
         <AIInsightsModal
             isOpen={isModalOpen}
@@ -476,6 +532,16 @@ const App = () => {
             loading={aiLoading}
             error={aiError}
             activeTab={activeTab}
+        />
+
+        <TabsConfigModal
+          isOpen={isTabsConfigOpen}
+          onClose={() => setIsTabsConfigOpen(false)}
+          tabs={tabsConfig}
+          onSave={(newTabs) => {
+            setTabsConfig(newTabs);
+            saveTabsConfig(newTabs);
+          }}
         />
 
         <main className="mt-6">

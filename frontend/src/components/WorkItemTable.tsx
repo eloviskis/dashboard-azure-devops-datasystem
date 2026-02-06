@@ -42,6 +42,24 @@ const WorkItemTable: React.FC<WorkItemTableProps> = ({ data }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [sortConfig, setSortConfig] = useState<SortConfig | null>({ key: 'createdDate', direction: 'descending' });
 
+  // Counters for Code Review Level 1 and Level 2 by person
+  const crCounters = useMemo(() => {
+    const level1: Record<string, number> = {};
+    const level2: Record<string, number> = {};
+    data.forEach(item => {
+      if (item.codeReviewLevel1) {
+        level1[item.codeReviewLevel1] = (level1[item.codeReviewLevel1] || 0) + 1;
+      }
+      if (item.codeReviewLevel2) {
+        level2[item.codeReviewLevel2] = (level2[item.codeReviewLevel2] || 0) + 1;
+      }
+    });
+    return {
+      level1: Object.entries(level1).sort((a, b) => b[1] - a[1]),
+      level2: Object.entries(level2).sort((a, b) => b[1] - a[1]),
+    };
+  }, [data]);
+
   const sortedItems = useMemo(() => {
     let sortableItems = [...data];
     if (sortConfig !== null) {
@@ -91,7 +109,39 @@ const WorkItemTable: React.FC<WorkItemTableProps> = ({ data }) => {
   }
 
   return (
-    <div className="relative overflow-x-auto">
+    <div className="space-y-4">
+        {/* Code Review Counters */}
+        {(crCounters.level1.length > 0 || crCounters.level2.length > 0) && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {crCounters.level1.length > 0 && (
+              <div className="bg-ds-dark-blue p-3 rounded-lg border border-ds-border">
+                <h4 className="text-ds-light-text font-semibold text-sm mb-2">📋 Code Review Nível 1 por Pessoa</h4>
+                <div className="flex flex-wrap gap-2">
+                  {crCounters.level1.map(([name, count]) => (
+                    <span key={name} className="bg-ds-muted/20 text-ds-text text-xs px-2 py-1 rounded-md">
+                      {name}: <strong className="text-ds-green">{count}</strong>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {crCounters.level2.length > 0 && (
+              <div className="bg-ds-dark-blue p-3 rounded-lg border border-ds-border">
+                <h4 className="text-ds-light-text font-semibold text-sm mb-2">📋 Code Review Nível 2 por Pessoa</h4>
+                <div className="flex flex-wrap gap-2">
+                  {crCounters.level2.map(([name, count]) => (
+                    <span key={name} className="bg-ds-muted/20 text-ds-text text-xs px-2 py-1 rounded-md">
+                      {name}: <strong className="text-blue-400">{count}</strong>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Table */}
+        <div className="relative overflow-x-auto">
         <table className="w-full text-sm text-left text-ds-text">
             <thead className="text-xs text-ds-light-text uppercase bg-ds-navy/50">
                 <tr>
@@ -153,6 +203,7 @@ const WorkItemTable: React.FC<WorkItemTableProps> = ({ data }) => {
                 </li>
             </ul>
         </nav>
+    </div>
     </div>
   );
 };

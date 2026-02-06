@@ -1,6 +1,8 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import './FilterBar.css';
 import { WorkItem, WorkItemFilters, WorkItemTypes, WorkItemStates } from '../types.ts';
+import { format, subMonths } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 interface FilterBarProps {
   activeTab: string;
@@ -9,6 +11,8 @@ interface FilterBarProps {
   onWorkItemFiltersChange: (filters: WorkItemFilters) => void;
   onClearFilters: () => void;
 }
+
+type PeriodMode = 'preset' | 'specific-month' | 'custom';
 
 const FilterSelect: React.FC<{
   label: string;
@@ -38,6 +42,22 @@ const FilterBar: React.FC<FilterBarProps> = ({
   workItemFilters, onWorkItemFiltersChange,
   onClearFilters
 }) => {
+  const [periodMode, setPeriodMode] = useState<PeriodMode>('preset');
+  const [selectedMonth, setSelectedMonth] = useState<string>('');
+  const [customStart, setCustomStart] = useState<string>('');
+  const [customEnd, setCustomEnd] = useState<string>('');
+
+  const lastMonths = useMemo(() => {
+    const months: { value: string; label: string }[] = [];
+    const now = new Date();
+    for (let i = 0; i < 12; i++) {
+      const d = subMonths(now, i);
+      const val = format(d, 'yyyy-MM');
+      const label = format(d, 'MMMM yyyy', { locale: ptBR });
+      months.push({ value: val, label: label.charAt(0).toUpperCase() + label.slice(1) });
+    }
+    return months;
+  }, []);
 
   const options = useMemo(() => {
     const teams = [...new Set(workItems.map(i => i.team))].sort();
@@ -54,6 +74,23 @@ const FilterBar: React.FC<FilterBarProps> = ({
       states: [...WorkItemStates].map(s => ({ value: s, label: s })),
     };
   }, [workItems]);
+
+  const handleMonthChange = (monthValue: string) => {
+    setSelectedMonth(monthValue);
+    if (monthValue) {
+      onWorkItemFiltersChange({ ...workItemFilters, period: 30, periodMode: 'specific-month', specificMonth: monthValue });
+    }
+  };
+
+  const handleCustomDateChange = (start: string, end: string) => {
+    if (start) setCustomStart(start);
+    if (end) setCustomEnd(end);
+    const s = start || customStart;
+    const e = end || customEnd;
+    if (s && e) {
+      onWorkItemFiltersChange({ ...workItemFilters, period: 0, periodMode: 'custom', customStartDate: s, customEndDate: e });
+    }
+  };
 
   const handleExport = () => {
     const dataToExport = workItems;
@@ -78,22 +115,84 @@ const FilterBar: React.FC<FilterBarProps> = ({
     document.body.removeChild(link);
   };
   
+  const renderPeriodFilter = () => (
+    <div className="flex flex-wrap items-end gap-3">
+      <div>
+        <label className="block text-ds-text text-sm mb-1">Período:</label>
+        <div className="flex gap-1">
+          {[
+            { value: 'preset', label: 'Pré-definido' },
+            { value: 'specific-month', label: 'Mês Específico' },
+            { value: 'custom', label: 'Personalizado' },
+          ].map(opt => (
+            <button
+              key={opt.value}
+              onClick={() => {
+                setPeriodMode(opt.value as PeriodMode);
+                if (opt.value === 'preset') {
+                  onWorkItemFiltersChange({ ...workItemFilters, periodMode: undefined, specificMonth: undefined, customStartDate: undefined, customEndDate: undefined });
+                }
+              }}
+              className={`px-3 py-1.5 text-xs rounded-md font-medium transition-colors ${periodMode === opt.value ? 'bg-ds-green text-ds-dark-blue' : 'bg-ds-muted/20 text-ds-text hover:bg-ds-muted/40'}`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {periodMode === 'preset' && (
+        <div>
+          <select
+            value={String(workItemFilters.period)}
+            onChange={e => onWorkItemFiltersChange({ ...workItemFilters, period: Number(e.target.value) })}
+            className="bg-ds-navy border border-ds-border text-ds-light-text text-sm rounded-md p-2"
+          >
+            <option value="7">Últimos 7 dias</option>
+            <option value="8">Última semana + Hoje</option>
+            <option value="15">Últimos 15 dias</option>
+            <option value="30">Últimos 30 dias</option>
+            <option value="90">Últimos 90 dias</option>
+            <option value="180">Últimos 180 dias</option>
+          </select>
+        </div>
+      )}
+
+      {periodMode === 'specific-month' && (
+        <div>
+          <select value={selectedMonth} onChange={e => handleMonthChange(e.target.value)} className="bg-ds-navy border border-ds-border text-ds-light-text text-sm rounded-md p-2">
+            <option value="">Selecione o mês...</option>
+            {lastMonths.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+          </select>
+        </div>
+      )}
+
+      {periodMode === 'custom' && (
+        <div className="flex gap-2 items-end">
+          <div>
+            <label className="block text-ds-text text-sm mb-1">De:</label>
+            <input type="date" value={customStart} onChange={e => handleCustomDateChange(e.target.value, '')} className="bg-ds-navy border border-ds-border text-ds-light-text text-sm rounded-md p-2" />
+          </div>
+          <div>
+            <label className="block text-ds-text text-sm mb-1">Até:</label>
+            <input type="date" value={customEnd} onChange={e => handleCustomDateChange('', e.target.value)} className="bg-ds-navy border border-ds-border text-ds-light-text text-sm rounded-md p-2" />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
   const renderWorkItemFilters = () => (
-    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
-        <FilterSelect label="Período" value={String(workItemFilters.period)} onChange={e => onWorkItemFiltersChange({...workItemFilters, period: Number(e.target.value)})} options={[
-          {value: '7', label: 'Últimos 7 dias'},
-          {value: '8', label: 'Última semana + Hoje'},
-          {value: '15', label: 'Últimos 15 dias'},
-          {value: '30', label: 'Últimos 30 dias'},
-          {value: '90', label: 'Últimos 90 dias'},
-          {value: '180', label: 'Últimos 180 dias'}
-        ]} />
-      <FilterSelect label="Equipe" value={workItemFilters.teams} onChange={e => onWorkItemFiltersChange({...workItemFilters, teams: Array.from(e.target.selectedOptions, (option: HTMLOptionElement) => option.value)})} options={options.teams} multiple />
-      <FilterSelect label="Responsável" value={workItemFilters.assignedTos} onChange={e => onWorkItemFiltersChange({...workItemFilters, assignedTos: Array.from(e.target.selectedOptions, (option: HTMLOptionElement) => option.value)})} options={options.assignedTos} multiple />
-      <FilterSelect label="Tipo de Item" value={workItemFilters.types} onChange={e => onWorkItemFiltersChange({...workItemFilters, types: Array.from(e.target.selectedOptions, (option: HTMLOptionElement) => option.value)})} options={options.types} multiple />
-      <FilterSelect label="Status" value={workItemFilters.states} onChange={e => onWorkItemFiltersChange({...workItemFilters, states: Array.from(e.target.selectedOptions, (option: HTMLOptionElement) => option.value)})} options={options.states} multiple />
-      <FilterSelect label="Tags" value={workItemFilters.tags} onChange={e => onWorkItemFiltersChange({...workItemFilters, tags: Array.from(e.target.selectedOptions, (option: HTMLOptionElement) => option.value)})} options={options.tags} multiple />
-      <FilterSelect label="Tipo Cliente" value={workItemFilters.clients} onChange={e => onWorkItemFiltersChange({...workItemFilters, clients: Array.from(e.target.selectedOptions, (option: HTMLOptionElement) => option.value)})} options={options.clients} multiple />
+    <div className="space-y-4">
+      {renderPeriodFilter()}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <FilterSelect label="Equipe" value={workItemFilters.teams} onChange={e => onWorkItemFiltersChange({...workItemFilters, teams: Array.from(e.target.selectedOptions, (option: HTMLOptionElement) => option.value)})} options={options.teams} multiple />
+        <FilterSelect label="Responsável" value={workItemFilters.assignedTos} onChange={e => onWorkItemFiltersChange({...workItemFilters, assignedTos: Array.from(e.target.selectedOptions, (option: HTMLOptionElement) => option.value)})} options={options.assignedTos} multiple />
+        <FilterSelect label="Tipo de Item" value={workItemFilters.types} onChange={e => onWorkItemFiltersChange({...workItemFilters, types: Array.from(e.target.selectedOptions, (option: HTMLOptionElement) => option.value)})} options={options.types} multiple />
+        <FilterSelect label="Status" value={workItemFilters.states} onChange={e => onWorkItemFiltersChange({...workItemFilters, states: Array.from(e.target.selectedOptions, (option: HTMLOptionElement) => option.value)})} options={options.states} multiple />
+        <FilterSelect label="Tags" value={workItemFilters.tags} onChange={e => onWorkItemFiltersChange({...workItemFilters, tags: Array.from(e.target.selectedOptions, (option: HTMLOptionElement) => option.value)})} options={options.tags} multiple />
+        <FilterSelect label="Tipo Cliente" value={workItemFilters.clients} onChange={e => onWorkItemFiltersChange({...workItemFilters, clients: Array.from(e.target.selectedOptions, (option: HTMLOptionElement) => option.value)})} options={options.clients} multiple />
+      </div>
     </div>
   );
 
