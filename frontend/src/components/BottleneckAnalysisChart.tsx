@@ -55,7 +55,14 @@ const BottleneckAnalysisChart: React.FC<BottleneckAnalysisChartProps> = ({ data 
   }
 
   return (
-    <ResponsiveContainer width="100%" height={400}>
+    <div>
+      <div className="bg-yellow-900/20 border border-yellow-700/40 rounded-lg p-3 mb-4">
+        <p className="text-yellow-300 text-xs">
+          ⚠️ <strong>Dados estimados:</strong> O tempo em cada status é <strong>distribuído proporcionalmente</strong> com base no cycle time total e no tipo do item (Bug, PBI, Task etc.).
+          Não utiliza histórico real de transições de estado. Use como indicador direcional para identificar tendências de gargalo, não como valor absoluto.
+        </p>
+      </div>
+      <ResponsiveContainer width="100%" height={400}>
       <BarChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
         <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
         <XAxis dataKey="name" stroke={CHART_COLORS.text} />
@@ -76,6 +83,7 @@ const BottleneckAnalysisChart: React.FC<BottleneckAnalysisChartProps> = ({ data 
         ))}
       </BarChart>
     </ResponsiveContainer>
+    </div>
   );
 };
 

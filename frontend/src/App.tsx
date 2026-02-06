@@ -74,9 +74,9 @@ const DEFAULT_TAB_CONFIG = [
   { id: 'performance', label: 'Performance Geral', visible: true },
   { id: 'quality', label: 'Qualidade', visible: true },
   { id: 'clients', label: 'Análise por Cliente', visible: true },
-  { id: 'kanban', label: 'Fluxo & Kanban', visible: true },
+  { id: 'kanban', label: 'Fluxo Contínuo (Kanban)', visible: true },
   { id: 'detailed-throughput', label: 'Vazão Detalhada', visible: true },
-  { id: 'bottlenecks', label: 'Análise de Gargalos', visible: true },
+  { id: 'bottlenecks', label: 'Gargalos (Estimado)', visible: true },
   { id: 'tags', label: 'Análise de Tags', visible: true },
   { id: 'item-list', label: 'Lista de Itens', visible: true },
   { id: 'montecarlo', label: 'Previsão (Monte Carlo)', visible: true },
@@ -85,8 +85,8 @@ const DEFAULT_TAB_CONFIG = [
   { id: 'impedimentos', label: 'Impedimentos', visible: true },
   { id: 'po-analysis', label: 'Análise de Demanda', visible: true },
   { id: 'pull-requests', label: 'Pull Requests & Code Review', visible: true },
-  { id: 'scrum-ctc', label: 'Scrum Dashboard', visible: true },
-  { id: 'dora', label: 'DORA Metrics', visible: true },
+  { id: 'scrum-ctc', label: 'Scrum (CTC/Franquia)', visible: true },
+  { id: 'dora', label: 'Indicadores DevOps', visible: true },
   { id: 'sla', label: 'SLA Tracking', visible: true },
 ];
 
@@ -367,10 +367,6 @@ const App = () => {
             <div className="mt-6">
               <ActivityHeatmap data={filteredWorkItems} />
             </div>
-            {/* Story Points vs Cycle Time */}
-            <div className="mt-6">
-              <StoryPointsVsCycleTimeChart data={filteredWorkItems} />
-            </div>
           </>
         );
       case 'quality':
@@ -583,8 +579,12 @@ const App = () => {
       case 'scrum-ctc':
         return (
           <>
-            <SectionHeader title="Scrum Dashboard" />
+            <SectionHeader title="Scrum Dashboard — CTC/Franquia" />
             <ScrumCTCDashboard data={filteredWorkItems} />
+            {/* Story Points vs Cycle Time — movido para cá pois é métrica Scrum */}
+            <div className="mt-6">
+              <StoryPointsVsCycleTimeChart data={filteredWorkItems} />
+            </div>
           </>
         );
       case 'executive':
@@ -597,7 +597,7 @@ const App = () => {
       case 'dora':
         return (
           <>
-            <SectionHeader title="DORA Metrics" />
+            <SectionHeader title="Indicadores DevOps (Adaptados)" />
             <DORAMetricsDashboard data={filteredWorkItems} />
           </>
         );

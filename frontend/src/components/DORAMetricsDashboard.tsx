@@ -219,12 +219,19 @@ const DORAMetricsDashboard: React.FC<Props> = ({ data }) => {
 
       {/* Glossary */}
       <div className="bg-ds-navy/50 p-4 rounded-lg border border-ds-border/50">
-        <h4 className="text-ds-light-text font-semibold mb-2">📚 Glossário DORA</h4>
+        <h4 className="text-ds-light-text font-semibold mb-2">📚 Glossário — Indicadores Adaptados</h4>
+        <div className="bg-yellow-900/20 border border-yellow-700/40 rounded-lg p-3 mb-3">
+          <p className="text-yellow-300 text-xs">
+            ⚠️ <strong>Aviso:</strong> Estes indicadores são <strong>adaptações conceituais</strong> das métricas DORA para o contexto de Work Items do Azure DevOps.
+            As métricas DORA originais dependem de dados de pipeline CI/CD (deploys, releases, incidentes), que não estão disponíveis nesta integração.
+            Os valores abaixo usam <strong>dados reais da API</strong>, mas com definições adaptadas.
+          </p>
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs text-ds-text">
-          <p><strong className="text-ds-green">Deployment Frequency:</strong> Frequência de entregas. Qtd de itens concluídos por semana.</p>
-          <p><strong className="text-blue-400">Lead Time for Changes:</strong> Tempo desde a criação até a conclusão de um item (exceto bugs).</p>
-          <p><strong className="text-red-400">Change Failure Rate:</strong> % de bugs sobre o total de itens entregues.</p>
-          <p><strong className="text-yellow-400">MTTR (Mean Time to Restore):</strong> Tempo médio para resolver bugs.</p>
+          <p><strong className="text-ds-green">Deployment Frequency:</strong> Throughput semanal — itens concluídos por semana (<em>DORA real: deploys para produção</em>).</p>
+          <p><strong className="text-blue-400">Lead Time for Changes:</strong> Cycle time médio de PBIs/User Stories (<em>DORA real: commit → produção</em>).</p>
+          <p><strong className="text-red-400">Change Failure Rate:</strong> % de Bugs sobre total entregue (<em>DORA real: % deploys que causam falha</em>).</p>
+          <p><strong className="text-yellow-400">MTTR:</strong> Cycle time médio de Bugs (<em>DORA real: tempo de indisponibilidade até restauração</em>).</p>
         </div>
       </div>
     </div>

@@ -62,7 +62,13 @@ const CumulativeFlowDiagram: React.FC<CumulativeFlowDiagramProps> = ({ data, per
   }
 
   return (
-    <ResponsiveContainer width="100%" height={400}>
+    <div>
+      <div className="bg-yellow-900/20 border border-yellow-700/40 rounded-lg p-2 mb-3">
+        <p className="text-yellow-300 text-xs">
+          ⚠️ <strong>Aproximação:</strong> A coluna "Concluído" usa <em>closedDate</em> real. Para itens em progresso, o CFD usa o <strong>estado atual</strong> como proxy para todas as datas — não reflete o histórico real de transições de estado.
+        </p>
+      </div>
+      <ResponsiveContainer width="100%" height={400}>
       <AreaChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
         <XAxis dataKey="date" stroke={CHART_COLORS.text} tick={{ fontSize: 10 }} />
@@ -84,6 +90,7 @@ const CumulativeFlowDiagram: React.FC<CumulativeFlowDiagramProps> = ({ data, per
         ))}
       </AreaChart>
     </ResponsiveContainer>
+    </div>
   );
 };
 

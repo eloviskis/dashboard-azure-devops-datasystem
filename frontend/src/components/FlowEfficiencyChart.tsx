@@ -101,6 +101,9 @@ const FlowEfficiencyChart: React.FC<FlowEfficiencyChartProps> = ({ data }) => {
         <div className="text-xs text-ds-text max-w-md">
           <p><strong className="text-ds-green">Flow Efficiency</strong> = tempo trabalhando ÷ cycle time total.</p>
           <p className="mt-1">Ideal: &gt;40%. Típico: 15-25%. Indica quanto tempo o item fica em "espera" vs "trabalho ativo".</p>
+          <div className="mt-2 bg-yellow-900/20 border border-yellow-700/40 rounded p-2">
+            <p className="text-yellow-300">⚠️ <strong>Estimativa:</strong> A distribuição de tempo por status é <strong>estimada</strong> com proporções fixas por tipo de item (Bug, PBI, Task). Não reflete transições reais de estado. Use como referência direcional, não como valor absoluto.</p>
+          </div>
         </div>
       </div>
 
