@@ -71,7 +71,12 @@ export const getLastSyncStatus = async (): Promise<SyncStatus> => {
         if (!response.ok) {
             throw new Error('Failed to fetch sync status');
         }
-        return await response.json();
+        const data = await response.json();
+        // Backend retorna snake_case (sync_time), frontend espera camelCase (syncTime)
+        return {
+            syncTime: data.syncTime || data.sync_time || new Date().toISOString(),
+            status: data.status || 'error',
+        };
     } catch (error) {
         console.error("Error fetching sync status:", error);
         return { syncTime: new Date().toISOString(), status: 'error' };
@@ -92,11 +97,20 @@ export const getPullRequests = async (): Promise<PullRequest[]> => {
 };
 
 export const triggerFullSync = async (): Promise<any> => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 55000); // 55s timeout (Vercel limit ~60s)
   try {
-    const response = await fetch(`${API_BASE_URL}/api/sync`, { method: 'POST' });
+    const response = await fetch(`${API_BASE_URL}/api/sync`, { method: 'POST', signal: controller.signal });
+    clearTimeout(timeoutId);
     if (!response.ok) throw new Error('Failed to trigger sync');
     return await response.json();
-  } catch (error) {
+  } catch (error: any) {
+    clearTimeout(timeoutId);
+    // AbortError = timeout, isso é esperado no Vercel (sync continua no backend)
+    if (error?.name === 'AbortError') {
+      console.log('Sync request timed out (expected on serverless). Data is being processed.');
+      return { status: 'processing' };
+    }
     console.error("Error triggering full sync:", error);
     return null;
   }

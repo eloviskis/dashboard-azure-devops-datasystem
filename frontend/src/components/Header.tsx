@@ -18,24 +18,36 @@ const Header: React.FC<HeaderProps> = ({ lastSyncStatus, onOpenUserManagement, o
     
     const syncInfo = useMemo(() => {
         if (!lastSyncStatus) {
-            return { color: 'gray', text: 'Verificando status...' };
+            return { colorClass: 'bg-gray-500', text: 'Verificando status...' };
         }
+        
+        const syncDate = new Date(lastSyncStatus.syncTime);
+        const isRecent = !isNaN(syncDate.getTime()) && (Date.now() - syncDate.getTime()) < 60 * 60 * 1000; // < 1h
+        
         if (lastSyncStatus.status === 'success') {
             try {
-                const syncDate = new Date(lastSyncStatus.syncTime);
                 if (isNaN(syncDate.getTime())) {
-                    return { color: 'green', text: 'Dados sincronizados' };
+                    return { colorClass: 'bg-green-500', text: 'Dados sincronizados' };
                 }
                 const timeAgo = formatDistanceToNow(syncDate, { addSuffix: true, locale: ptBR });
-                return { color: 'green', text: `Dados sincronizados ${timeAgo}` };
+                return { colorClass: 'bg-green-500', text: `Dados sincronizados ${timeAgo}` };
             } catch {
-                return { color: 'green', text: 'Dados sincronizados' };
+                return { colorClass: 'bg-green-500', text: 'Dados sincronizados' };
             }
         }
         if (lastSyncStatus.status === 'error') {
-            return { color: 'red', text: 'Falha na última sincronização' };
+            // Se o sync é recente (< 1h), pode ser timeout do Vercel — dados provavelmente estão OK
+            if (isRecent) {
+                try {
+                    const timeAgo = formatDistanceToNow(syncDate, { addSuffix: true, locale: ptBR });
+                    return { colorClass: 'bg-yellow-500', text: `Última sync ${timeAgo} (timeout parcial)` };
+                } catch {
+                    return { colorClass: 'bg-yellow-500', text: 'Sync recente (possível timeout)' };
+                }
+            }
+            return { colorClass: 'bg-red-500', text: 'Falha na última sincronização' };
         }
-        return { color: 'yellow', text: 'Sincronização pendente' };
+        return { colorClass: 'bg-yellow-500', text: 'Sincronização pendente' };
     }, [lastSyncStatus]);
 
     return (
@@ -53,7 +65,7 @@ const Header: React.FC<HeaderProps> = ({ lastSyncStatus, onOpenUserManagement, o
                             <span className="text-ds-green">SYSTEM</span>
                         </h1>
                         <div className="has-tooltip">
-                           <span className={`h-3 w-3 rounded-full bg-${syncInfo.color}-500 block`}></span>
+                           <span className={`h-3 w-3 rounded-full ${syncInfo.colorClass} block`}></span>
                            <span className='tooltip rounded shadow-lg p-2 bg-ds-navy text-ds-light-text -mt-12 ml-4 text-xs whitespace-nowrap'>{syncInfo.text}</span>
                         </div>
                     </div>

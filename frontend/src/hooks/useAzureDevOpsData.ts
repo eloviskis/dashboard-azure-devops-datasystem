@@ -54,8 +54,8 @@ export const useAzureDevOpsData = () => {
     setSyncing(true);
     try {
       await triggerFullSync();
-      // Aguarda um pouco para o backend processar
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      // Aguarda para o backend processar os dados
+      await new Promise(resolve => setTimeout(resolve, 5000));
       await fetchData();
     } catch (e) {
       console.error('Sync error:', e);

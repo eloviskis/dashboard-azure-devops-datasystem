@@ -273,6 +273,38 @@ const ScrumCTCDashboard: React.FC<ScrumCTCDashboardProps> = ({ data }) => {
     return insights;
   }, [kpis, velocityData]);
 
+  // Detect current sprint (most recent sprint with active items)
+  const currentSprint = useMemo(() => {
+    const activeItems = franquiaItems.filter(i => 
+      !COMPLETED_STATES.includes(i.state) && i.state !== 'Removed' && i.iterationPath
+    );
+    
+    // Count items per iteration
+    const iterCounts: Record<string, number> = {};
+    activeItems.forEach(item => {
+      const iter = item.iterationPath as string;
+      if (iter && iter !== 'USE') {
+        iterCounts[iter] = (iterCounts[iter] || 0) + 1;
+      }
+    });
+    
+    if (Object.keys(iterCounts).length === 0) return null;
+
+    // Get the sprint with the highest sprint number (most recent)
+    const sprints = Object.keys(iterCounts).map(path => {
+      const parts = path.split('\\');
+      const name = parts[parts.length - 1];
+      const match = name.match(/SPRINT[_\s]*(\d+)/i);
+      return { path, name, number: match ? parseInt(match[1]) : 0, count: iterCounts[path] };
+    }).filter(s => s.number > 0);
+
+    if (sprints.length === 0) return null;
+
+    // Sprint atual = maior número com itens ativos
+    sprints.sort((a, b) => b.number - a.number);
+    return sprints[0];
+  }, [franquiaItems]);
+
   if (franquiaItems.length === 0) {
     return (
       <div className="bg-ds-navy p-8 rounded-lg border border-ds-border text-center">
@@ -322,8 +354,13 @@ const ScrumCTCDashboard: React.FC<ScrumCTCDashboardProps> = ({ data }) => {
               {types.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
           </div>
-          <div className="text-ds-green text-xs flex items-center gap-1">
+          <div className="text-ds-green text-xs flex items-center gap-2">
             <span>🏷️</span> Time: <strong>CTC (Franquia)</strong> — {franquiaItems.length} itens totais
+            {currentSprint && (
+              <span className="ml-2 px-2 py-1 rounded-full bg-ds-green/20 text-ds-green font-bold text-xs border border-ds-green/40">
+                🏃 Sprint Atual: {currentSprint.name} ({currentSprint.count} itens ativos)
+              </span>
+            )}
           </div>
         </div>
       </div>
