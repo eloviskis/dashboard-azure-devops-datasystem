@@ -183,8 +183,8 @@ const SLATrackingDashboard: React.FC<Props> = ({ data }) => {
                 {breachedItems.map((item, idx) => (
                   <tr key={idx} className="border-b border-ds-border hover:bg-ds-muted/20">
                     <td className="px-3 py-2">
-                      <a href={`https://dev.azure.com/usabordeaux/USE/_workitems/edit/${item.id}`} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">
-                        #{item.id}
+                      <a href={`https://dev.azure.com/datasystemsoftwares/USE/_workitems/edit/${item.workItemId}`} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">
+                        #{item.workItemId}
                       </a>
                     </td>
                     <td className="px-3 py-2 text-ds-light-text max-w-[250px] truncate">{item.title}</td>

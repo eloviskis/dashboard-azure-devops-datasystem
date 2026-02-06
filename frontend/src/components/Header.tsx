@@ -31,7 +31,7 @@ const Header: React.FC<HeaderProps> = ({ lastSyncStatus, onOpenUserManagement, o
             const priority = Number(item.priority) || 4;
             const threshold = priority === 1 ? 3 : priority === 2 ? 7 : 14;
             if (age > threshold) {
-                critical.push({ id: item.id, title: item.title, age, priority, team: item.team || '' });
+                critical.push({ id: item.workItemId, title: item.title, age, priority, team: item.team || '' });
             }
         });
         return critical.sort((a, b) => a.priority - b.priority || b.age - a.age).slice(0, 15);
@@ -134,7 +134,7 @@ const Header: React.FC<HeaderProps> = ({ lastSyncStatus, onOpenUserManagement, o
                                 <h4 className="text-ds-light-text font-semibold text-sm mb-2">🚨 Itens Críticos ({alerts.length})</h4>
                                 <div className="space-y-1">
                                     {alerts.map((a, i) => (
-                                        <a key={i} href={`https://dev.azure.com/usabordeaux/USE/_workitems/edit/${a.id}`} target="_blank" rel="noopener noreferrer"
+                                        <a key={i} href={`https://dev.azure.com/datasystemsoftwares/USE/_workitems/edit/${a.id}`} target="_blank" rel="noopener noreferrer"
                                            className="block p-2 hover:bg-ds-muted/20 rounded text-xs">
                                             <div className="flex items-center gap-2">
                                                 <span className={`font-bold ${a.priority === 1 ? 'text-red-400' : a.priority === 2 ? 'text-yellow-400' : 'text-blue-400'}`}>P{a.priority}</span>
