@@ -22,9 +22,9 @@ const Header: React.FC<HeaderProps> = ({ lastSyncStatus }) => {
             return { color: 'green', text: `Dados sincronizados ${timeAgo}` };
         }
         if (lastSyncStatus.status === 'error') {
-            return { color: 'red', text: 'Falha na última sincronização' };
+            return { color: 'red', text: 'Falha na ├║ltima sincroniza├º├úo' };
         }
-        return { color: 'yellow', text: 'Sincronização pendente' };
+        return { color: 'yellow', text: 'Sincroniza├º├úo pendente' };
     }, [lastSyncStatus]);
 
     return (
@@ -54,7 +54,7 @@ const Header: React.FC<HeaderProps> = ({ lastSyncStatus }) => {
             <div className="flex items-center gap-4">
                 <div className="text-right">
                     <p className="text-sm text-ds-light-text">{user?.username}</p>
-                    <p className="text-xs text-ds-text">{isAdmin ? 'Administrador' : 'Usuário'}</p>
+                    <p className="text-xs text-ds-text">{isAdmin ? 'Administrador' : 'Usu├írio'}</p>
                 </div>
                 <button
                     onClick={logout}

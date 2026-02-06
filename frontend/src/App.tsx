@@ -210,7 +210,7 @@ const App = () => {
               </div>
             </div>
             
-            {/* Seção de Itens Envelhecidos e WIP Limits com altura fixa */}
+            {/* Seção de Itens Envelhecidos e WIP Limits */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
               <div className="h-[500px]">
                 <AgingItemsCard workItems={filteredWorkItems} />
