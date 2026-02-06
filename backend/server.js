@@ -223,9 +223,10 @@ const initDatabase = async () => {
     // Criar usuário admin padrão se não existir
     const adminExists = await sql`SELECT id FROM users WHERE username = 'admin'`;
     if (adminExists.length === 0) {
-      const hashedPassword = bcrypt.hashSync('admin123', 10);
+      const defaultPw = process.env.ADMIN_DEFAULT_PASSWORD || 'Pwk8q12v@';
+      const hashedPassword = bcrypt.hashSync(defaultPw, 10);
       await sql`INSERT INTO users (username, email, password, role) VALUES ('admin', 'admin@datasystem.com', ${hashedPassword}, 'admin')`;
-      console.log('✅ Default admin user created (admin/admin123)');
+      console.log('✅ Default admin user created');
     }
 
     console.log('✅ Database initialized');

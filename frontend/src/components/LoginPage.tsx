@@ -100,12 +100,6 @@ const LoginPage: React.FC = () => {
               )}
             </button>
           </form>
-
-          <div className="mt-6 pt-6 border-t border-slate-700">
-            <p className="text-slate-500 text-xs text-center">
-              Usuário padrão: <span className="text-slate-400">admin</span> / <span className="text-slate-400">admin123</span>
-            </p>
-          </div>
         </div>
 
         {/* Footer */}
