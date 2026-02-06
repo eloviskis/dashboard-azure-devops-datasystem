@@ -321,7 +321,7 @@ async function syncData() {
         const closedDate = fields['Microsoft.VSTS.Common.ClosedDate'] || '';
         const storyPoints = fields['Microsoft.VSTS.Scheduling.StoryPoints'] || null;
         const tags = fields['System.Tags'] || '';
-        const tipoCliente = fields['Custom.TipoCliente'] || '';
+        const tipoCliente = fields['Custom.Tipocliente'] || fields['Custom.TipoCliente'] || fields['Custom.tipocliente'] || '';
         const priority = fields['Microsoft.VSTS.Common.Priority']?.toString() || '';
         const url = item._links?.html?.href || '';
         const activatedDate = fields['Microsoft.VSTS.Common.ActivatedDate'] || '';
@@ -334,7 +334,7 @@ async function syncData() {
         const squad = fields['Custom.Squad'] || '';
         const area = fields['Custom.Area'] || '';
         const complexity = fields['Custom.Complexity'] || fields['Custom.Complexidade'] || '';
-        const reincidencia = fields['Custom.Reincidencia'] || fields['Custom.Reincidência'] || '';
+        const reincidencia = fields['Custom.REINCIDENCIA'] || fields['Custom.Reincidencia'] || fields['Custom.Reincidência'] || '';
         const performanceDays = fields['Custom.PerformanceDays'] || fields['Custom.DiasPerformance'] || '';
         const qa = fields['Custom.QA'] || '';
         const causaRaiz = fields['Custom.CausaRaiz'] || fields['Custom.RootCause'] || '';
