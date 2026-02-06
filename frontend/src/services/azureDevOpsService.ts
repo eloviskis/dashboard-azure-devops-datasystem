@@ -1,4 +1,5 @@
 import { WorkItem } from '../types.ts';
+import { PullRequest } from '../types.ts';
 import { SyncStatus } from '../hooks/useAzureDevOpsData.ts';
 
 // Permite usar URL pública do backend via variável de ambiente ou localhost
@@ -75,4 +76,28 @@ export const getLastSyncStatus = async (): Promise<SyncStatus> => {
         console.error("Error fetching sync status:", error);
         return { syncTime: new Date().toISOString(), status: 'error' };
     }
+};
+
+export const getPullRequests = async (): Promise<PullRequest[]> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/pull-requests`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch pull requests: ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error("Error fetching pull requests:", error);
+    return [];
+  }
+};
+
+export const syncPullRequests = async (): Promise<any> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/sync/pull-requests`, { method: 'POST' });
+    if (!response.ok) throw new Error('Failed to sync PRs');
+    return await response.json();
+  } catch (error) {
+    console.error("Error syncing pull requests:", error);
+    return { status: 'error', message: (error as Error).message };
+  }
 };

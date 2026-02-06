@@ -406,6 +406,125 @@ async function syncData() {
 }
 
 // ===========================================
+// PULL REQUESTS SYNC
+// ===========================================
+
+async function syncPullRequests() {
+  if (!isConfigured()) {
+    console.log('⚠️ Azure DevOps not configured - skipping PR sync');
+    return { status: 'skipped', message: 'Not configured' };
+  }
+  if (!sql) {
+    console.log('⚠️ Database not configured - skipping PR sync');
+    return { status: 'skipped', message: 'Database not configured' };
+  }
+
+  const startTime = new Date();
+  console.log(`🔄 Starting Pull Requests sync at ${startTime.toISOString()}`);
+
+  try {
+    const baseUrl = `https://dev.azure.com/${AZURE_CONFIG.organization}/${AZURE_CONFIG.project}`;
+    
+    // First get all repositories in the project
+    const reposUrl = `${baseUrl}/_apis/git/repositories?api-version=7.0`;
+    const reposResponse = await axios.get(reposUrl, { headers: getAuthHeader() });
+    const repositories = reposResponse.data.value || [];
+    
+    console.log(`   Found ${repositories.length} repositories`);
+
+    let totalPRs = 0;
+
+    for (const repo of repositories) {
+      // Fetch PRs for each repo (all statuses: active, completed, abandoned)
+      for (const status of ['active', 'completed', 'abandoned']) {
+        let skip = 0;
+        const top = 100;
+        let hasMore = true;
+
+        while (hasMore) {
+          const prUrl = `${baseUrl}/_apis/git/repositories/${repo.id}/pullrequests?searchCriteria.status=${status}&$top=${top}&$skip=${skip}&api-version=7.0`;
+          
+          let prResponse;
+          try {
+            prResponse = await axios.get(prUrl, { headers: getAuthHeader() });
+          } catch (err) {
+            console.log(`   ⚠️ Error fetching ${status} PRs for repo ${repo.name}: ${err.message}`);
+            break;
+          }
+
+          const pullRequests = prResponse.data.value || [];
+          
+          if (pullRequests.length === 0) {
+            hasMore = false;
+            break;
+          }
+
+          // Only get PRs from last 180 days for completed/abandoned
+          const cutoffDate = new Date();
+          cutoffDate.setDate(cutoffDate.getDate() - 180);
+
+          for (const pr of pullRequests) {
+            const createdDate = pr.creationDate || '';
+            
+            // Skip old completed/abandoned PRs
+            if (status !== 'active' && createdDate && new Date(createdDate) < cutoffDate) {
+              hasMore = false;
+              break;
+            }
+
+            const closedDate = pr.closedDate || '';
+            const createdBy = pr.createdBy?.displayName || '';
+            const sourceRef = pr.sourceRefName || '';
+            const targetRef = pr.targetRefName || '';
+            const labels = (pr.labels || []).map(l => l.name).join(',');
+            const reviewers = JSON.stringify((pr.reviewers || []).map(r => ({
+              name: r.displayName,
+              vote: r.vote,
+              isRequired: r.isRequired || false
+            })));
+            const votes = JSON.stringify((pr.reviewers || []).map(r => ({
+              name: r.displayName,
+              vote: r.vote
+            })));
+            const hasValidaCR = (pr.labels || []).some(l => l.name?.toLowerCase().includes('valida') && l.name?.toLowerCase().includes('cr'));
+            const url = pr._links?.web?.href || `${baseUrl}/_git/${repo.name}/pullrequest/${pr.pullRequestId}`;
+
+            await sql`
+              INSERT INTO pull_requests (pull_request_id, title, description, status, created_by, created_date, closed_date,
+                source_ref_name, target_ref_name, repository_id, repository_name, labels, reviewers, votes,
+                has_valida_cr_label, url, synced_at)
+              VALUES (${pr.pullRequestId}, ${pr.title || ''}, ${(pr.description || '').substring(0, 500)}, ${status},
+                ${createdBy}, ${createdDate}, ${closedDate}, ${sourceRef}, ${targetRef},
+                ${repo.id}, ${repo.name}, ${labels}, ${reviewers}, ${votes},
+                ${hasValidaCR}, ${url}, ${new Date().toISOString()})
+              ON CONFLICT (pull_request_id) DO UPDATE SET
+                title = EXCLUDED.title, description = EXCLUDED.description, status = EXCLUDED.status,
+                created_by = EXCLUDED.created_by, closed_date = EXCLUDED.closed_date,
+                labels = EXCLUDED.labels, reviewers = EXCLUDED.reviewers, votes = EXCLUDED.votes,
+                has_valida_cr_label = EXCLUDED.has_valida_cr_label, synced_at = EXCLUDED.synced_at
+            `;
+            totalPRs++;
+          }
+
+          skip += top;
+          if (pullRequests.length < top) hasMore = false;
+        }
+      }
+    }
+
+    console.log(`   ✅ Synced ${totalPRs} pull requests`);
+
+    const endTime = new Date();
+    console.log(`✅ PR sync completed in ${(endTime - startTime) / 1000}s`);
+
+    return { status: 'success', pullRequestsCount: totalPRs };
+  } catch (error) {
+    console.error('❌ PR Sync error:', error.message);
+    return { status: 'error', message: error.message };
+  }
+}
+
+// ===========================================
 // AUTHENTICATION ENDPOINTS
 // ===========================================
 
@@ -793,8 +912,8 @@ app.get('/api/sync/log', async (req, res) => {
 app.post('/api/sync', async (req, res) => {
   try {
     console.log('🔄 Manual sync triggered');
-    const result = await syncData();
-    res.json(result);
+    const [wiResult, prResult] = await Promise.all([syncData(), syncPullRequests()]);
+    res.json({ workItems: wiResult, pullRequests: prResult });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -826,6 +945,64 @@ app.get('/api/stats', async (req, res) => {
   }
 });
 
+// ===========================================
+// PULL REQUEST ENDPOINTS
+// ===========================================
+
+app.get('/api/pull-requests', async (req, res) => {
+  try {
+    console.log('📊 GET /api/pull-requests - Fetching pull requests...');
+    const rows = await sql`SELECT * FROM pull_requests ORDER BY created_date DESC`;
+    console.log(`   Found ${rows.length} pull requests`);
+
+    const items = rows.map(row => {
+      let reviewers = [];
+      let votes = [];
+      try { reviewers = JSON.parse(row.reviewers || '[]'); } catch(e) {}
+      try { votes = JSON.parse(row.votes || '[]'); } catch(e) {}
+
+      const lifetimeDays = row.closed_date && row.created_date
+        ? Math.round((new Date(row.closed_date) - new Date(row.created_date)) / (1000 * 60 * 60 * 24))
+        : null;
+
+      return {
+        pullRequestId: row.pull_request_id,
+        title: row.title,
+        description: row.description,
+        status: row.status,
+        createdBy: row.created_by,
+        createdDate: row.created_date,
+        closedDate: row.closed_date,
+        sourceRefName: row.source_ref_name,
+        targetRefName: row.target_ref_name,
+        repositoryId: row.repository_id,
+        repositoryName: row.repository_name,
+        labels: row.labels ? row.labels.split(',').filter(Boolean) : [],
+        reviewers,
+        votes,
+        hasValidaCRLabel: row.has_valida_cr_label,
+        lifetimeDays,
+        url: row.url
+      };
+    });
+
+    res.json(items);
+  } catch (err) {
+    console.error('❌ Error in /api/pull-requests:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/sync/pull-requests', async (req, res) => {
+  try {
+    console.log('🔄 Manual PR sync triggered');
+    const result = await syncPullRequests();
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // 404 Handler
 app.use((req, res) => {
   res.status(404).json({ 
@@ -846,6 +1023,7 @@ if (isConfigured()) {
   schedule.scheduleJob('*/30 * * * *', () => {
     console.log('🔄 Running scheduled sync...');
     syncData();
+    syncPullRequests();
   });
   console.log('⏰ Scheduled sync every 30 minutes');
 }
@@ -858,6 +1036,7 @@ app.listen(PORT, () => {
   if (isConfigured() && DATABASE_URL) {
     console.log('🔄 Starting initial sync...');
     syncData();
+    syncPullRequests();
   }
 });
 

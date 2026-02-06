@@ -49,6 +49,7 @@ import WIPLimits from './components/WIPLimits.tsx';
 import CycleTimeAnalyticsDashboard from './components/CycleTimeAnalyticsDashboard.tsx';
 import TeamInsightsDashboard from './components/TeamInsightsDashboard.tsx';
 import TabsConfigModal, { loadTabsConfig, saveTabsConfig } from './components/TabsConfigModal.tsx';
+import PullRequestsDashboard from './components/PullRequestsDashboard.tsx';
 
 // Import Types
 import { WorkItem, WorkItemFilters } from './types.ts';
@@ -56,7 +57,7 @@ import { WorkItem, WorkItemFilters } from './types.ts';
 // Import Metrics
 import { calculatePerformanceMetrics, calculateQualityMetrics } from './utils/metrics.ts';
 
-type Tab = 'team-insights' | 'cycle-analytics' | 'performance' | 'quality' | 'kanban' | 'detailed-throughput' | 'bottlenecks' | 'tags' | 'clients' | 'montecarlo' | 'item-list' | 'rootcause' | 'backlog' | 'impedimentos' | 'po-analysis';
+type Tab = 'team-insights' | 'cycle-analytics' | 'performance' | 'quality' | 'kanban' | 'detailed-throughput' | 'bottlenecks' | 'tags' | 'clients' | 'montecarlo' | 'item-list' | 'rootcause' | 'backlog' | 'impedimentos' | 'po-analysis' | 'pull-requests';
 
 const DEFAULT_TAB_CONFIG = [
   { id: 'team-insights', label: 'Insights por Time', visible: true },
@@ -74,6 +75,7 @@ const DEFAULT_TAB_CONFIG = [
   { id: 'backlog', label: 'Análise de Backlog', visible: true },
   { id: 'impedimentos', label: 'Impedimentos', visible: true },
   { id: 'po-analysis', label: 'Análise de PO', visible: true },
+  { id: 'pull-requests', label: 'Pull Requests & Code Review', visible: true },
 ];
 
 const App = () => {
@@ -468,6 +470,13 @@ const App = () => {
             </div>
           </>
         );
+      case 'pull-requests':
+        return (
+          <>
+            <SectionHeader title="Pull Requests & Code Review" />
+            <PullRequestsDashboard />
+          </>
+        );
       default:
         return null;
     }
@@ -530,7 +539,7 @@ const App = () => {
             </div>
         </div>
         
-        {activeTab !== 'cycle-analytics' && activeTab !== 'team-insights' && (
+        {activeTab !== 'cycle-analytics' && activeTab !== 'team-insights' && activeTab !== 'pull-requests' && (
         <FilterBar 
             activeTab={activeTab}
             workItems={workItems}

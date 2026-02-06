@@ -72,3 +72,30 @@ export interface WorkItemFilters {
   customStartDate?: string;
   customEndDate?: string;
 }
+
+// Pull Request
+export interface PullRequestReviewer {
+  name: string;
+  vote: number; // 10=approved, 5=approved with suggestions, 0=no vote, -5=waiting, -10=rejected
+  isRequired?: boolean;
+}
+
+export interface PullRequest {
+  pullRequestId: number;
+  title: string;
+  description?: string;
+  status: 'active' | 'completed' | 'abandoned';
+  createdBy: string;
+  createdDate: string;
+  closedDate?: string | null;
+  sourceRefName: string;
+  targetRefName: string;
+  repositoryId: string;
+  repositoryName: string;
+  labels: string[];
+  reviewers: PullRequestReviewer[];
+  votes: { name: string; vote: number }[];
+  hasValidaCRLabel: boolean;
+  lifetimeDays: number | null;
+  url: string;
+}
