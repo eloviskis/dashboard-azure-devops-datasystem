@@ -90,7 +90,7 @@ const App = () => {
   const [isTabsConfigOpen, setIsTabsConfigOpen] = useState(false);
 
   const initialWorkItemFilters: WorkItemFilters = {
-    period: 30,
+    period: 180,
     teams: [],
     assignedTos: [],
     types: [],
@@ -123,8 +123,9 @@ const App = () => {
     }
 
     return workItems.filter(item => {
-      const itemDate = new Date(item.createdDate);
-      if (itemDate < startDate || itemDate > endDate) return false;
+      // Usa changedDate para filtrar itens recentemente ativos (não apenas criados)
+      const itemDate = new Date(item.changedDate || item.createdDate);
+      if (workItemFilters.period !== 0 && (itemDate < startDate || itemDate > endDate)) return false;
       if (workItemFilters.teams.length > 0 && !workItemFilters.teams.includes(item.team)) return false;
       if (workItemFilters.assignedTos.length > 0 && !workItemFilters.assignedTos.includes(item.assignedTo || '')) return false;
       if (workItemFilters.types.length > 0 && !workItemFilters.types.includes(item.type)) return false;

@@ -148,12 +148,14 @@ const FilterBar: React.FC<FilterBarProps> = ({
             onChange={e => onWorkItemFiltersChange({ ...workItemFilters, period: Number(e.target.value) })}
             className="bg-ds-navy border border-ds-border text-ds-light-text text-sm rounded-md p-2"
           >
+            <option value="0">Todos</option>
             <option value="7">Últimos 7 dias</option>
             <option value="8">Última semana + Hoje</option>
             <option value="15">Últimos 15 dias</option>
             <option value="30">Últimos 30 dias</option>
             <option value="90">Últimos 90 dias</option>
             <option value="180">Últimos 180 dias</option>
+            <option value="365">Último ano</option>
           </select>
         </div>
       )}
