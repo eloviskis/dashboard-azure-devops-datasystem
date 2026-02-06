@@ -3,7 +3,7 @@ import { WorkItem } from '../types';
 import { CHART_COLORS } from '../constants';
 import {
   ResponsiveContainer, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
-  BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Cell
+  BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Cell, Legend
 } from 'recharts';
 import { subMonths, isWithinInterval, startOfMonth, endOfMonth, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';

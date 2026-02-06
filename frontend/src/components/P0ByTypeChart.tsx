@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { Bar } from 'react-chartjs-2';
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://backend-hazel-three-14.vercel.app';
+
 const P0ByTypeChart: React.FC = () => {
   const [data, setData] = useState<{ type: string; count: number }[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('http://localhost:3001/api/stats/p0-by-type')
+    fetch(`${API_BASE_URL}/api/stats/p0-by-type`)
       .then(res => res.json())
       .then(resData => {
         setData(resData);

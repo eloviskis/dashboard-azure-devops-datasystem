@@ -110,6 +110,13 @@ const WorkItemTable: React.FC<WorkItemTableProps> = ({ data }) => {
 
   return (
     <div className="space-y-4">
+        {/* Total Counter */}
+        <div className="flex items-center justify-between bg-ds-navy p-3 rounded-lg border border-ds-border">
+          <span className="text-ds-light-text font-semibold text-sm">
+            📊 Total de Itens: <span className="text-ds-green text-lg">{data.length}</span>
+          </span>
+        </div>
+
         {/* Code Review Counters */}
         {(crCounters.level1.length > 0 || crCounters.level2.length > 0) && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

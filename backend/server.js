@@ -528,6 +528,10 @@ app.get('/api/auth/verify', authenticateToken, (req, res) => {
   res.json({ valid: true, user: req.user });
 });
 
+app.get('/api/auth/validate', authenticateToken, (req, res) => {
+  res.json({ valid: true, user: req.user });
+});
+
 // ===========================================
 // USER MANAGEMENT ENDPOINTS
 // ===========================================
