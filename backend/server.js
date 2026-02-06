@@ -12,7 +12,16 @@ require('dotenv').config();
 const JWT_SECRET = process.env.JWT_SECRET || 'devops-dashboard-secret-key-2026';
 
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: [
+    'https://dashboard-azure-devops-datasystem.vercel.app',
+    'https://dashboard-azure-devops-datasystem-git-main-eloviskis.vercel.app',
+    /\.vercel\.app$/,
+    'http://localhost:5173',
+    'http://localhost:3000'
+  ],
+  credentials: true
+}));
 app.use(express.json());
 
 // PostgreSQL (Neon) setup
@@ -81,11 +90,11 @@ function calculateLeadTime(createdDate, closedDate) {
   return calculateDaysBetween(createdDate, closedDate);
 }
 
-function calculateAge(changedDate) {
-  if (!changedDate) return 0;
-  const changed = new Date(changedDate);
+function calculateAge(createdDate) {
+  if (!createdDate) return 0;
+  const created = new Date(createdDate);
   const now = new Date();
-  return Math.round((now - changed) / (1000 * 60 * 60 * 24));
+  return Math.round((now - created) / (1000 * 60 * 60 * 24));
 }
 
 // Initialize database - creates tables if they don't exist (SAFE for production)
@@ -316,11 +325,32 @@ async function syncData() {
         const url = item._links?.html?.href || '';
         const activatedDate = fields['Microsoft.VSTS.Common.ActivatedDate'] || '';
 
+        // Campos customizados adicionais
+        const codeReviewLevel1 = fields['Custom.CodeReviewLevel1'] || fields['Custom.CRLevel1'] || '';
+        const codeReviewLevel2 = fields['Custom.CodeReviewLevel2'] || fields['Custom.CRLevel2'] || '';
+        const customType = fields['Custom.Type'] || fields['Custom.CustomType'] || '';
+        const rootCauseStatus = fields['Custom.RootCauseStatus'] || fields['Custom.StatusCausaRaiz'] || '';
+        const squad = fields['Custom.Squad'] || '';
+        const area = fields['Custom.Area'] || '';
+        const complexity = fields['Custom.Complexity'] || fields['Custom.Complexidade'] || '';
+        const reincidencia = fields['Custom.Reincidencia'] || fields['Custom.Reincidência'] || '';
+        const performanceDays = fields['Custom.PerformanceDays'] || fields['Custom.DiasPerformance'] || '';
+        const qa = fields['Custom.QA'] || '';
+        const causaRaiz = fields['Custom.CausaRaiz'] || fields['Custom.RootCause'] || '';
+        const createdBy = fields['System.CreatedBy']?.displayName || '';
+        const po = fields['Custom.PO'] || fields['Custom.ProductOwner'] || '';
+        const readyDate = fields['Custom.ReadyDate'] || '';
+        const doneDate = fields['Custom.DoneDate'] || '';
+
         await sql`
           INSERT INTO work_items (work_item_id, title, state, type, assigned_to, team, area_path, iteration_path,
-            created_date, changed_date, closed_date, story_points, tags, tipo_cliente, priority, url, first_activation_date, synced_at)
+            created_date, changed_date, closed_date, story_points, tags, tipo_cliente, priority, url, first_activation_date,
+            code_review_level1, code_review_level2, custom_type, root_cause_status, squad, area, complexity,
+            reincidencia, performance_days, qa, causa_raiz, created_by, po, ready_date, done_date, synced_at)
           VALUES (${workItemId}, ${title}, ${state}, ${type}, ${assignedTo}, ${team}, ${areaPath}, ${iterationPath},
-            ${createdDate}, ${changedDate}, ${closedDate}, ${storyPoints}, ${tags}, ${tipoCliente}, ${priority}, ${url}, ${activatedDate || null}, ${new Date().toISOString()})
+            ${createdDate}, ${changedDate}, ${closedDate}, ${storyPoints}, ${tags}, ${tipoCliente}, ${priority}, ${url}, ${activatedDate || null},
+            ${codeReviewLevel1}, ${codeReviewLevel2}, ${customType}, ${rootCauseStatus}, ${squad}, ${area}, ${complexity},
+            ${reincidencia}, ${performanceDays}, ${qa}, ${causaRaiz}, ${createdBy}, ${po}, ${readyDate}, ${doneDate}, ${new Date().toISOString()})
           ON CONFLICT (work_item_id) DO UPDATE SET
             title = EXCLUDED.title, state = EXCLUDED.state, type = EXCLUDED.type, assigned_to = EXCLUDED.assigned_to,
             team = EXCLUDED.team, area_path = EXCLUDED.area_path, iteration_path = EXCLUDED.iteration_path,
@@ -328,6 +358,21 @@ async function syncData() {
             story_points = EXCLUDED.story_points, tags = EXCLUDED.tags, tipo_cliente = EXCLUDED.tipo_cliente,
             priority = EXCLUDED.priority, url = EXCLUDED.url, 
             first_activation_date = COALESCE(EXCLUDED.first_activation_date, work_items.first_activation_date),
+            code_review_level1 = EXCLUDED.code_review_level1,
+            code_review_level2 = EXCLUDED.code_review_level2,
+            custom_type = EXCLUDED.custom_type,
+            root_cause_status = EXCLUDED.root_cause_status,
+            squad = EXCLUDED.squad,
+            area = EXCLUDED.area,
+            complexity = EXCLUDED.complexity,
+            reincidencia = EXCLUDED.reincidencia,
+            performance_days = EXCLUDED.performance_days,
+            qa = EXCLUDED.qa,
+            causa_raiz = EXCLUDED.causa_raiz,
+            created_by = EXCLUDED.created_by,
+            po = EXCLUDED.po,
+            ready_date = EXCLUDED.ready_date,
+            done_date = EXCLUDED.done_date,
             synced_at = EXCLUDED.synced_at
         `;
       }
@@ -387,8 +432,8 @@ const requireAdmin = (req, res, next) => {
   next();
 };
 
-// Debug endpoint para verificar tabela users
-app.get('/api/debug/users-schema', async (req, res) => {
+// Debug endpoint para verificar tabela users (requer admin)
+app.get('/api/debug/users-schema', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const columns = await sql`
       SELECT column_name, data_type 
@@ -402,8 +447,8 @@ app.get('/api/debug/users-schema', async (req, res) => {
   }
 });
 
-// Endpoint para forçar inicialização do banco
-app.post('/api/init-db', async (req, res) => {
+// Endpoint para forçar inicialização do banco (requer admin)
+app.post('/api/init-db', authenticateToken, requireAdmin, async (req, res) => {
   try {
     console.log('🔄 Forcing database initialization...');
     await initDatabase();
@@ -414,8 +459,8 @@ app.post('/api/init-db', async (req, res) => {
   }
 });
 
-// Debug endpoint para verificar configuração do Azure
-app.get('/api/debug/azure-config', (req, res) => {
+// Debug endpoint para verificar configuração do Azure (requer admin)
+app.get('/api/debug/azure-config', authenticateToken, requireAdmin, (req, res) => {
   res.json({
     organization: AZURE_CONFIG.organization,
     project: AZURE_CONFIG.project,
@@ -619,7 +664,7 @@ app.get('/api/items', async (req, res) => {
     const items = rows.map(row => {
       const cycleTime = calculateCycleTime(row.first_activation_date, row.closed_date);
       const leadTime = calculateLeadTime(row.created_date, row.closed_date);
-      const age = calculateAge(row.changed_date);
+      const age = calculateAge(row.created_date);
 
       return {
         workItemId: row.work_item_id,
@@ -641,6 +686,8 @@ app.get('/api/items', async (req, res) => {
         url: row.url,
         tipoCliente: row.tipo_cliente,
         priority: row.priority,
+        codeReviewLevel1: row.code_review_level1,
+        codeReviewLevel2: row.code_review_level2,
         customType: row.custom_type,
         rootCauseStatus: row.root_cause_status,
         squad: row.squad,
@@ -685,12 +732,33 @@ app.get('/api/items/period/:days', async (req, res) => {
       assignedTo: row.assigned_to,
       team: row.team,
       areaPath: row.area_path,
+      iterationPath: row.iteration_path,
       createdDate: row.created_date,
       changedDate: row.changed_date,
       closedDate: row.closed_date,
+      storyPoints: row.story_points,
+      tags: row.tags,
       cycleTime: calculateCycleTime(row.first_activation_date, row.closed_date),
       leadTime: calculateLeadTime(row.created_date, row.closed_date),
-      age: calculateAge(row.changed_date)
+      age: calculateAge(row.created_date),
+      url: row.url,
+      tipoCliente: row.tipo_cliente,
+      priority: row.priority,
+      codeReviewLevel1: row.code_review_level1,
+      codeReviewLevel2: row.code_review_level2,
+      customType: row.custom_type,
+      rootCauseStatus: row.root_cause_status,
+      squad: row.squad,
+      area: row.area,
+      reincidencia: row.reincidencia,
+      performanceDays: row.performance_days,
+      qa: row.qa,
+      complexity: row.complexity,
+      causaRaiz: row.causa_raiz,
+      createdBy: row.created_by,
+      po: row.po,
+      readyDate: row.ready_date,
+      doneDate: row.done_date
     }));
 
     res.json(items);

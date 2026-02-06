@@ -8,9 +8,10 @@ import { useAuth } from '../contexts/AuthContext';
 
 interface HeaderProps {
     lastSyncStatus: SyncStatus | null;
+    onOpenUserManagement?: () => void;
 }
 
-const Header: React.FC<HeaderProps> = ({ lastSyncStatus }) => {
+const Header: React.FC<HeaderProps> = ({ lastSyncStatus, onOpenUserManagement }) => {
     const { user, logout, isAdmin } = useAuth();
     
     const syncInfo = useMemo(() => {
@@ -22,9 +23,9 @@ const Header: React.FC<HeaderProps> = ({ lastSyncStatus }) => {
             return { color: 'green', text: `Dados sincronizados ${timeAgo}` };
         }
         if (lastSyncStatus.status === 'error') {
-            return { color: 'red', text: 'Falha na ├║ltima sincroniza├º├úo' };
+            return { color: 'red', text: 'Falha na última sincronização' };
         }
-        return { color: 'yellow', text: 'Sincroniza├º├úo pendente' };
+        return { color: 'yellow', text: 'Sincronização pendente' };
     }, [lastSyncStatus]);
 
     return (
@@ -52,9 +53,21 @@ const Header: React.FC<HeaderProps> = ({ lastSyncStatus }) => {
             
             {/* User Info & Logout */}
             <div className="flex items-center gap-4">
+                {isAdmin && onOpenUserManagement && (
+                    <button
+                        onClick={onOpenUserManagement}
+                        className="flex items-center gap-2 px-3 py-2 bg-ds-navy hover:bg-ds-border rounded-lg transition-colors text-sm"
+                        title="Gerenciar Usuários"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                        </svg>
+                        <span className="hidden sm:inline">Usuários</span>
+                    </button>
+                )}
                 <div className="text-right">
                     <p className="text-sm text-ds-light-text">{user?.username}</p>
-                    <p className="text-xs text-ds-text">{isAdmin ? 'Administrador' : 'Usu├írio'}</p>
+                    <p className="text-xs text-ds-text">{isAdmin ? 'Administrador' : 'Usuário'}</p>
                 </div>
                 <button
                     onClick={logout}

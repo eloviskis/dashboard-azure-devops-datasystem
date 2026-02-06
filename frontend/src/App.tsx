@@ -8,6 +8,7 @@ import { GoogleGenAI } from '@google/genai';
 // Import Auth
 import { useAuth } from './contexts/AuthContext';
 import LoginPage from './components/LoginPage';
+import UserManagementPage from './components/UserManagementPage';
 
 // Import Hooks
 import { useAzureDevOpsData } from './hooks/useAzureDevOpsData.ts';
@@ -76,8 +77,9 @@ const DEFAULT_TAB_CONFIG = [
 ];
 
 const App = () => {
-  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { isAuthenticated, isLoading: authLoading, isAdmin } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>('team-insights');
+  const [showUserManagement, setShowUserManagement] = useState(false);
   const { workItems, loading: loadingWIs, error: errorWIs, lastSyncStatus } = useAzureDevOpsData();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -141,7 +143,7 @@ const App = () => {
       setAiInsight('');
       
       try {
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+        const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY as string });
         
         let contextData = JSON.stringify({
           filters: workItemFilters,
@@ -495,7 +497,22 @@ const App = () => {
 
   return (
     <div className="min-h-screen bg-ds-dark-blue">
-      <Header lastSyncStatus={lastSyncStatus} />
+      <Header lastSyncStatus={lastSyncStatus} onOpenUserManagement={isAdmin ? () => setShowUserManagement(true) : undefined} />
+
+      {showUserManagement ? (
+        <div className="p-6 md:p-10">
+          <div className="flex items-center gap-4 mb-6">
+            <button
+              onClick={() => setShowUserManagement(false)}
+              className="flex items-center gap-2 px-4 py-2 bg-ds-navy hover:bg-ds-border rounded-lg transition-colors text-sm text-ds-light-text"
+            >
+              ← Voltar ao Dashboard
+            </button>
+            <h2 className="text-xl font-bold text-ds-light-text">Gerenciamento de Usuários</h2>
+          </div>
+          <UserManagementPage />
+        </div>
+      ) : (
       <div className="p-6 md:p-10">
         <div className="mb-6">
             <div className="flex border-b border-ds-border overflow-x-auto">
@@ -548,6 +565,7 @@ const App = () => {
             {renderContent()}
         </main>
       </div>
+      )}
     </div>
   );
 };
