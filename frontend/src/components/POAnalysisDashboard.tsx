@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { WorkItem } from '../types';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts';
 import { CHART_COLORS } from '../constants';
+import { COMPLETED_STATES } from '../utils/metrics';
 
 interface Props {
   data: WorkItem[];
@@ -145,7 +146,7 @@ export const POAnalysisDashboard: React.FC<Props> = ({ data }) => {
         acc[criador] = { criados: 0, fechados: 0 };
       }
       acc[criador].criados++;
-      if (item.state === 'Closed' || item.state === 'Done' || item.state === 'Concluído') {
+      if (COMPLETED_STATES.includes(item.state)) {
         acc[criador].fechados++;
       }
       return acc;
@@ -171,7 +172,7 @@ export const POAnalysisDashboard: React.FC<Props> = ({ data }) => {
         acc[criador] = { criados: 0, fechados: 0 };
       }
       acc[criador].criados++;
-      if (item.state === 'Closed' || item.state === 'Done' || item.state === 'Concluído') {
+      if (COMPLETED_STATES.includes(item.state)) {
         acc[criador].fechados++;
       }
       return acc;
@@ -294,7 +295,7 @@ export const POAnalysisDashboard: React.FC<Props> = ({ data }) => {
     const criadorName = chartData.name;
     const items = itemsComCriador.filter(item => 
       (item.createdBy || '(não informado)') === criadorName &&
-      (item.state === 'Closed' || item.state === 'Done' || item.state === 'Concluído')
+      COMPLETED_STATES.includes(item.state)
     );
     setModalData({
       title: `Itens fechados criados por ${criadorName}`,
@@ -345,7 +346,7 @@ export const POAnalysisDashboard: React.FC<Props> = ({ data }) => {
   // Métricas gerais
   const totalCriados = itemsComCriador.length;
   const totalFechados = itemsComCriador.filter(item => 
-    item.state === 'Closed' || item.state === 'Done' || item.state === 'Concluído'
+    COMPLETED_STATES.includes(item.state)
   ).length;
   const taxaGeralConclusao = totalCriados > 0 ? ((totalFechados / totalCriados) * 100).toFixed(1) : '0';
   const totalCriadores = new Set(itemsComCriador.map(item => item.createdBy)).size;

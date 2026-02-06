@@ -250,7 +250,7 @@ const WorkItemTable: React.FC<WorkItemTableProps> = ({ data }) => {
                         <td className="px-6 py-4">{item.codeReviewLevel1 || 'N/A'}</td>
                         <td className="px-6 py-4">{item.codeReviewLevel2 || 'N/A'}</td>
                         <td className="px-6 py-4">{item.type}</td>
-                        <td className="px-6 py-4">{format(item.createdDate, 'dd/MM/yyyy')}</td>
+                        <td className="px-6 py-4">{item.createdDate ? format(new Date(item.createdDate), 'dd/MM/yyyy') : '-'}</td>
                         <td className="px-6 py-4 text-center">{item.cycleTime !== null ? item.cycleTime : '-'}</td>
                     </tr>
                     );

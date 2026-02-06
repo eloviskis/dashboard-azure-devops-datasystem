@@ -66,7 +66,10 @@ const FilterBar: React.FC<FilterBarProps> = ({
     const teams = [...new Set(workItems.map(i => i.team))].sort();
     const assignedTos = [...new Set(workItems.map(i => i.assignedTo).filter(Boolean) as string[])].sort();
     const clients = [...new Set(workItems.map(i => i.tipoCliente).filter(Boolean) as string[])].sort();
-    const tags = [...new Set(workItems.flatMap(i => i.tags))].sort();
+    const tags = [...new Set(workItems.flatMap(i => {
+      if (!i.tags) return [];
+      return Array.isArray(i.tags) ? i.tags : i.tags.split(';').map(t => t.trim());
+    }).filter(Boolean))].sort();
     const priorities = [...new Set(workItems.map(i => String(i.priority || '')).filter(Boolean))].sort();
     
     return {

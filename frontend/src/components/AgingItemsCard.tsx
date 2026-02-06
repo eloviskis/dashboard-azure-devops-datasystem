@@ -18,9 +18,9 @@ const AgingItemsCard: React.FC<AgingItemsCardProps> = ({ workItems }) => {
     
     // Filtrar itens não concluídos e calcular aging
     const openItems = workItems.filter(item => 
-      !closedStates.some(s => item.state.toLowerCase().includes(s.toLowerCase()))
+      !closedStates.includes(item.state)
     ).map(item => {
-      const created = new Date(item.createdDate);
+      const created = item.createdDate ? new Date(item.createdDate) : new Date();
       const daysOld = Math.floor((now.getTime() - created.getTime()) / (1000 * 60 * 60 * 24));
       return { ...item, daysOld };
     });

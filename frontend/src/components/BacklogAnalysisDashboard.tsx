@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { WorkItem } from '../types';
+import { COMPLETED_STATES } from '../utils/metrics';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, Legend, Cell, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, CartesianGrid } from 'recharts';
 
 interface Props {
@@ -102,9 +103,7 @@ const BacklogAnalysisDashboard: React.FC<Props> = ({ data }) => {
   
   // Filtra apenas itens fechados/concluídos para análise de velocidade
   const completedItems = useMemo(() => 
-    data.filter(item => 
-      item.state === 'Closed' || item.state === 'Done' || item.state === 'Resolved'
-    ),
+    data.filter(item => COMPLETED_STATES.includes(item.state)),
     [data]
   );
 

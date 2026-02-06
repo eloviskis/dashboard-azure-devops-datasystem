@@ -34,7 +34,8 @@ const MonteCarloSimulation: React.FC<MonteCarloSimulationProps> = ({ data, filte
         const throughput: Record<string, number> = data
             .filter(item => COMPLETED_STATES.includes(item.state) && item.closedDate)
             .reduce((acc, item) => {
-                const weekKey = `${getYear(item.closedDate!)}-W${getWeek(item.closedDate!, { weekStartsOn: 1 })}`;
+                const d = new Date(item.closedDate!);
+                const weekKey = `${getYear(d)}-W${getWeek(d, { weekStartsOn: 1 })}`;
                 acc[weekKey] = (acc[weekKey] || 0) + 1;
                 return acc;
             }, {} as Record<string, number>);

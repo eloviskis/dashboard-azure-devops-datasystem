@@ -65,7 +65,7 @@ const ItemListModal: React.FC<{ data: ModalData | null; onClose: () => void }> =
           ) : (
             <div className="space-y-3">
               {data.items.map((item, idx) => {
-                const daysStopped = calculateDaysStopped(item.changedDate.toString());
+                const daysStopped = calculateDaysStopped((item.changedDate || item.createdDate || '').toString());
                 return (
                   <div 
                     key={item.workItemId || idx}
@@ -111,7 +111,7 @@ const ItemListModal: React.FC<{ data: ModalData | null; onClose: () => void }> =
                           </div>
                           <div>
                             <span className="text-ds-text">📅 Última atualização: </span>
-                            <span className="text-white">{new Date(item.changedDate.toString()).toLocaleDateString('pt-BR')}</span>
+                            <span className="text-white">{item.changedDate ? new Date(item.changedDate.toString()).toLocaleDateString('pt-BR') : '-'}</span>
                           </div>
                         </div>
 
@@ -175,7 +175,7 @@ const ImpedimentosDashboard: React.FC<Props> = ({ data }) => {
       return tagsStr.toUpperCase().includes('IMPEDIMENTO');
     }).map(item => ({
       ...item,
-      daysStopped: calculateDaysStopped(item.changedDate.toString())
+      daysStopped: calculateDaysStopped((item.changedDate || item.createdDate || '').toString())
     }));
   }, [data]);
 
@@ -487,7 +487,7 @@ const ImpedimentosDashboard: React.FC<Props> = ({ data }) => {
                         </div>
                         <div>
                           <span className="text-ds-text">📅 Última atualização: </span>
-                          <span className="text-white">{new Date(item.changedDate).toLocaleDateString('pt-BR')}</span>
+                          <span className="text-white">{item.changedDate ? new Date(item.changedDate).toLocaleDateString('pt-BR') : '-'}</span>
                         </div>
                       </div>
                     </div>
