@@ -786,7 +786,9 @@ app.get('/api/items', async (req, res) => {
     console.log(`   Found ${rows.length} items in database`);
 
     const items = rows.map(row => {
-      const cycleTime = calculateCycleTime(row.first_activation_date, row.closed_date);
+      // Fallback: se first_activation_date não existe, usa created_date para cycleTime
+      const cycleTime = calculateCycleTime(row.first_activation_date, row.closed_date)
+                        ?? calculateCycleTime(row.created_date, row.closed_date);
       const leadTime = calculateLeadTime(row.created_date, row.closed_date);
       const age = calculateAge(row.created_date);
 

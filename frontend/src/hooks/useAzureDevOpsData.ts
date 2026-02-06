@@ -23,7 +23,24 @@ export const useAzureDevOpsData = () => {
           getWorkItems(),
           getLastSyncStatus()
       ]);
-      setWorkItems(data);
+
+      // Enriquece dados: calcula cycleTime e leadTime quando o backend retorna null
+      const enrichedData = data.map((item: WorkItem) => {
+        let { cycleTime, leadTime } = item;
+        if ((cycleTime === null || cycleTime === undefined) && item.closedDate && item.createdDate) {
+          const closed = new Date(item.closedDate as string);
+          const created = new Date(item.createdDate as string);
+          cycleTime = Math.round((closed.getTime() - created.getTime()) / (1000 * 60 * 60 * 24));
+        }
+        if ((leadTime === null || leadTime === undefined) && item.closedDate && item.createdDate) {
+          const closed = new Date(item.closedDate as string);
+          const created = new Date(item.createdDate as string);
+          leadTime = Math.round((closed.getTime() - created.getTime()) / (1000 * 60 * 60 * 24));
+        }
+        return { ...item, cycleTime, leadTime };
+      });
+
+      setWorkItems(enrichedData);
       setLastSyncStatus(syncStatus);
 
     } catch (e) {
