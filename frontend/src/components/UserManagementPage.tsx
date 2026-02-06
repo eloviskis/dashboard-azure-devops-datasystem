@@ -32,7 +32,7 @@ const UserManagementPage: React.FC = () => {
 
   const fetchUsers = useCallback(async () => {
     try {
-      const response = await fetch(`${API_URL}/api/auth/users`, {
+      const response = await fetch(`${API_URL}/api/users`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -62,7 +62,7 @@ const UserManagementPage: React.FC = () => {
     setSuccess('');
 
     try {
-      const response = await fetch(`${API_URL}/api/auth/users`, {
+      const response = await fetch(`${API_URL}/api/users`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -104,7 +104,7 @@ const UserManagementPage: React.FC = () => {
         updateData.password = formData.password;
       }
 
-      const response = await fetch(`${API_URL}/api/auth/users/${editingUser.id}`, {
+      const response = await fetch(`${API_URL}/api/users/${editingUser.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -139,7 +139,7 @@ const UserManagementPage: React.FC = () => {
     setSuccess('');
 
     try {
-      const response = await fetch(`${API_URL}/api/auth/users/${user.id}`, {
+      const response = await fetch(`${API_URL}/api/users/${user.id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`
