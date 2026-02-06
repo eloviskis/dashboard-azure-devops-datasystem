@@ -39,6 +39,8 @@ import WorkItemTable from './components/WorkItemTable.tsx';
 import ClientItemDistributionChart from './components/ClientItemDistributionChart.tsx';
 import ClientCycleTimeChart from './components/ClientCycleTimeChart.tsx';
 import ClientThroughputChart from './components/ClientThroughputChart.tsx';
+import AgingItemsCard from './components/AgingItemsCard.tsx';
+import WIPLimits from './components/WIPLimits.tsx';
 
 // Import Types
 import { WorkItem, WorkItemFilters } from './types.ts';
@@ -200,6 +202,16 @@ const App = () => {
                 <ChartInfoLamp info="Este gráfico destaca os colaboradores com maior número de entregas. Facilita reconhecer talentos, identificar sobrecarga e promover ações de reconhecimento ou equilíbrio de trabalho." />
                 <h3 className="text-ds-light-text font-bold text-lg mb-4">Top 10 - Performance Individual</h3>
                 <IndividualPerformanceChart data={filteredWorkItems} />
+              </div>
+            </div>
+            
+            {/* Seção de Itens Envelhecidos e WIP Limits com altura fixa */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+              <div className="h-[500px]">
+                <AgingItemsCard workItems={filteredWorkItems} />
+              </div>
+              <div className="h-[500px]">
+                <WIPLimits workItems={filteredWorkItems} />
               </div>
             </div>
           </>
