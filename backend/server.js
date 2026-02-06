@@ -88,7 +88,7 @@ function calculateAge(changedDate) {
   return Math.round((now - changed) / (1000 * 60 * 60 * 24));
 }
 
-// Initialize database
+// Initialize database - creates tables if they don't exist (SAFE for production)
 const initDatabase = async () => {
   if (!sql) {
     console.log('⚠️ Database not connected - skipping initialization');
@@ -96,10 +96,9 @@ const initDatabase = async () => {
   }
 
   try {
-    // Drop and recreate work_items to ensure correct schema
-    await sql`DROP TABLE IF EXISTS work_items CASCADE`;
+    // Create work_items if not exists
     await sql`
-      CREATE TABLE work_items (
+      CREATE TABLE IF NOT EXISTS work_items (
         id SERIAL PRIMARY KEY,
         work_item_id INTEGER UNIQUE,
         title TEXT,
@@ -113,7 +112,7 @@ const initDatabase = async () => {
         changed_date TEXT,
         closed_date TEXT,
         first_activation_date TEXT,
-        story_points INTEGER,
+        story_points REAL,
         tags TEXT,
         code_review_level1 TEXT,
         code_review_level2 TEXT,
@@ -138,12 +137,11 @@ const initDatabase = async () => {
         done_date TEXT
       )
     `;
-    console.log('✅ work_items table recreated');
+    console.log('✅ work_items table ready');
 
-    // Drop and recreate pull_requests
-    await sql`DROP TABLE IF EXISTS pull_requests CASCADE`;
+    // Create pull_requests if not exists
     await sql`
-      CREATE TABLE pull_requests (
+      CREATE TABLE IF NOT EXISTS pull_requests (
         id SERIAL PRIMARY KEY,
         pull_request_id INTEGER UNIQUE,
         title TEXT,
@@ -164,12 +162,11 @@ const initDatabase = async () => {
         synced_at TEXT
       )
     `;
-    console.log('✅ pull_requests table recreated');
+    console.log('✅ pull_requests table ready');
 
-    // Drop and recreate commits
-    await sql`DROP TABLE IF EXISTS commits CASCADE`;
+    // Create commits if not exists
     await sql`
-      CREATE TABLE commits (
+      CREATE TABLE IF NOT EXISTS commits (
         id SERIAL PRIMARY KEY,
         commit_id TEXT UNIQUE,
         author TEXT,
@@ -184,12 +181,11 @@ const initDatabase = async () => {
         synced_at TEXT
       )
     `;
-    console.log('✅ commits table recreated');
+    console.log('✅ commits table ready');
 
-    // Drop and recreate sync_log
-    await sql`DROP TABLE IF EXISTS sync_log CASCADE`;
+    // Create sync_log if not exists
     await sql`
-      CREATE TABLE sync_log (
+      CREATE TABLE IF NOT EXISTS sync_log (
         id SERIAL PRIMARY KEY,
         sync_time TEXT,
         items_count INTEGER,
@@ -199,12 +195,11 @@ const initDatabase = async () => {
         error_message TEXT
       )
     `;
-    console.log('✅ sync_log table recreated');
+    console.log('✅ sync_log table ready');
 
-    // Drop and recreate users table to ensure correct schema
-    await sql`DROP TABLE IF EXISTS users CASCADE`;
+    // Create users table if not exists
     await sql`
-      CREATE TABLE users (
+      CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
         username TEXT UNIQUE NOT NULL,
         email TEXT UNIQUE NOT NULL,
@@ -214,12 +209,15 @@ const initDatabase = async () => {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `;
-    console.log('✅ users table recreated');
+    console.log('✅ users table ready');
 
-    // Criar usuário admin padrão
-    const hashedPassword = bcrypt.hashSync('admin123', 10);
-    await sql`INSERT INTO users (username, email, password, role) VALUES ('admin', 'admin@datasystem.com', ${hashedPassword}, 'admin')`;
-    console.log('✅ Default admin user created (admin/admin123)');
+    // Criar usuário admin padrão se não existir
+    const adminExists = await sql`SELECT id FROM users WHERE username = 'admin'`;
+    if (adminExists.length === 0) {
+      const hashedPassword = bcrypt.hashSync('admin123', 10);
+      await sql`INSERT INTO users (username, email, password, role) VALUES ('admin', 'admin@datasystem.com', ${hashedPassword}, 'admin')`;
+      console.log('✅ Default admin user created (admin/admin123)');
+    }
 
     console.log('✅ Database initialized');
   } catch (error) {
@@ -230,11 +228,11 @@ const initDatabase = async () => {
 // Initialize database on startup
 initDatabase();
 
-// Azure DevOps configuration
+// Azure DevOps configuration - remove newlines from env vars (Vercel issue)
 const AZURE_CONFIG = {
-  organization: process.env.AZURE_ORG || 'your-organization',
-  project: process.env.AZURE_PROJECT || 'your-project',
-  pat: process.env.AZURE_PAT || 'your-token'
+  organization: (process.env.AZURE_ORG || 'your-organization').replace(/[\r\n]/g, '').trim(),
+  project: (process.env.AZURE_PROJECT || 'your-project').replace(/[\r\n]/g, '').trim(),
+  pat: (process.env.AZURE_PAT || 'your-token').replace(/[\r\n]/g, '').trim()
 };
 
 const isConfigured = () => {
@@ -411,6 +409,17 @@ app.post('/api/init-db', async (req, res) => {
     console.error('❌ Init error:', error);
     res.status(500).json({ error: error.message });
   }
+});
+
+// Debug endpoint para verificar configuração do Azure
+app.get('/api/debug/azure-config', (req, res) => {
+  res.json({
+    organization: AZURE_CONFIG.organization,
+    project: AZURE_CONFIG.project,
+    patConfigured: !!AZURE_CONFIG.pat && AZURE_CONFIG.pat.length > 10,
+    patLength: AZURE_CONFIG.pat?.length || 0,
+    isConfigured: isConfigured()
+  });
 });
 
 // Login
