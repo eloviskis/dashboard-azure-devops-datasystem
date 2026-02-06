@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { WorkItem } from '../types';
 import { CHART_COLORS } from '../constants';
+import { getPercentile } from '../utils/metrics';
 import {
   ResponsiveContainer, BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Legend, ReferenceLine
 } from 'recharts';
@@ -45,8 +46,8 @@ const DORAMetricsDashboard: React.FC<Props> = ({ data }) => {
     return Object.entries(byTeam).map(([team, times]) => {
       const sorted = [...times].sort((a, b) => a - b);
       const avg = times.reduce((a, b) => a + b, 0) / times.length;
-      const p50 = sorted[Math.floor(sorted.length * 0.5)] || 0;
-      const p85 = sorted[Math.floor(sorted.length * 0.85)] || 0;
+      const p50 = getPercentile(sorted, 0.50);
+      const p85 = getPercentile(sorted, 0.85);
       return { team, avg: Math.round(avg * 10) / 10, p50: Math.round(p50 * 10) / 10, p85: Math.round(p85 * 10) / 10, count: times.length };
     }).sort((a, b) => a.avg - b.avg);
   }, [data]);

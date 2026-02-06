@@ -94,7 +94,12 @@ const TopTagsChart: React.FC<TopTagsChartProps> = ({ data }) => {
   const [modalData, setModalData] = useState<ModalData | null>(null);
 
   const chartData = useMemo(() => {
-    const tagCounts = data.flatMap(item => item.tags).reduce((acc, tag) => {
+    const normalizeTags = (item: WorkItem): string[] => {
+      if (!item.tags) return [];
+      return Array.isArray(item.tags) ? item.tags.map(t => t.trim()).filter(Boolean) : item.tags.split(';').map(t => t.trim()).filter(Boolean);
+    };
+
+    const tagCounts = data.flatMap(normalizeTags).reduce((acc, tag) => {
       acc[tag] = (acc[tag] || 0) + 1;
       return acc;
     }, {} as Record<string, number>);
@@ -107,7 +112,10 @@ const TopTagsChart: React.FC<TopTagsChartProps> = ({ data }) => {
   }, [data]);
 
   const handleClick = (entry: any) => {
-    const items = data.filter(item => item.tags.includes(entry.name));
+    const items = data.filter(item => {
+      const tags = !item.tags ? [] : (Array.isArray(item.tags) ? item.tags.map(t => t.trim()) : item.tags.split(';').map(t => t.trim()));
+      return tags.includes(entry.name);
+    });
     setModalData({
       title: `Tag: ${entry.name}`,
       items,

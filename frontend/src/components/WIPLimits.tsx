@@ -40,7 +40,7 @@ const WIPLimits: React.FC<WIPLimitsProps> = ({
     ];
 
     const inProgressItems = workItems.filter(i => 
-      inProgressStates.some(s => i.state.toLowerCase().includes(s.toLowerCase()))
+      inProgressStates.some(s => i.state.toLowerCase() === s.toLowerCase())
     );
 
     // WIP por time

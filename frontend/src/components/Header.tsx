@@ -26,8 +26,9 @@ const Header: React.FC<HeaderProps> = ({ lastSyncStatus, onOpenUserManagement, o
         const critical: { id: number; title: string; age: number; priority: number; team: string }[] = [];
         workItems.forEach(item => {
             if (!IN_PROGRESS.includes(item.state)) return;
-            const created = new Date(item.createdDate || '');
-            const age = Math.round((now - created.getTime()) / (1000 * 60 * 60 * 24));
+            const ref = new Date(item.changedDate || item.createdDate || '');
+            if (isNaN(ref.getTime())) return;
+            const age = Math.round((now - ref.getTime()) / (1000 * 60 * 60 * 24));
             const priority = Number(item.priority) || 4;
             const threshold = priority === 1 ? 3 : priority === 2 ? 7 : 14;
             if (age > threshold) {

@@ -111,8 +111,11 @@ const WorkItemTable: React.FC<WorkItemTableProps> = ({ data }) => {
         let aValue: any = a[sortConfig.key];
         let bValue: any = b[sortConfig.key];
 
-        if (aValue === null || aValue === undefined) aValue = -1;
-        if (bValue === null || bValue === undefined) bValue = -1;
+        const aNull = aValue === null || aValue === undefined;
+        const bNull = bValue === null || bValue === undefined;
+        if (aNull && bNull) return 0;
+        if (aNull) return 1; // nulls always last
+        if (bNull) return -1;
 
         if (aValue < bValue) {
           return sortConfig.direction === 'ascending' ? -1 : 1;

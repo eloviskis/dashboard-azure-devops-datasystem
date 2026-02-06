@@ -60,13 +60,13 @@ const SLATrackingDashboard: React.FC<Props> = ({ data }) => {
     const inProgress = data.filter(i => !COMPLETED_STATES.includes(i.state) && i.state !== 'Removed' && i.state !== 'New');
     return inProgress.filter(item => {
       if (!item.createdDate) return false;
-      const created = new Date(item.createdDate);
-      if (isNaN(created.getTime())) return false;
-      const ageDays = (Date.now() - created.getTime()) / (1000 * 60 * 60 * 24);
+      const startDate = new Date(item.changedDate || item.createdDate);
+      if (isNaN(startDate.getTime())) return false;
+      const ageDays = (Date.now() - startDate.getTime()) / (1000 * 60 * 60 * 24);
       return ageDays > slaTarget;
     }).map(item => {
-      const created = new Date(item.createdDate!);
-      const ageDays = Math.round((Date.now() - created.getTime()) / (1000 * 60 * 60 * 24));
+      const startDate = new Date(item.changedDate || item.createdDate!);
+      const ageDays = Math.round((Date.now() - startDate.getTime()) / (1000 * 60 * 60 * 24));
       return { ...item, ageDays };
     }).sort((a, b) => b.ageDays - a.ageDays).slice(0, 20);
   }, [data, slaTarget]);

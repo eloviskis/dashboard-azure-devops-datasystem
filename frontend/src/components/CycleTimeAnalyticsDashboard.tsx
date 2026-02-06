@@ -6,7 +6,7 @@ import {
   XAxis, YAxis, Tooltip, CartesianGrid, Legend, Cell,
   ScatterChart, Scatter, ZAxis, ReferenceLine
 } from 'recharts';
-import { format, subWeeks, subMonths, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachWeekOfInterval, eachMonthOfInterval, differenceInDays, isWithinInterval } from 'date-fns';
+import { format, subWeeks, subMonths, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachWeekOfInterval, eachMonthOfInterval, differenceInDays, isWithinInterval, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 interface CycleTimeAnalyticsDashboardProps {
@@ -155,7 +155,34 @@ const CycleTimeAnalyticsDashboard: React.FC<CycleTimeAnalyticsDashboardProps> = 
       } catch { return []; }
     };
 
+    const getBiweekly = () => {
+      try {
+        const periods: { start: Date; end: Date }[] = [];
+        let cursor = new Date(dateRange.start);
+        while (cursor < dateRange.end) {
+          const periodEnd = addDays(cursor, 13);
+          periods.push({ start: new Date(cursor), end: periodEnd > dateRange.end ? dateRange.end : periodEnd });
+          cursor = addDays(cursor, 14);
+        }
+        return periods.map(({ start, end }) => {
+          const itemsInPeriod = filteredItems.filter(i => {
+            const d = new Date(i.closedDate!);
+            return isWithinInterval(d, { start, end });
+          });
+          const cycleTimes = itemsInPeriod.filter(i => i.cycleTime != null).map(i => i.cycleTime as number);
+          const leadTimes = itemsInPeriod.filter(i => i.leadTime != null).map(i => i.leadTime as number);
+          return {
+            label: `${format(start, 'dd/MM')}-${format(end, 'dd/MM')}`,
+            cycleTime: cycleTimes.length > 0 ? Math.round((cycleTimes.reduce((a, b) => a + b, 0) / cycleTimes.length) * 10) / 10 : null,
+            leadTime: leadTimes.length > 0 ? Math.round((leadTimes.reduce((a, b) => a + b, 0) / leadTimes.length) * 10) / 10 : null,
+            count: itemsInPeriod.length,
+          };
+        });
+      } catch { return []; }
+    };
+
     if (periodType === 'monthly') return getMonths();
+    if (periodType === 'biweekly') return getBiweekly();
     return getWeeks();
   }, [filteredItems, dateRange, periodType]);
 

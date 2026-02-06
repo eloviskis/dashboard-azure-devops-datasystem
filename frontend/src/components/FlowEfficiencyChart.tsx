@@ -55,7 +55,7 @@ const FlowEfficiencyChart: React.FC<FlowEfficiencyChartProps> = ({ data }) => {
         const avgActive = d.activeTime / d.count;
         const avgWait = d.waitTime / d.count;
         const avgCT = d.totalCT / d.count;
-        const efficiency = avgCT > 0 ? Math.round((avgActive / avgCT) * 100) : 0;
+        const efficiency = avgCT > 0 ? Math.min(100, Math.round((avgActive / avgCT) * 100)) : 0;
         return {
           team,
           activeTime: Math.round(avgActive * 10) / 10,
@@ -73,7 +73,7 @@ const FlowEfficiencyChart: React.FC<FlowEfficiencyChartProps> = ({ data }) => {
         s + (ACTIVE_WORK_STATES.some(st => status.toLowerCase().includes(st.toLowerCase())) ? days : 0), 0);
     }, 0);
     const globalCT = completedItems.reduce((sum, i) => sum + (i.cycleTime as number), 0);
-    const globalEfficiency = globalCT > 0 ? Math.round((globalActive / globalCT) * 100) : 0;
+    const globalEfficiency = globalCT > 0 ? Math.min(100, Math.round((globalActive / globalCT) * 100)) : 0;
 
     return { teamData, globalEfficiency, totalItems: completedItems.length };
   }, [data]);

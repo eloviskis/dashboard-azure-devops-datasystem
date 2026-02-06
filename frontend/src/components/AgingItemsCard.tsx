@@ -33,7 +33,7 @@ const AgingItemsCard: React.FC<AgingItemsCardProps> = ({ workItems }) => {
     // Ordenar itens
     const sortedItems = [...openItems].sort((a, b) => {
       if (sortBy === 'dias') return b.daysOld - a.daysOld;
-      return (b.priority || 999) - (a.priority || 999);
+      return (a.priority || 999) - (b.priority || 999);
     });
 
     // Dados para gráfico de tendência (últimos 30 dias)
@@ -62,10 +62,11 @@ const AgingItemsCard: React.FC<AgingItemsCardProps> = ({ workItems }) => {
   }, [workItems, sortBy]);
 
   const getPriorityColor = (priority: number | undefined) => {
-    if (!priority || priority === 1) return 'bg-red-500/20 text-red-400';
+    if (priority === 1) return 'bg-red-500/20 text-red-400';
     if (priority === 2) return 'bg-orange-500/20 text-orange-400';
     if (priority === 3) return 'bg-yellow-500/20 text-yellow-400';
-    return 'bg-blue-500/20 text-blue-400';
+    if (priority === 4) return 'bg-blue-500/20 text-blue-400';
+    return 'bg-gray-500/20 text-gray-400'; // Sem prioridade
   };
 
   const getAgingColor = (days: number) => {

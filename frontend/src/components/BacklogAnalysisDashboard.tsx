@@ -222,11 +222,13 @@ const BacklogAnalysisDashboard: React.FC<Props> = ({ data }) => {
 
   // Dados para gráfico radar (comparativo de times)
   const radarData = useMemo(() => {
+    const maxCT = Math.max(...teamMetrics.map(t => t.avgCycleTime), 1);
+    const maxLT = Math.max(...teamMetrics.map(t => t.avgLeadTime), 1);
     return teamMetrics.slice(0, 6).map(team => ({
       team: team.team.length > 15 ? team.team.substring(0, 15) + '...' : team.team,
       'Vazão': team.throughput,
-      'Cycle Time': Math.max(0, 30 - team.avgCycleTime), // Inverte para que menor seja melhor
-      'Lead Time': Math.max(0, 30 - team.avgLeadTime),
+      'Cycle Time': Math.max(0, Math.round((1 - team.avgCycleTime / maxCT) * 100)), // Inverte: menor CT = melhor score
+      'Lead Time': Math.max(0, Math.round((1 - team.avgLeadTime / maxLT) * 100)),
     }));
   }, [teamMetrics]);
 
