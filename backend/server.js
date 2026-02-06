@@ -96,9 +96,10 @@ const initDatabase = async () => {
   }
 
   try {
-    // Tabela de Work Items
+    // Drop and recreate work_items to ensure correct schema
+    await sql`DROP TABLE IF EXISTS work_items CASCADE`;
     await sql`
-      CREATE TABLE IF NOT EXISTS work_items (
+      CREATE TABLE work_items (
         id SERIAL PRIMARY KEY,
         work_item_id INTEGER UNIQUE,
         title TEXT,
@@ -137,11 +138,12 @@ const initDatabase = async () => {
         done_date TEXT
       )
     `;
-    console.log('✅ work_items table ready');
+    console.log('✅ work_items table recreated');
 
-    // Tabela de Pull Requests
+    // Drop and recreate pull_requests
+    await sql`DROP TABLE IF EXISTS pull_requests CASCADE`;
     await sql`
-      CREATE TABLE IF NOT EXISTS pull_requests (
+      CREATE TABLE pull_requests (
         id SERIAL PRIMARY KEY,
         pull_request_id INTEGER UNIQUE,
         title TEXT,
@@ -162,11 +164,12 @@ const initDatabase = async () => {
         synced_at TEXT
       )
     `;
-    console.log('✅ pull_requests table ready');
+    console.log('✅ pull_requests table recreated');
 
-    // Tabela de Commits
+    // Drop and recreate commits
+    await sql`DROP TABLE IF EXISTS commits CASCADE`;
     await sql`
-      CREATE TABLE IF NOT EXISTS commits (
+      CREATE TABLE commits (
         id SERIAL PRIMARY KEY,
         commit_id TEXT UNIQUE,
         author TEXT,
@@ -181,11 +184,12 @@ const initDatabase = async () => {
         synced_at TEXT
       )
     `;
-    console.log('✅ commits table ready');
+    console.log('✅ commits table recreated');
 
-    // Tabela de Sync Log
+    // Drop and recreate sync_log
+    await sql`DROP TABLE IF EXISTS sync_log CASCADE`;
     await sql`
-      CREATE TABLE IF NOT EXISTS sync_log (
+      CREATE TABLE sync_log (
         id SERIAL PRIMARY KEY,
         sync_time TEXT,
         items_count INTEGER,
@@ -195,11 +199,12 @@ const initDatabase = async () => {
         error_message TEXT
       )
     `;
-    console.log('✅ sync_log table ready');
+    console.log('✅ sync_log table recreated');
 
-    // Tabela de Usuários
+    // Drop and recreate users table to ensure correct schema
+    await sql`DROP TABLE IF EXISTS users CASCADE`;
     await sql`
-      CREATE TABLE IF NOT EXISTS users (
+      CREATE TABLE users (
         id SERIAL PRIMARY KEY,
         username TEXT UNIQUE NOT NULL,
         email TEXT UNIQUE NOT NULL,
@@ -209,15 +214,12 @@ const initDatabase = async () => {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `;
-    console.log('✅ users table ready');
+    console.log('✅ users table recreated');
 
-    // Criar usuário admin padrão se não existir
-    const adminExists = await sql`SELECT id FROM users WHERE username = 'admin'`;
-    if (adminExists.length === 0) {
-      const hashedPassword = bcrypt.hashSync('admin123', 10);
-      await sql`INSERT INTO users (username, email, password, role) VALUES ('admin', 'admin@datasystem.com', ${hashedPassword}, 'admin')`;
-      console.log('✅ Default admin user created (admin/admin123)');
-    }
+    // Criar usuário admin padrão
+    const hashedPassword = bcrypt.hashSync('admin123', 10);
+    await sql`INSERT INTO users (username, email, password, role) VALUES ('admin', 'admin@datasystem.com', ${hashedPassword}, 'admin')`;
+    console.log('✅ Default admin user created (admin/admin123)');
 
     console.log('✅ Database initialized');
   } catch (error) {
@@ -384,24 +386,62 @@ const requireAdmin = (req, res, next) => {
   next();
 };
 
+// Debug endpoint para verificar tabela users
+app.get('/api/debug/users-schema', async (req, res) => {
+  try {
+    const columns = await sql`
+      SELECT column_name, data_type 
+      FROM information_schema.columns 
+      WHERE table_name = 'users'
+    `;
+    const users = await sql`SELECT id, username, email, role, password IS NOT NULL as has_password FROM users`;
+    res.json({ columns, users });
+  } catch (error) {
+    res.json({ error: error.message });
+  }
+});
+
+// Endpoint para forçar inicialização do banco
+app.post('/api/init-db', async (req, res) => {
+  try {
+    console.log('🔄 Forcing database initialization...');
+    await initDatabase();
+    res.json({ success: true, message: 'Database initialized' });
+  } catch (error) {
+    console.error('❌ Init error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Login
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { username, password } = req.body;
+    console.log('📝 Login attempt for:', username);
 
     if (!username || !password) {
       return res.status(400).json({ error: 'Username e password são obrigatórios' });
     }
 
     const users = await sql`SELECT * FROM users WHERE username = ${username}`;
+    console.log('📝 Users found:', users.length);
     const user = users[0];
 
     if (!user) {
+      console.log('❌ User not found');
       return res.status(401).json({ error: 'Credenciais inválidas' });
+    }
+
+    console.log('📝 User found, has password:', !!user.password, 'password type:', typeof user.password);
+    
+    if (!user.password) {
+      console.log('❌ User has no password stored');
+      return res.status(401).json({ error: 'Credenciais inválidas - senha não configurada' });
     }
 
     const validPassword = bcrypt.compareSync(password, user.password);
     if (!validPassword) {
+      console.log('❌ Invalid password');
       return res.status(401).json({ error: 'Credenciais inválidas' });
     }
 
