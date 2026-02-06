@@ -51,16 +51,24 @@ import TeamInsightsDashboard from './components/TeamInsightsDashboard.tsx';
 import TabsConfigModal, { loadTabsConfig, saveTabsConfig } from './components/TabsConfigModal.tsx';
 import PullRequestsDashboard from './components/PullRequestsDashboard.tsx';
 import ScrumCTCDashboard from './components/ScrumCTCDashboard.tsx';
+import DORAMetricsDashboard from './components/DORAMetricsDashboard.tsx';
+import SLATrackingDashboard from './components/SLATrackingDashboard.tsx';
+import ExecutiveHomeDashboard from './components/ExecutiveHomeDashboard.tsx';
+import FlowEfficiencyChart from './components/FlowEfficiencyChart.tsx';
+import ActivityHeatmap from './components/ActivityHeatmap.tsx';
+import ReworkAnalysisChart from './components/ReworkAnalysisChart.tsx';
+import StoryPointsVsCycleTimeChart from './components/StoryPointsVsCycleTimeChart.tsx';
 
 // Import Types
 import { WorkItem, WorkItemFilters } from './types.ts';
 
 // Import Metrics
-import { calculatePerformanceMetrics, calculateQualityMetrics } from './utils/metrics.ts';
+import { calculatePerformanceMetrics, calculateQualityMetrics, COMPLETED_STATES } from './utils/metrics.ts';
 
-type Tab = 'team-insights' | 'cycle-analytics' | 'performance' | 'quality' | 'kanban' | 'detailed-throughput' | 'bottlenecks' | 'tags' | 'clients' | 'montecarlo' | 'item-list' | 'rootcause' | 'backlog' | 'impedimentos' | 'po-analysis' | 'pull-requests' | 'scrum-ctc';
+type Tab = 'executive' | 'team-insights' | 'cycle-analytics' | 'performance' | 'quality' | 'kanban' | 'detailed-throughput' | 'bottlenecks' | 'tags' | 'clients' | 'montecarlo' | 'item-list' | 'rootcause' | 'backlog' | 'impedimentos' | 'po-analysis' | 'pull-requests' | 'scrum-ctc' | 'dora' | 'sla';
 
 const DEFAULT_TAB_CONFIG = [
+  { id: 'executive', label: 'Visão Executiva', visible: true },
   { id: 'team-insights', label: 'Insights por Time', visible: true },
   { id: 'cycle-analytics', label: 'Cycle Time Analytics', visible: true },
   { id: 'performance', label: 'Performance Geral', visible: true },
@@ -77,12 +85,18 @@ const DEFAULT_TAB_CONFIG = [
   { id: 'impedimentos', label: 'Impedimentos', visible: true },
   { id: 'po-analysis', label: 'Análise de Demanda', visible: true },
   { id: 'pull-requests', label: 'Pull Requests & Code Review', visible: true },
-  { id: 'scrum-ctc', label: 'Scrum - CTC', visible: true },
+  { id: 'scrum-ctc', label: 'Scrum Dashboard', visible: true },
+  { id: 'dora', label: 'DORA Metrics', visible: true },
+  { id: 'sla', label: 'SLA Tracking', visible: true },
 ];
 
 const App = () => {
   const { isAuthenticated, isLoading: authLoading, isAdmin } = useAuth();
-  const [activeTab, setActiveTab] = useState<Tab>('team-insights');
+  const [activeTab, setActiveTab] = useState<Tab>(() => {
+    const params = new URLSearchParams(window.location.search);
+    const urlTab = params.get('tab') as Tab;
+    return urlTab && DEFAULT_TAB_CONFIG.some(t => t.id === urlTab) ? urlTab : 'executive';
+  });
   const [showUserManagement, setShowUserManagement] = useState(false);
   const { workItems, loading: loadingWIs, error: errorWIs, lastSyncStatus, syncing, handleSync } = useAzureDevOpsData();
 
@@ -101,6 +115,7 @@ const App = () => {
     states: [],
     clients: [],
     tags: [],
+    priorities: [],
     periodMode: undefined,
     specificMonth: undefined,
     customStartDate: undefined,
@@ -127,14 +142,18 @@ const App = () => {
     }
 
     return workItems.filter(item => {
-      // Usa changedDate para filtrar itens recentemente ativos (não apenas criados)
-      const itemDate = new Date(item.changedDate || item.createdDate);
+      // Usa closedDate para itens concluídos (throughput preciso), changedDate para demais
+      const isCompleted = COMPLETED_STATES.includes(item.state);
+      const itemDate = isCompleted && item.closedDate 
+        ? new Date(item.closedDate as string) 
+        : new Date(item.changedDate || item.createdDate);
       if (workItemFilters.period !== 0 && (itemDate < startDate || itemDate > endDate)) return false;
       if (workItemFilters.teams.length > 0 && !workItemFilters.teams.includes(item.team)) return false;
       if (workItemFilters.assignedTos.length > 0 && !workItemFilters.assignedTos.includes(item.assignedTo || '')) return false;
       if (workItemFilters.types.length > 0 && !workItemFilters.types.includes(item.type)) return false;
       if (workItemFilters.states.length > 0 && !workItemFilters.states.includes(item.state)) return false;
       if (workItemFilters.clients.length > 0 && item.tipoCliente && !workItemFilters.clients.includes(item.tipoCliente)) return false;
+      if (workItemFilters.priorities.length > 0 && !workItemFilters.priorities.includes(String(item.priority || ''))) return false;
       const itemTags = Array.isArray(item.tags) ? item.tags : (item.tags ? item.tags.split(';').map(t => t.trim()) : []);
       if (workItemFilters.tags.length > 0 && (!itemTags.length || !itemTags.some(t => workItemFilters.tags.includes(t)))) return false;
       return true;
@@ -225,6 +244,9 @@ const App = () => {
   
   const handleTabClick = (tab: Tab) => {
     setActiveTab(tab);
+    const url = new URL(window.location.href);
+    url.searchParams.set('tab', tab);
+    window.history.replaceState({}, '', url.toString());
   }
 
   const handleOpenModal = () => {
@@ -341,6 +363,14 @@ const App = () => {
                 <WIPLimits workItems={filteredWorkItems} />
               </div>
             </div>
+            {/* Activity Heatmap */}
+            <div className="mt-6">
+              <ActivityHeatmap data={filteredWorkItems} />
+            </div>
+            {/* Story Points vs Cycle Time */}
+            <div className="mt-6">
+              <StoryPointsVsCycleTimeChart data={filteredWorkItems} />
+            </div>
           </>
         );
       case 'quality':
@@ -376,6 +406,10 @@ const App = () => {
                   <h3 className="text-ds-light-text font-bold text-lg mb-4">Tendência de Criação</h3>
                   <BugCreationTrendChart data={filteredWorkItems} period={workItemFilters.period} />
                 </div>
+            </div>
+            {/* Rework Analysis */}
+            <div className="mt-6">
+              <ReworkAnalysisChart data={filteredWorkItems} />
             </div>
           </>
         );
@@ -423,6 +457,8 @@ const App = () => {
                   <ThroughputHistogram data={filteredWorkItems} />
                 </div>
             </div>
+            {/* Flow Efficiency */}
+            <FlowEfficiencyChart data={filteredWorkItems} />
           </>
         );
       case 'detailed-throughput':
@@ -547,8 +583,29 @@ const App = () => {
       case 'scrum-ctc':
         return (
           <>
-            <SectionHeader title="Scrum - CTC (Franquia)" />
+            <SectionHeader title="Scrum Dashboard" />
             <ScrumCTCDashboard data={filteredWorkItems} />
+          </>
+        );
+      case 'executive':
+        return (
+          <>
+            <SectionHeader title="Visão Executiva" />
+            <ExecutiveHomeDashboard data={filteredWorkItems} />
+          </>
+        );
+      case 'dora':
+        return (
+          <>
+            <SectionHeader title="DORA Metrics" />
+            <DORAMetricsDashboard data={filteredWorkItems} />
+          </>
+        );
+      case 'sla':
+        return (
+          <>
+            <SectionHeader title="SLA Tracking" />
+            <SLATrackingDashboard data={filteredWorkItems} />
           </>
         );
       default:
@@ -581,7 +638,7 @@ const App = () => {
 
   return (
     <div className="min-h-screen bg-ds-dark-blue">
-      <Header lastSyncStatus={lastSyncStatus} onOpenUserManagement={isAdmin ? () => setShowUserManagement(true) : undefined} onSync={handleSync} syncing={syncing} />
+      <Header lastSyncStatus={lastSyncStatus} onOpenUserManagement={isAdmin ? () => setShowUserManagement(true) : undefined} onSync={handleSync} syncing={syncing} workItems={workItems} />
 
       {showUserManagement ? (
         <div className="p-6 md:p-10">
@@ -613,10 +670,11 @@ const App = () => {
             </div>
         </div>
         
-        {activeTab !== 'cycle-analytics' && activeTab !== 'team-insights' && activeTab !== 'pull-requests' && activeTab !== 'scrum-ctc' && (
+        {activeTab !== 'cycle-analytics' && activeTab !== 'team-insights' && activeTab !== 'pull-requests' && activeTab !== 'scrum-ctc' && activeTab !== 'executive' && (
         <FilterBar 
             activeTab={activeTab}
             workItems={workItems}
+            filteredWorkItems={filteredWorkItems}
             workItemFilters={workItemFilters}
             onWorkItemFiltersChange={setWorkItemFilters}
             onClearFilters={() => {

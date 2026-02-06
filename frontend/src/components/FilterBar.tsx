@@ -3,10 +3,12 @@ import './FilterBar.css';
 import { WorkItem, WorkItemFilters, WorkItemTypes, WorkItemStates } from '../types.ts';
 import { format, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import html2canvas from 'html2canvas';
 
 interface FilterBarProps {
   activeTab: string;
   workItems: WorkItem[];
+  filteredWorkItems: WorkItem[];
   workItemFilters: WorkItemFilters;
   onWorkItemFiltersChange: (filters: WorkItemFilters) => void;
   onClearFilters: () => void;
@@ -39,6 +41,7 @@ const FilterSelect: React.FC<{
 
 const FilterBar: React.FC<FilterBarProps> = ({
   workItems,
+  filteredWorkItems,
   workItemFilters, onWorkItemFiltersChange,
   onClearFilters
 }) => {
@@ -64,6 +67,7 @@ const FilterBar: React.FC<FilterBarProps> = ({
     const assignedTos = [...new Set(workItems.map(i => i.assignedTo).filter(Boolean) as string[])].sort();
     const clients = [...new Set(workItems.map(i => i.tipoCliente).filter(Boolean) as string[])].sort();
     const tags = [...new Set(workItems.flatMap(i => i.tags))].sort();
+    const priorities = [...new Set(workItems.map(i => String(i.priority || '')).filter(Boolean))].sort();
     
     return {
       teams: teams.map(s => ({ value: s, label: s })),
@@ -72,6 +76,7 @@ const FilterBar: React.FC<FilterBarProps> = ({
       tags: tags.map(t => ({ value: t, label: t })),
       types: [...WorkItemTypes].map(t => ({ value: t, label: t })),
       states: [...WorkItemStates].map(s => ({ value: s, label: s })),
+      priorities: priorities.map(p => ({ value: p, label: `Prioridade ${p}` })),
     };
   }, [workItems]);
 
@@ -93,7 +98,7 @@ const FilterBar: React.FC<FilterBarProps> = ({
   };
 
   const handleExport = () => {
-    const dataToExport = workItems;
+    const dataToExport = filteredWorkItems;
     if (dataToExport.length === 0) return;
     
     const headers = Object.keys(dataToExport[0] || {}).join(',');
@@ -187,11 +192,12 @@ const FilterBar: React.FC<FilterBarProps> = ({
   const renderWorkItemFilters = () => (
     <div className="space-y-4">
       {renderPeriodFilter()}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
         <FilterSelect label="Equipe" value={workItemFilters.teams} onChange={e => onWorkItemFiltersChange({...workItemFilters, teams: Array.from(e.target.selectedOptions, (option: HTMLOptionElement) => option.value)})} options={options.teams} multiple />
         <FilterSelect label="Responsável" value={workItemFilters.assignedTos} onChange={e => onWorkItemFiltersChange({...workItemFilters, assignedTos: Array.from(e.target.selectedOptions, (option: HTMLOptionElement) => option.value)})} options={options.assignedTos} multiple />
         <FilterSelect label="Tipo de Item" value={workItemFilters.types} onChange={e => onWorkItemFiltersChange({...workItemFilters, types: Array.from(e.target.selectedOptions, (option: HTMLOptionElement) => option.value)})} options={options.types} multiple />
         <FilterSelect label="Status" value={workItemFilters.states} onChange={e => onWorkItemFiltersChange({...workItemFilters, states: Array.from(e.target.selectedOptions, (option: HTMLOptionElement) => option.value)})} options={options.states} multiple />
+        <FilterSelect label="Prioridade" value={workItemFilters.priorities} onChange={e => onWorkItemFiltersChange({...workItemFilters, priorities: Array.from(e.target.selectedOptions, (option: HTMLOptionElement) => option.value)})} options={options.priorities} multiple />
         <FilterSelect label="Tags" value={workItemFilters.tags} onChange={e => onWorkItemFiltersChange({...workItemFilters, tags: Array.from(e.target.selectedOptions, (option: HTMLOptionElement) => option.value)})} options={options.tags} multiple />
         <FilterSelect label="Tipo Cliente" value={workItemFilters.clients} onChange={e => onWorkItemFiltersChange({...workItemFilters, clients: Array.from(e.target.selectedOptions, (option: HTMLOptionElement) => option.value)})} options={options.clients} multiple />
       </div>
@@ -201,9 +207,24 @@ const FilterBar: React.FC<FilterBarProps> = ({
   return (
     <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
       {renderWorkItemFilters()}
-      <div className="flex items-center justify-end gap-4 mt-4">
-         <button onClick={handleExport} className="bg-ds-green/10 text-ds-green font-semibold py-2 px-4 rounded-md hover:bg-ds-green/20 transition-colors text-sm">Exportar CSV</button>
-         <button onClick={onClearFilters} className="bg-ds-muted/20 text-ds-light-text font-semibold py-2 px-4 rounded-md hover:bg-ds-muted/40 transition-colors text-sm">Limpar Filtros</button>
+      <div className="flex items-center justify-between gap-4 mt-4">
+         <span className="text-ds-text text-sm">
+           Mostrando <strong className="text-ds-green">{filteredWorkItems.length}</strong> de <strong className="text-ds-light-text">{workItems.length}</strong> itens
+         </span>
+         <div className="flex items-center gap-4">
+           <button onClick={() => {
+             const mainEl = document.querySelector('main');
+             if (!mainEl) return;
+             html2canvas(mainEl as HTMLElement, { backgroundColor: '#0a192f', scale: 2, useCORS: true }).then(canvas => {
+               const link = document.createElement('a');
+               link.download = `dashboard_${format(new Date(), 'yyyy-MM-dd_HHmm')}.png`;
+               link.href = canvas.toDataURL('image/png');
+               link.click();
+             });
+           }} className="bg-blue-500/10 text-blue-400 font-semibold py-2 px-4 rounded-md hover:bg-blue-500/20 transition-colors text-sm">Exportar PNG</button>
+           <button onClick={handleExport} className="bg-ds-green/10 text-ds-green font-semibold py-2 px-4 rounded-md hover:bg-ds-green/20 transition-colors text-sm">Exportar CSV</button>
+           <button onClick={onClearFilters} className="bg-ds-muted/20 text-ds-light-text font-semibold py-2 px-4 rounded-md hover:bg-ds-muted/40 transition-colors text-sm">Limpar Filtros</button>
+         </div>
       </div>
     </div>
   );

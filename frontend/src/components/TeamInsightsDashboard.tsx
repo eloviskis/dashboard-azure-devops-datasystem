@@ -3,9 +3,9 @@ import { WorkItem } from '../types';
 import { CHART_COLORS } from '../constants';
 import {
   ResponsiveContainer, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
-  BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Cell, Legend
+  BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Cell, Legend, LineChart, Line
 } from 'recharts';
-import { subMonths, isWithinInterval, startOfMonth, endOfMonth, format } from 'date-fns';
+import { subMonths, isWithinInterval, startOfMonth, endOfMonth, format, eachWeekOfInterval, endOfWeek, subDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 interface TeamInsightsDashboardProps {
@@ -177,6 +177,62 @@ const TeamInsightsDashboard: React.FC<TeamInsightsDashboardProps> = ({ data }) =
       { metric: 'Vel. Individual', team: Math.round((teamVelocity / maxValues.velocity) * 100), global: Math.round((globalVelocity / maxValues.velocity) * 100) },
     ];
   }, [selectedStats, teamStats, globalAvg]);
+
+  // Predictability Score (#10): based on cycle time standard deviation
+  const predictability = useMemo(() => {
+    if (!selectedStats) return null;
+    const filteredByDate = data.filter(item => {
+      const d = new Date(item.createdDate || '');
+      return isWithinInterval(d, { start: dateRange.start, end: dateRange.end }) && item.team === selectedTeam;
+    });
+    const completed = filteredByDate.filter(i => COMPLETED_STATES.includes(i.state) && i.cycleTime != null);
+    if (completed.length < 3) return null;
+
+    const cts = completed.map(i => i.cycleTime as number);
+    const avg = cts.reduce((a, b) => a + b, 0) / cts.length;
+    const stdDev = Math.sqrt(cts.reduce((sum, v) => sum + Math.pow(v - avg, 2), 0) / (cts.length - 1));
+    const cv = avg > 0 ? (stdDev / avg) * 100 : 0; // Coefficient of Variation
+    // Score: lower CV = more predictable. CV < 30% = excellent, < 60% = good, < 100% = moderate, else bad
+    const score = cv <= 30 ? 100 : cv <= 60 ? 80 : cv <= 100 ? 50 : 20;
+    const label = score >= 80 ? 'Previsível' : score >= 50 ? 'Moderado' : 'Imprevisível';
+    return { score, cv: Math.round(cv), stdDev: Math.round(stdDev * 10) / 10, avg: Math.round(avg * 10) / 10, label, count: completed.length };
+  }, [selectedStats, data, dateRange, selectedTeam]);
+
+  // Score trend over time - weekly (#13)
+  const scoreTrend = useMemo(() => {
+    if (!selectedTeam) return [];
+    const now = new Date();
+    const start = subDays(now, 84); // 12 weeks
+    const weeks = eachWeekOfInterval({ start, end: now }, { weekStartsOn: 1 });
+    
+    return weeks.map(weekStart => {
+      const wEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
+      const teamItems = data.filter(item => {
+        const d = new Date(item.changedDate || item.createdDate || '');
+        return item.team === selectedTeam && d >= weekStart && d <= wEnd;
+      });
+      const completed = teamItems.filter(i => COMPLETED_STATES.includes(i.state));
+      const withCT = completed.filter(i => i.cycleTime != null);
+      const throughput = completed.length;
+      const avgCT = withCT.length > 0 ? withCT.reduce((s, i) => s + (i.cycleTime as number), 0) / withCT.length : 0;
+      const bugs = teamItems.filter(i => BUG_TYPES.includes(i.type) || ISSUE_TYPES.includes(i.type)).length;
+      const bugRate = teamItems.length > 0 ? (bugs / teamItems.length) * 100 : 0;
+      const completionRate = teamItems.length > 0 ? (completed.length / teamItems.length) * 100 : 0;
+      
+      // Simplified weekly score
+      const tpScore = Math.min(throughput * 10, 100);
+      const ctScore = avgCT <= 3 ? 100 : avgCT <= 7 ? 80 : avgCT <= 14 ? 50 : 20;
+      const qualityScore = Math.max(0, 100 - bugRate * 2);
+      const score = Math.round((tpScore * 0.3 + ctScore * 0.3 + qualityScore * 0.2 + completionRate * 0.2));
+
+      return {
+        week: format(weekStart, 'dd/MM', { locale: ptBR }),
+        score: Math.min(score, 100),
+        throughput,
+        avgCT: Math.round(avgCT * 10) / 10,
+      };
+    });
+  }, [selectedTeam, data]);
 
   // Generate insights
   const insights = useMemo(() => {
@@ -386,6 +442,66 @@ const TeamInsightsDashboard: React.FC<TeamInsightsDashboardProps> = ({ data }) =
                 <Tooltip contentStyle={{ backgroundColor: CHART_COLORS.tooltipBg, border: 'none', borderRadius: '8px', color: '#E2E8F0' }} />
               </RadarChart>
             </ResponsiveContainer>
+          </div>
+
+          {/* Predictability Score & Score Trend */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Predictability */}
+            {predictability && (
+              <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
+                <h3 className="text-ds-light-text font-bold text-lg mb-4">🎯 Previsibilidade do Time</h3>
+                <div className="flex items-center gap-6">
+                  <div className="text-center">
+                    <p className={`text-4xl font-bold ${predictability.score >= 80 ? 'text-green-400' : predictability.score >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>
+                      {predictability.score}
+                    </p>
+                    <p className="text-ds-text text-xs mt-1">{predictability.label}</p>
+                  </div>
+                  <div className="flex-1 space-y-2 text-sm">
+                    <div className="flex justify-between text-ds-text">
+                      <span>Cycle Time Médio</span>
+                      <span className="text-ds-light-text font-semibold">{predictability.avg} dias</span>
+                    </div>
+                    <div className="flex justify-between text-ds-text">
+                      <span>Desvio Padrão (σ)</span>
+                      <span className="text-ds-light-text font-semibold">{predictability.stdDev} dias</span>
+                    </div>
+                    <div className="flex justify-between text-ds-text">
+                      <span>Coef. Variação</span>
+                      <span className={`font-semibold ${predictability.cv <= 30 ? 'text-green-400' : predictability.cv <= 60 ? 'text-yellow-400' : 'text-red-400'}`}>
+                        {predictability.cv}%
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-ds-text">
+                      <span>Amostra</span>
+                      <span className="text-ds-light-text">{predictability.count} itens</span>
+                    </div>
+                  </div>
+                </div>
+                <p className="text-ds-text text-xs mt-3">
+                  💡 Quanto menor o coeficiente de variação, mais previsível é o time. Meta: {'<'} 30%.
+                </p>
+              </div>
+            )}
+
+            {/* Score Trend */}
+            {scoreTrend.length > 0 && (
+              <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
+                <h3 className="text-ds-light-text font-bold text-lg mb-4">📈 Tendência do Score (12 semanas)</h3>
+                <ResponsiveContainer width="100%" height={220}>
+                  <LineChart data={scoreTrend}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
+                    <XAxis dataKey="week" stroke={CHART_COLORS.text} tick={{ fontSize: 10 }} />
+                    <YAxis stroke={CHART_COLORS.text} domain={[0, 100]} />
+                    <Tooltip contentStyle={{ backgroundColor: CHART_COLORS.tooltipBg, border: 'none', borderRadius: '8px', color: '#E2E8F0' }}
+                      formatter={(value: number, name: string) => [name === 'score' ? `${value} pts` : name === 'throughput' ? `${value} itens` : `${value}d`, name === 'score' ? 'Score' : name === 'throughput' ? 'Throughput' : 'CT Médio']} />
+                    <Legend />
+                    <Line type="monotone" dataKey="score" name="Score" stroke="#64FFDA" strokeWidth={2} dot={{ r: 3 }} />
+                    <Line type="monotone" dataKey="throughput" name="Throughput" stroke="#47C5FB" strokeWidth={1.5} dot={{ r: 2 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            )}
           </div>
 
           {/* Insights */}

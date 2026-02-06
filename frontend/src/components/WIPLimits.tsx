@@ -61,6 +61,14 @@ const WIPLimits: React.FC<WIPLimitsProps> = ({
       personWIP[person].items.push(item);
     });
 
+    // WIP por coluna/estado
+    const columnWIP: Record<string, number> = {};
+    const columnOrder = ['Para Desenvolver', 'Active', 'Ativo', 'Aguardando Code Review', 'Fazendo Code Review', 'Aguardando QA', 'Testando QA'];
+    inProgressItems.forEach(item => {
+      const state = item.state || 'Outros';
+      columnWIP[state] = (columnWIP[state] || 0) + 1;
+    });
+
     // Identificar violações
     const teamViolations = Object.entries(teamWIP)
       .filter(([, data]) => data.count > teamLimit)
@@ -74,6 +82,7 @@ const WIPLimits: React.FC<WIPLimitsProps> = ({
       totalWIP: inProgressItems.length,
       teamWIP: Object.entries(teamWIP).sort((a, b) => b[1].count - a[1].count),
       personWIP: Object.entries(personWIP).sort((a, b) => b[1].count - a[1].count),
+      columnWIP: columnOrder.filter(s => columnWIP[s]).map(s => ({ state: s, count: columnWIP[s] || 0 })),
       teamViolations,
       personViolations,
       hasViolations: teamViolations.length > 0 || personViolations.length > 0
@@ -142,6 +151,31 @@ const WIPLimits: React.FC<WIPLimitsProps> = ({
               </span>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* WIP por Coluna do Workflow */}
+      {wipAnalysis.columnWIP.length > 0 && (
+        <div className="mb-3 flex-shrink-0">
+          <h4 className="text-ds-text text-xs mb-2 uppercase tracking-wide">WIP por Coluna do Workflow</h4>
+          <div className="flex gap-1.5 flex-wrap">
+            {wipAnalysis.columnWIP.map(col => {
+              const colColors: Record<string, string> = {
+                'Para Desenvolver': 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
+                'Active': 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+                'Ativo': 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+                'Aguardando Code Review': 'bg-orange-500/20 text-orange-400 border-orange-500/30',
+                'Fazendo Code Review': 'bg-orange-600/20 text-orange-300 border-orange-600/30',
+                'Aguardando QA': 'bg-purple-500/20 text-purple-400 border-purple-500/30',
+                'Testando QA': 'bg-purple-600/20 text-purple-300 border-purple-600/30',
+              };
+              return (
+                <div key={col.state} className={`px-2 py-1 rounded border text-xs font-medium ${colColors[col.state] || 'bg-ds-muted/20 text-ds-text border-ds-border'}`}>
+                  {col.state}: <strong>{col.count}</strong>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 

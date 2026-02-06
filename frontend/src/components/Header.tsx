@@ -1,5 +1,6 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { SyncStatus } from '../hooks/useAzureDevOpsData';
+import { WorkItem } from '../types';
 // Fix: Import date-fns functions from their submodules for v2 compatibility.
 import { formatDistanceToNow } from 'date-fns'; // Updated to named imports
 // Fix: Import locale data with a default import from its specific path to resolve type errors.
@@ -11,10 +12,30 @@ interface HeaderProps {
     onOpenUserManagement?: () => void;
     onSync?: () => void;
     syncing?: boolean;
+    workItems?: WorkItem[];
 }
 
-const Header: React.FC<HeaderProps> = ({ lastSyncStatus, onOpenUserManagement, onSync, syncing }) => {
+const Header: React.FC<HeaderProps> = ({ lastSyncStatus, onOpenUserManagement, onSync, syncing, workItems = [] }) => {
     const { user, logout, isAdmin } = useAuth();
+    const [showAlerts, setShowAlerts] = useState(false);
+    
+    // Alert badge: high priority items aging in WIP
+    const alerts = useMemo(() => {
+        const IN_PROGRESS = ['Active', 'Ativo', 'Em Progresso', 'Para Desenvolver', 'Aguardando Code Review', 'Fazendo Code Review', 'Aguardando QA', 'Testando QA'];
+        const now = Date.now();
+        const critical: { id: number; title: string; age: number; priority: number; team: string }[] = [];
+        workItems.forEach(item => {
+            if (!IN_PROGRESS.includes(item.state)) return;
+            const created = new Date(item.createdDate || '');
+            const age = Math.round((now - created.getTime()) / (1000 * 60 * 60 * 24));
+            const priority = Number(item.priority) || 4;
+            const threshold = priority === 1 ? 3 : priority === 2 ? 7 : 14;
+            if (age > threshold) {
+                critical.push({ id: item.id, title: item.title, age, priority, team: item.team || '' });
+            }
+        });
+        return critical.sort((a, b) => a.priority - b.priority || b.age - a.age).slice(0, 15);
+    }, [workItems]);
     
     const syncInfo = useMemo(() => {
         if (!lastSyncStatus) {
@@ -92,6 +113,41 @@ const Header: React.FC<HeaderProps> = ({ lastSyncStatus, onOpenUserManagement, o
                         </svg>
                         <span className="hidden sm:inline">{syncing ? 'Sincronizando...' : 'Sincronizar'}</span>
                     </button>
+                )}
+                {/* Alert Badge */}
+                {alerts.length > 0 && (
+                    <div className="relative">
+                        <button
+                            onClick={() => setShowAlerts(!showAlerts)}
+                            className="relative flex items-center gap-1 px-3 py-2 bg-red-500/10 text-red-400 hover:bg-red-500/20 rounded-lg transition-colors text-sm"
+                            title={`${alerts.length} alertas de itens críticos`}
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                            </svg>
+                            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold">
+                                {alerts.length}
+                            </span>
+                        </button>
+                        {showAlerts && (
+                            <div className="absolute right-0 top-12 w-96 max-h-80 overflow-y-auto bg-ds-navy border border-ds-border rounded-lg shadow-xl z-50 p-3">
+                                <h4 className="text-ds-light-text font-semibold text-sm mb-2">🚨 Itens Críticos ({alerts.length})</h4>
+                                <div className="space-y-1">
+                                    {alerts.map((a, i) => (
+                                        <a key={i} href={`https://dev.azure.com/usabordeaux/USE/_workitems/edit/${a.id}`} target="_blank" rel="noopener noreferrer"
+                                           className="block p-2 hover:bg-ds-muted/20 rounded text-xs">
+                                            <div className="flex items-center gap-2">
+                                                <span className={`font-bold ${a.priority === 1 ? 'text-red-400' : a.priority === 2 ? 'text-yellow-400' : 'text-blue-400'}`}>P{a.priority}</span>
+                                                <span className="text-ds-light-text truncate flex-1">#{a.id} {a.title}</span>
+                                                <span className="text-red-400 font-semibold">{a.age}d</span>
+                                            </div>
+                                            <span className="text-ds-text">{a.team}</span>
+                                        </a>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 )}
                 {isAdmin && onOpenUserManagement && (
                     <button

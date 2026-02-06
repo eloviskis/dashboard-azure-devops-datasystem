@@ -3,9 +3,9 @@ import { WorkItem } from '../types';
 import { CHART_COLORS } from '../constants';
 import {
   ResponsiveContainer, BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
-  XAxis, YAxis, Tooltip, CartesianGrid, Legend, ReferenceLine
+  XAxis, YAxis, Tooltip, CartesianGrid, Legend, ReferenceLine, AreaChart, Area
 } from 'recharts';
-import { format, subMonths, startOfMonth, endOfMonth, isWithinInterval, eachMonthOfInterval } from 'date-fns';
+import { format, subMonths, startOfMonth, endOfMonth, isWithinInterval, eachMonthOfInterval, differenceInDays, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 interface ScrumCTCDashboardProps {
@@ -29,14 +29,24 @@ const ScrumCTCDashboard: React.FC<ScrumCTCDashboardProps> = ({ data }) => {
   const [sprintHistory, setSprintHistory] = useState<number>(8);
   const [filterMember, setFilterMember] = useState<string>('all');
   const [filterType, setFilterType] = useState<string>('all');
+  const [selectedScrumTeam, setSelectedScrumTeam] = useState<string>('__ctc__');
 
-  // Filter only Franquia team items
-  const franquiaItems = useMemo(() => {
-    return data.filter(item => {
-      const team = (item.team || '').toLowerCase();
-      return team.includes('franquia') || team.includes('ctc');
-    });
+  // Available teams
+  const availableTeams = useMemo(() => {
+    return [...new Set(data.map(i => i.team).filter(Boolean) as string[])].sort();
   }, [data]);
+
+  // Filter by selected team
+  const franquiaItems = useMemo(() => {
+    if (selectedScrumTeam === '__ctc__') {
+      return data.filter(item => {
+        const team = (item.team || '').toLowerCase();
+        return team.includes('franquia') || team.includes('ctc');
+      });
+    }
+    if (selectedScrumTeam === '__all__') return data;
+    return data.filter(item => item.team === selectedScrumTeam);
+  }, [data, selectedScrumTeam]);
 
   // Get iterations/sprints from iterationPath
   const sprintData = useMemo(() => {
@@ -207,15 +217,19 @@ const ScrumCTCDashboard: React.FC<ScrumCTCDashboardProps> = ({ data }) => {
     }));
   }, [velocityData, kpis]);
 
-  // Sprint history table
+  // Sprint history table with carry-over analysis
   const sprintHistory2 = useMemo(() => {
-    return filteredSprintData.map(sprint => {
+    return filteredSprintData.map((sprint, idx) => {
       const items = sprint.items;
       const committed = items.length;
       const delivered = items.filter(i => COMPLETED_STATES.includes(i.state)).length;
       const bugs = items.filter(i => i.type === 'Bug').length;
       const sp = items.reduce((sum, i) => sum + (i.storyPoints || 0), 0);
       const spDelivered = items.filter(i => COMPLETED_STATES.includes(i.state)).reduce((sum, i) => sum + (i.storyPoints || 0), 0);
+      // Carry-over: items not completed from this sprint
+      const notDone = items.filter(i => !COMPLETED_STATES.includes(i.state) && i.state !== 'Removed');
+      const carryOver = notDone.length;
+      const carryOverSP = Math.round(notDone.reduce((sum, i) => sum + (i.storyPoints || 0), 0) * 10) / 10;
       return {
         name: sprint.name,
         committed,
@@ -224,9 +238,52 @@ const ScrumCTCDashboard: React.FC<ScrumCTCDashboardProps> = ({ data }) => {
         bugs,
         sp: Math.round(sp * 10) / 10,
         spDelivered: Math.round(spDelivered * 10) / 10,
+        carryOver,
+        carryOverSP,
       };
     });
   }, [filteredSprintData]);
+
+  // Burndown data for current sprint
+  const burndownData = useMemo(() => {
+    if (!currentSprint) return [];
+    // Get items from current sprint
+    const currentSprintData = sprintData.find(s => s.name.includes(currentSprint.name.replace(/.*\\/, '')));
+    if (!currentSprintData) return [];
+    const items = currentSprintData.items;
+    if (items.length === 0) return [];
+    
+    const totalItems = items.length;
+    const totalSP = items.reduce((s, i) => s + (i.storyPoints || 0), 0);
+    
+    // Determine sprint date range
+    const createdDates = items.map(i => new Date(i.createdDate || '').getTime()).filter(d => !isNaN(d));
+    const sprintStart = createdDates.length > 0 ? new Date(Math.min(...createdDates)) : new Date();
+    const sprintEnd = addDays(sprintStart, sprintDuration * 7);
+    const totalDays = differenceInDays(sprintEnd, sprintStart) || 1;
+    
+    // Build daily burndown
+    const data: { day: string; remaining: number; spRemaining: number; ideal: number; idealSP: number }[] = [];
+    for (let d = 0; d <= totalDays; d++) {
+      const date = addDays(sprintStart, d);
+      const dateStr = format(date, 'dd/MM');
+      const completedByDate = items.filter(i => {
+        if (!i.closedDate) return false;
+        return new Date(i.closedDate as string) <= date && COMPLETED_STATES.includes(i.state);
+      });
+      const completedItems = completedByDate.length;
+      const completedSP = completedByDate.reduce((s, i) => s + (i.storyPoints || 0), 0);
+      
+      data.push({
+        day: dateStr,
+        remaining: totalItems - completedItems,
+        spRemaining: Math.round((totalSP - completedSP) * 10) / 10,
+        ideal: Math.round((totalItems * (1 - d / totalDays)) * 10) / 10,
+        idealSP: Math.round((totalSP * (1 - d / totalDays)) * 10) / 10,
+      });
+    }
+    return data;
+  }, [currentSprint, sprintData, sprintDuration]);
 
   // Scrum insights
   const scrumInsights = useMemo(() => {
@@ -308,8 +365,8 @@ const ScrumCTCDashboard: React.FC<ScrumCTCDashboardProps> = ({ data }) => {
   if (franquiaItems.length === 0) {
     return (
       <div className="bg-ds-navy p-8 rounded-lg border border-ds-border text-center">
-        <p className="text-ds-text text-lg">Nenhum dado encontrado para o time CTC (Franquia).</p>
-        <p className="text-ds-text text-sm mt-2">Verifique se os dados foram sincronizados e se existe um time com nome "Franquia" no Azure DevOps.</p>
+        <p className="text-ds-text text-lg">Nenhum dado encontrado para o time selecionado.</p>
+        <p className="text-ds-text text-sm mt-2">Verifique se os dados foram sincronizados e selecione um time com itens no Azure DevOps.</p>
       </div>
     );
   }
@@ -319,6 +376,15 @@ const ScrumCTCDashboard: React.FC<ScrumCTCDashboardProps> = ({ data }) => {
       {/* Scrum Filters */}
       <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
         <div className="flex flex-wrap items-end gap-4">
+          <div>
+            <label className="text-ds-text text-sm mb-1 block">Time Scrum:</label>
+            <select value={selectedScrumTeam} onChange={e => setSelectedScrumTeam(e.target.value)}
+              className="bg-ds-navy border border-ds-border text-ds-light-text text-sm rounded-md p-2">
+              <option value="__ctc__">CTC (Franquia)</option>
+              <option value="__all__">Todos os Times</option>
+              {availableTeams.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
           <div>
             <label className="text-ds-text text-sm mb-1 block">Duração do Sprint:</label>
             <select value={sprintDuration} onChange={e => setSprintDuration(Number(e.target.value))}
@@ -355,7 +421,7 @@ const ScrumCTCDashboard: React.FC<ScrumCTCDashboardProps> = ({ data }) => {
             </select>
           </div>
           <div className="text-ds-green text-xs flex items-center gap-2">
-            <span>🏷️</span> Time: <strong>CTC (Franquia)</strong> — {franquiaItems.length} itens totais
+            <span>🏷️</span> Time: <strong>{selectedScrumTeam === '__ctc__' ? 'CTC (Franquia)' : selectedScrumTeam === '__all__' ? 'Todos' : selectedScrumTeam}</strong> — {franquiaItems.length} itens totais
             {currentSprint && (
               <span className="ml-2 px-2 py-1 rounded-full bg-ds-green/20 text-ds-green font-bold text-xs border border-ds-green/40">
                 🏃 Sprint Atual: {currentSprint.name} ({currentSprint.count} itens ativos)
@@ -383,6 +449,26 @@ const ScrumCTCDashboard: React.FC<ScrumCTCDashboardProps> = ({ data }) => {
           </div>
         ))}
       </div>
+
+      {/* Burndown Chart */}
+      {burndownData.length > 0 && (
+        <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
+          <h3 className="text-ds-light-text font-bold text-lg mb-4">🔥 Sprint Burndown — {currentSprint?.name}</h3>
+          <ResponsiveContainer width="100%" height={350}>
+            <AreaChart data={burndownData}>
+              <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
+              <XAxis dataKey="day" stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} />
+              <YAxis stroke={CHART_COLORS.text} />
+              <Tooltip contentStyle={{ backgroundColor: CHART_COLORS.tooltipBg, border: 'none', borderRadius: '8px', color: '#E2E8F0' }} />
+              <Legend />
+              <Area type="monotone" dataKey="remaining" name="Itens Restantes" stroke="#F56565" fill="#F56565" fillOpacity={0.15} strokeWidth={2} />
+              <Area type="monotone" dataKey="spRemaining" name="SP Restantes" stroke="#47C5FB" fill="#47C5FB" fillOpacity={0.1} strokeWidth={2} />
+              <Line type="monotone" dataKey="ideal" name="Ideal (Itens)" stroke="#FFB86C" strokeDasharray="5 5" strokeWidth={1.5} dot={false} />
+              <Line type="monotone" dataKey="idealSP" name="Ideal (SP)" stroke="#64FFDA" strokeDasharray="5 5" strokeWidth={1.5} dot={false} />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      )}
 
       {/* Velocity Chart */}
       <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
@@ -463,8 +549,10 @@ const ScrumCTCDashboard: React.FC<ScrumCTCDashboardProps> = ({ data }) => {
                 <th className="px-4 py-3">Comprometido</th>
                 <th className="px-4 py-3">Entregue</th>
                 <th className="px-4 py-3">Confiabilidade</th>
-                <th className="px-4 py-3">SP Comprometidos</th>
+                <th className="px-4 py-3">SP Comprom.</th>
                 <th className="px-4 py-3">SP Entregues</th>
+                <th className="px-4 py-3">Carry-over</th>
+                <th className="px-4 py-3">Carry SP</th>
                 <th className="px-4 py-3">Bugs</th>
               </tr>
             </thead>
@@ -481,6 +569,8 @@ const ScrumCTCDashboard: React.FC<ScrumCTCDashboardProps> = ({ data }) => {
                   </td>
                   <td className="px-4 py-3">{sprint.sp}</td>
                   <td className="px-4 py-3 text-blue-400">{sprint.spDelivered}</td>
+                  <td className="px-4 py-3">{sprint.carryOver > 0 ? <span className="text-orange-400 font-semibold">{sprint.carryOver}</span> : '0'}</td>
+                  <td className="px-4 py-3">{sprint.carryOverSP > 0 ? <span className="text-orange-400">{sprint.carryOverSP}</span> : '0'}</td>
                   <td className="px-4 py-3">{sprint.bugs > 0 ? <span className="text-red-400">{sprint.bugs}</span> : '0'}</td>
                 </tr>
               ))}

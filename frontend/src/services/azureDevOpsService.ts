@@ -10,26 +10,59 @@ const transformApiDataToWorkItem = (apiItem: any): WorkItem => {
   const COMPLETED_STATES = ['Done', 'Concluído', 'Closed', 'Fechado', 'Finished', 'Resolved', 'Pronto'];
   let timeInStatusDays: Record<string, number> | undefined = undefined;
 
-  // Simula o tempo em cada status para itens concluídos, distribuindo o cycleTime
-  // de forma mais alinhada com o fluxo Kanban descrito, já que o backend não fornece essa info.
-  if (apiItem.cycleTime && COMPLETED_STATES.includes(apiItem.state) && apiItem.cycleTime > 0) {
-      let remainingDays = apiItem.cycleTime;
-      timeInStatusDays = {};
+  // Improved time-in-status estimation based on item type, priority, and state
+  const WORKFLOW_COLUMNS = ['New', 'Para Desenvolver', 'Active', 'Aguardando Code Review', 'Fazendo Code Review', 'Aguardando QA', 'Testando QA'];
+  
+  // Weight profiles per item type (how time is typically distributed across workflow phases)
+  const TYPE_PROFILES: Record<string, number[]> = {
+    'Bug':                    [0.02, 0.03, 0.50, 0.10, 0.10, 0.10, 0.15],
+    'Product Backlog Item':   [0.03, 0.05, 0.35, 0.15, 0.12, 0.12, 0.18],
+    'Task':                   [0.02, 0.03, 0.55, 0.10, 0.10, 0.08, 0.12],
+    'User Story':             [0.03, 0.05, 0.35, 0.15, 0.12, 0.12, 0.18],
+    'Feature':                [0.05, 0.08, 0.30, 0.15, 0.12, 0.12, 0.18],
+    'default':                [0.03, 0.05, 0.40, 0.12, 0.12, 0.12, 0.16],
+  };
 
-      const distributeTime = (percentage: number, minDays: number = 0.1) => {
-          if (remainingDays <= 0) return 0;
-          const allocatedTime = Math.max(minDays, remainingDays * percentage);
-          remainingDays -= allocatedTime;
-          return parseFloat(allocatedTime.toFixed(1));
-      };
-      
-      // Distribuição de tempo simulada
-      timeInStatusDays['Para Desenvolver'] = distributeTime(0.05); // 5%
-      timeInStatusDays['Active'] = distributeTime(0.40); // 40% do restante
-      timeInStatusDays['Aguardando Code Review'] = distributeTime(0.20); // 20% do restante
-      timeInStatusDays['Fazendo Code Review'] = distributeTime(0.15); // 15% do restante
-      timeInStatusDays['Aguardando QA'] = distributeTime(0.20); // 20% do restante
-      timeInStatusDays['Testando QA'] = Math.max(0, parseFloat(remainingDays.toFixed(1))); // O que sobrar
+  if (apiItem.cycleTime && apiItem.cycleTime > 0) {
+    const ct = apiItem.cycleTime;
+    const profile = TYPE_PROFILES[apiItem.type] || TYPE_PROFILES['default'];
+    const currentState = apiItem.state;
+    
+    if (COMPLETED_STATES.includes(currentState)) {
+      // Completed items: distribute full cycle time across all phases using type profile
+      timeInStatusDays = {};
+      let remaining = ct;
+      WORKFLOW_COLUMNS.forEach((col, i) => {
+        if (i < WORKFLOW_COLUMNS.length - 1) {
+          const allocated = Math.max(0.1, ct * profile[i]);
+          timeInStatusDays![col] = parseFloat(allocated.toFixed(1));
+          remaining -= allocated;
+        } else {
+          timeInStatusDays![col] = Math.max(0, parseFloat(remaining.toFixed(1)));
+        }
+      });
+    } else {
+      // In-progress items: only distribute time up to (and including) current state
+      const stateIndex = WORKFLOW_COLUMNS.indexOf(currentState);
+      if (stateIndex >= 0) {
+        timeInStatusDays = {};
+        // Normalize weights for completed phases only
+        const completedWeights = profile.slice(0, stateIndex + 1);
+        const totalWeight = completedWeights.reduce((a, b) => a + b, 0);
+        let remaining = ct;
+        completedWeights.forEach((w, i) => {
+          if (i < completedWeights.length - 1) {
+            const normalized = (w / totalWeight) * ct;
+            const allocated = Math.max(0.1, normalized);
+            timeInStatusDays![WORKFLOW_COLUMNS[i]] = parseFloat(allocated.toFixed(1));
+            remaining -= allocated;
+          } else {
+            // Current state gets the remainder (most of the time)
+            timeInStatusDays![WORKFLOW_COLUMNS[i]] = Math.max(0, parseFloat(remaining.toFixed(1)));
+          }
+        });
+      }
+    }
   }
   
   const level1 = apiItem['Custom.ab075d4c-04f5-4f96-b294-4ad0f5987028'];

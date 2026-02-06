@@ -446,6 +446,97 @@ const CycleTimeAnalyticsDashboard: React.FC<CycleTimeAnalyticsDashboardProps> = 
         </ResponsiveContainer>
       </div>
 
+      {/* Cycle Time por Tipo de Item (#11) */}
+      <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
+        <h3 className="text-ds-light-text font-bold text-lg mb-4">📊 Cycle Time por Tipo de Item</h3>
+        {(() => {
+          const typeMap: Record<string, number[]> = {};
+          filteredItems.forEach(item => {
+            const t = item.type || 'Outros';
+            if (!typeMap[t]) typeMap[t] = [];
+            typeMap[t].push(item.cycleTime as number);
+          });
+          const typeData = Object.entries(typeMap).map(([type, times]) => {
+            const sorted = [...times].sort((a, b) => a - b);
+            const avg = sorted.reduce((a, b) => a + b, 0) / sorted.length;
+            const p85Idx = Math.ceil(sorted.length * 0.85) - 1;
+            return { type, avg: Math.round(avg * 10) / 10, p85: Math.round((sorted[p85Idx] || 0) * 10) / 10, count: sorted.length };
+          }).sort((a, b) => b.avg - a.avg);
+          const typeColors: Record<string, string> = { 'Bug': '#f56565', 'Issue': '#f6e05e', 'Product Backlog Item': '#64FFDA', 'Task': '#47C5FB', 'User Story': '#B794F4', 'Feature': '#FBB6CE', 'Eventuality': '#ED8936' };
+          return typeData.length > 0 ? (
+            <div>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={typeData} layout="vertical" margin={{ left: 120 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
+                  <XAxis type="number" stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} />
+                  <YAxis type="category" dataKey="type" stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} width={110} />
+                  <Tooltip contentStyle={{ backgroundColor: CHART_COLORS.tooltipBg, border: 'none', borderRadius: '8px', color: '#E2E8F0' }} formatter={(v: any) => [`${v} dias`]} />
+                  <Legend />
+                  <Bar dataKey="avg" name="CT Médio (dias)" fill="#64FFDA" radius={[0, 4, 4, 0]}>
+                    {typeData.map((entry) => (
+                      <Cell key={entry.type} fill={typeColors[entry.type] || '#64FFDA'} />
+                    ))}
+                  </Bar>
+                  <Bar dataKey="p85" name="P85 (dias)" fill="#FFB86C" radius={[0, 4, 4, 0]} fillOpacity={0.6} />
+                </BarChart>
+              </ResponsiveContainer>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-3">
+                {typeData.map(t => (
+                  <div key={t.type} className="p-2 bg-ds-bg rounded text-xs text-center">
+                    <span className="text-ds-text">{t.type}</span>
+                    <p className="text-ds-light-text font-bold">{t.avg}d avg | {t.p85}d P85</p>
+                    <p className="text-ds-text">{t.count} itens</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : <p className="text-ds-text text-center py-4">Sem dados suficientes.</p>;
+        })()}
+      </div>
+
+      {/* Top Outliers (#12) */}
+      <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
+        <h3 className="text-ds-light-text font-bold text-lg mb-4">🐌 Top 15 Outliers de Cycle Time</h3>
+        {(() => {
+          const outliers = [...filteredItems]
+            .filter(i => i.cycleTime != null)
+            .sort((a, b) => (b.cycleTime as number) - (a.cycleTime as number))
+            .slice(0, 15);
+          return outliers.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left text-ds-text">
+                <thead className="text-xs text-ds-light-text uppercase bg-ds-navy/50">
+                  <tr>
+                    <th className="px-3 py-2">#</th>
+                    <th className="px-3 py-2">ID</th>
+                    <th className="px-3 py-2">Título</th>
+                    <th className="px-3 py-2">Tipo</th>
+                    <th className="px-3 py-2">Time</th>
+                    <th className="px-3 py-2">CT (dias)</th>
+                    <th className="px-3 py-2">Link</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {outliers.map((item, idx) => (
+                    <tr key={item.workItemId} className="border-b border-ds-border hover:bg-ds-muted/20">
+                      <td className="px-3 py-2 font-bold text-ds-green">{idx + 1}</td>
+                      <td className="px-3 py-2">{item.workItemId}</td>
+                      <td className="px-3 py-2 text-ds-light-text max-w-xs truncate">{item.title}</td>
+                      <td className="px-3 py-2">{item.type}</td>
+                      <td className="px-3 py-2">{item.team}</td>
+                      <td className="px-3 py-2 font-bold text-red-400">{item.cycleTime}</td>
+                      <td className="px-3 py-2">
+                        {item.url && <a href={item.url} target="_blank" rel="noopener noreferrer" className="text-ds-green hover:underline text-xs">Abrir ↗</a>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : <p className="text-ds-text text-center py-4">Sem outliers identificados.</p>;
+        })()}
+      </div>
+
       {/* Educational info */}
       <div className="bg-ds-navy/50 p-4 rounded-lg border border-ds-border/50">
         <h4 className="text-ds-light-text font-semibold mb-2">📚 Glossário</h4>
