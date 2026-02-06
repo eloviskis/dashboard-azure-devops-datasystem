@@ -5,7 +5,12 @@ const cors = require('cors');
 const schedule = require('node-schedule');
 const Database = require('better-sqlite3');
 const path = require('node:path');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 require('dotenv').config();
+
+// JWT Secret - em produção, usar variável de ambiente
+const JWT_SECRET = process.env.JWT_SECRET || 'devops-dashboard-secret-key-2026';
 
 const app = express();
 app.use(cors());
@@ -201,6 +206,33 @@ function calculateAge(changedDate) {
     )
   `);
   console.log('✅ sync_log table ready');
+
+  // Tabela de Usuários
+  dbRunAsync(`
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT UNIQUE NOT NULL,
+      email TEXT UNIQUE NOT NULL,
+      password TEXT NOT NULL,
+      role TEXT DEFAULT 'user',
+      createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+      updatedAt TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  console.log('✅ users table ready');
+
+  // Criar usuário admin padrão se não existir
+  const adminExists = db.prepare('SELECT id FROM users WHERE username = ?').get('admin');
+  if (!adminExists) {
+    const hashedPassword = bcrypt.hashSync('admin123', 10);
+    db.prepare('INSERT INTO users (username, email, password, role) VALUES (?, ?, ?, ?)').run(
+      'admin',
+      'admin@datasystem.com',
+      hashedPassword,
+      'admin'
+    );
+    console.log('✅ Default admin user created (admin/admin123)');
+  }
 
   console.log('✅ Database initialized');
 })();
@@ -531,6 +563,199 @@ app.get('/health', (req, res) => {
     database: dbPath,
     azureConfigured: isConfigured()
   });
+});
+
+// ===========================================
+// AUTHENTICATION ENDPOINTS
+// ===========================================
+
+// Middleware para verificar JWT
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({ error: 'Token não fornecido' });
+  }
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) {
+      return res.status(403).json({ error: 'Token inválido ou expirado' });
+    }
+    req.user = user;
+    next();
+  });
+};
+
+// Middleware para verificar se é admin
+const requireAdmin = (req, res, next) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Acesso negado. Requer permissão de administrador.' });
+  }
+  next();
+};
+
+// Login
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username e password são obrigatórios' });
+    }
+
+    const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
+
+    if (!user) {
+      return res.status(401).json({ error: 'Credenciais inválidas' });
+    }
+
+    const validPassword = bcrypt.compareSync(password, user.password);
+    if (!validPassword) {
+      return res.status(401).json({ error: 'Credenciais inválidas' });
+    }
+
+    const token = jwt.sign(
+      { id: user.id, username: user.username, email: user.email, role: user.role },
+      JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    res.json({
+      token,
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        role: user.role
+      }
+    });
+  } catch (error) {
+    console.error('❌ Login error:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+// Verificar token
+app.get('/api/auth/verify', authenticateToken, (req, res) => {
+  res.json({ valid: true, user: req.user });
+});
+
+// ===========================================
+// USER MANAGEMENT ENDPOINTS
+// ===========================================
+
+// Listar todos os usuários (admin only)
+app.get('/api/users', authenticateToken, requireAdmin, (req, res) => {
+  try {
+    const users = db.prepare('SELECT id, username, email, role, createdAt, updatedAt FROM users ORDER BY createdAt DESC').all();
+    res.json(users);
+  } catch (error) {
+    console.error('❌ Error fetching users:', error);
+    res.status(500).json({ error: 'Erro ao buscar usuários' });
+  }
+});
+
+// Criar novo usuário (admin only)
+app.post('/api/users', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { username, email, password, role = 'user' } = req.body;
+
+    if (!username || !email || !password) {
+      return res.status(400).json({ error: 'Username, email e password são obrigatórios' });
+    }
+
+    // Verificar se username ou email já existem
+    const existingUser = db.prepare('SELECT id FROM users WHERE username = ? OR email = ?').get(username, email);
+    if (existingUser) {
+      return res.status(400).json({ error: 'Username ou email já existe' });
+    }
+
+    const hashedPassword = bcrypt.hashSync(password, 10);
+    const result = db.prepare('INSERT INTO users (username, email, password, role) VALUES (?, ?, ?, ?)').run(
+      username,
+      email,
+      hashedPassword,
+      role
+    );
+
+    res.status(201).json({
+      id: result.lastInsertRowid,
+      username,
+      email,
+      role
+    });
+  } catch (error) {
+    console.error('❌ Error creating user:', error);
+    res.status(500).json({ error: 'Erro ao criar usuário' });
+  }
+});
+
+// Atualizar usuário (admin only)
+app.put('/api/users/:id', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { username, email, password, role } = req.body;
+
+    const existingUser = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+    if (!existingUser) {
+      return res.status(404).json({ error: 'Usuário não encontrado' });
+    }
+
+    // Verificar se username ou email já existem em outro usuário
+    if (username || email) {
+      const conflict = db.prepare('SELECT id FROM users WHERE (username = ? OR email = ?) AND id != ?').get(
+        username || existingUser.username,
+        email || existingUser.email,
+        id
+      );
+      if (conflict) {
+        return res.status(400).json({ error: 'Username ou email já existe' });
+      }
+    }
+
+    const updates = [];
+    const params = [];
+
+    if (username) { updates.push('username = ?'); params.push(username); }
+    if (email) { updates.push('email = ?'); params.push(email); }
+    if (password) { updates.push('password = ?'); params.push(bcrypt.hashSync(password, 10)); }
+    if (role) { updates.push('role = ?'); params.push(role); }
+    updates.push('updatedAt = CURRENT_TIMESTAMP');
+
+    params.push(id);
+
+    db.prepare(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`).run(...params);
+
+    const updatedUser = db.prepare('SELECT id, username, email, role, createdAt, updatedAt FROM users WHERE id = ?').get(id);
+    res.json(updatedUser);
+  } catch (error) {
+    console.error('❌ Error updating user:', error);
+    res.status(500).json({ error: 'Erro ao atualizar usuário' });
+  }
+});
+
+// Deletar usuário (admin only)
+app.delete('/api/users/:id', authenticateToken, requireAdmin, (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Não permitir deletar o próprio usuário
+    if (parseInt(id) === req.user.id) {
+      return res.status(400).json({ error: 'Não é possível deletar seu próprio usuário' });
+    }
+
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+    if (!user) {
+      return res.status(404).json({ error: 'Usuário não encontrado' });
+    }
+
+    db.prepare('DELETE FROM users WHERE id = ?').run(id);
+    res.json({ message: 'Usuário deletado com sucesso' });
+  } catch (error) {
+    console.error('❌ Error deleting user:', error);
+    res.status(500).json({ error: 'Erro ao deletar usuário' });
+  }
 });
 
 // Get all work items with calculations

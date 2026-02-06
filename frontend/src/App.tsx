@@ -5,6 +5,10 @@ import React, { useState, useMemo } from 'react';
 import { subDays } from 'date-fns';
 import { GoogleGenAI } from '@google/genai';
 
+// Import Auth
+import { useAuth } from './contexts/AuthContext';
+import LoginPage from './components/LoginPage';
+
 // Import Hooks
 import { useAzureDevOpsData } from './hooks/useAzureDevOpsData.ts';
 
@@ -51,6 +55,7 @@ import { calculatePerformanceMetrics, calculateQualityMetrics } from './utils/me
 type Tab = 'performance' | 'quality' | 'kanban' | 'detailed-throughput' | 'bottlenecks' | 'tags' | 'clients' | 'montecarlo' | 'item-list' | 'rootcause' | 'backlog' | 'impedimentos' | 'po-analysis';
 
 const App = () => {
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>('performance');
   const { workItems, loading: loadingWIs, error: errorWIs, lastSyncStatus } = useAzureDevOpsData();
 
@@ -413,6 +418,23 @@ const App = () => {
           {children}
       </button>
   );
+
+  // Tela de loading enquanto verifica autenticação
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-ds-dark-blue flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-ds-green mx-auto mb-4"></div>
+          <p className="text-ds-light-text">Carregando...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Se não estiver autenticado, mostrar tela de login
+  if (!isAuthenticated) {
+    return <LoginPage />;
+  }
 
   return (
     <div className="min-h-screen bg-ds-dark-blue">
