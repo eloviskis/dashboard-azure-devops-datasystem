@@ -169,6 +169,7 @@ const MonteCarloSimulation: React.FC<MonteCarloSimulationProps> = ({ data, filte
                     <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
                         <h3 className="text-ds-light-text font-bold text-lg mb-2">Previsão: Quantos itens em {numWeeks} semanas?</h3>
                         <div className="text-ds-text space-y-1 mb-4 text-sm">
+                            <p><span className="font-bold text-red-400">95% de probabilidade</span> de concluir <span className="font-bold text-white">{simulationResult.howMany.confidenceLevels.p95} ou mais</span> itens.</p>
                             <p><span className="font-bold text-ds-green">85% de probabilidade</span> de concluir <span className="font-bold text-white">{simulationResult.howMany.confidenceLevels.p85} ou mais</span> itens.</p>
                             <p><span className="font-bold text-ds-cyan">50% de probabilidade</span> de concluir <span className="font-bold text-white">{simulationResult.howMany.confidenceLevels.p50} ou mais</span> itens.</p>
                         </div>
@@ -180,13 +181,16 @@ const MonteCarloSimulation: React.FC<MonteCarloSimulationProps> = ({ data, filte
                                 <Tooltip contentStyle={{ backgroundColor: CHART_COLORS.tooltipBg, borderColor: CHART_COLORS.grid }}/>
                                 <Legend wrapperStyle={{ color: CHART_COLORS.text }} />
                                 <Bar dataKey="frequency" name="Frequência" fill={CHART_COLORS.primary} fillOpacity={0.8}/>
+                                <ReferenceLine x={simulationResult.howMany.confidenceLevels.p50} stroke="#47C5FB" strokeDasharray="3 3" label={{ value: '50%', position: 'insideTop', fill: '#47C5FB' }} />
                                 <ReferenceLine x={simulationResult.howMany.confidenceLevels.p85} stroke="#64FFDA" strokeDasharray="3 3" label={{ value: '85%', position: 'insideTop', fill: '#64FFDA' }} />
+                                <ReferenceLine x={simulationResult.howMany.confidenceLevels.p95} stroke="#F56565" strokeDasharray="3 3" label={{ value: '95%', position: 'insideTop', fill: '#F56565' }} />
                             </BarChart>
                         </ResponsiveContainer>
                     </div>
                     <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
                         <h3 className="text-ds-light-text font-bold text-lg mb-2">Previsão: Quando terminaremos {numItems} itens?</h3>
                          <div className="text-ds-text space-y-1 mb-4 text-sm">
+                            <p><span className="font-bold text-red-400">95% de probabilidade</span> de concluir em <span className="font-bold text-white">até {simulationResult.when.confidenceLevels.p95} semanas</span>.</p>
                             <p><span className="font-bold text-ds-green">85% de probabilidade</span> de concluir em <span className="font-bold text-white">até {simulationResult.when.confidenceLevels.p85} semanas</span>.</p>
                             <p><span className="font-bold text-ds-cyan">50% de probabilidade</span> de concluir em <span className="font-bold text-white">até {simulationResult.when.confidenceLevels.p50} semanas</span>.</p>
                         </div>
@@ -198,7 +202,9 @@ const MonteCarloSimulation: React.FC<MonteCarloSimulationProps> = ({ data, filte
                                 <Tooltip contentStyle={{ backgroundColor: CHART_COLORS.tooltipBg, borderColor: CHART_COLORS.grid }}/>
                                 <Legend wrapperStyle={{ color: CHART_COLORS.text }} />
                                 <Bar dataKey="frequency" name="Frequência" fill={CHART_COLORS.secondary} fillOpacity={0.8} />
+                                <ReferenceLine x={simulationResult.when.confidenceLevels.p50} stroke="#47C5FB" strokeDasharray="3 3" label={{ value: '50%', position: 'insideTop', fill: '#47C5FB' }} />
                                 <ReferenceLine x={simulationResult.when.confidenceLevels.p85} stroke="#47C5FB" strokeDasharray="3 3" label={{ value: '85%', position: 'insideTop', fill: '#47C5FB' }} />
+                                <ReferenceLine x={simulationResult.when.confidenceLevels.p95} stroke="#F56565" strokeDasharray="3 3" label={{ value: '95%', position: 'insideTop', fill: '#F56565' }} />
                             </BarChart>
                         </ResponsiveContainer>
                     </div>

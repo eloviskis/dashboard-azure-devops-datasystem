@@ -117,6 +117,44 @@ const TeamInsightsDashboard: React.FC<TeamInsightsDashboardProps> = ({ data }) =
 
   const selectedStats = useMemo(() => teamStats.find(t => t.team === selectedTeam), [teamStats, selectedTeam]);
 
+  // Team Score (0-100)
+  const teamScore = useMemo(() => {
+    if (!selectedStats || teamStats.length === 0) return null;
+    
+    const maxTP = Math.max(...teamStats.map(t => t.throughput), 1);
+    const maxCT = Math.max(...teamStats.map(t => t.avgCycleTime), 1);
+    
+    const tpScore = (selectedStats.throughput / maxTP) * 100;
+    const completionScore = selectedStats.completionRate;
+    const ctScore = Math.max(0, 100 - (selectedStats.avgCycleTime / maxCT) * 100);
+    const qualityScore = Math.max(0, 100 - selectedStats.bugRate);
+    const perCapita = selectedStats.throughput / (selectedStats.members || 1);
+    const maxPerCapita = Math.max(...teamStats.map(t => t.throughput / (t.members || 1)), 1);
+    const velocityScore = (perCapita / maxPerCapita) * 100;
+    
+    const total = Math.round((tpScore * 0.25 + completionScore * 0.2 + ctScore * 0.25 + qualityScore * 0.15 + velocityScore * 0.15));
+    
+    const strengths: string[] = [];
+    const weaknesses: string[] = [];
+    
+    if (tpScore >= 70) strengths.push('Throughput alto');
+    else if (tpScore < 40) weaknesses.push('Throughput baixo');
+    
+    if (completionScore >= 70) strengths.push('Taxa de conclusão excelente');
+    else if (completionScore < 40) weaknesses.push('Taxa de conclusão baixa');
+    
+    if (ctScore >= 70) strengths.push('Cycle Time rápido');
+    else if (ctScore < 40) weaknesses.push('Cycle Time lento');
+    
+    if (qualityScore >= 80) strengths.push('Qualidade alta');
+    else if (qualityScore < 60) weaknesses.push('Taxa de bugs elevada');
+    
+    if (velocityScore >= 70) strengths.push('Produtividade individual alta');
+    else if (velocityScore < 40) weaknesses.push('Produtividade individual baixa');
+    
+    return { total, strengths, weaknesses };
+  }, [selectedStats, teamStats]);
+
   // Radar data (normalized 0-100)
   const radarData = useMemo(() => {
     if (!selectedStats || teamStats.length === 0) return [];
@@ -253,6 +291,46 @@ const TeamInsightsDashboard: React.FC<TeamInsightsDashboardProps> = ({ data }) =
         </div>
       ) : selectedStats ? (
         <>
+          {/* Rankings */}
+          {/* Team Score */}
+          {teamScore && (
+            <div className="bg-ds-navy p-6 rounded-lg border border-ds-border">
+              <div className="flex flex-wrap items-center gap-8">
+                <div className="text-center">
+                  <p className="text-ds-text text-sm mb-2">Score Geral do Time</p>
+                  <div className={`text-5xl font-bold ${teamScore.total >= 70 ? 'text-green-400' : teamScore.total >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>
+                    {teamScore.total}
+                    <span className="text-lg text-ds-text"> / 100</span>
+                  </div>
+                  <div className="w-full bg-ds-border rounded-full h-3 mt-3">
+                    <div
+                      className={`h-3 rounded-full transition-all ${teamScore.total >= 70 ? 'bg-green-400' : teamScore.total >= 50 ? 'bg-yellow-400' : 'bg-red-400'}`}
+                      style={{ width: `${teamScore.total}%` }}
+                    />
+                  </div>
+                </div>
+                <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {teamScore.strengths.length > 0 && (
+                    <div>
+                      <p className="text-green-400 text-sm font-semibold mb-1">🟢 Pontos Fortes</p>
+                      {teamScore.strengths.map((s, i) => (
+                        <p key={i} className="text-green-300 text-xs">• {s}</p>
+                      ))}
+                    </div>
+                  )}
+                  {teamScore.weaknesses.length > 0 && (
+                    <div>
+                      <p className="text-red-400 text-sm font-semibold mb-1">🔴 Pontos Fracos</p>
+                      {teamScore.weaknesses.map((s, i) => (
+                        <p key={i} className="text-red-300 text-xs">• {s}</p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Rankings */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[

@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { WorkItem } from '../types.ts';
-import { format } from 'date-fns';
+import { format, differenceInDays } from 'date-fns';
 import { EmptyState } from './ChartStates.tsx';
 import { STATUS_COLORS } from '../constants.ts';
 
@@ -16,7 +16,8 @@ interface SortConfig {
   direction: SortDirection;
 }
 
-const ITEMS_PER_PAGE = 15;
+const ITEMS_PER_PAGE = 25;
+const OLD_ITEM_THRESHOLD_DAYS = 90;
 
 const SortableHeader: React.FC<{
     sortKey: SortKey,
@@ -41,6 +42,34 @@ const SortableHeader: React.FC<{
 const WorkItemTable: React.FC<WorkItemTableProps> = ({ data }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [sortConfig, setSortConfig] = useState<SortConfig | null>({ key: 'createdDate', direction: 'descending' });
+  const [searchText, setSearchText] = useState('');
+
+  // Export CSV function
+  const exportCSV = useCallback(() => {
+    const headers = ['ID', 'Título', 'Status', 'Responsável', 'Time', 'CR Nível 1', 'CR Nível 2', 'Tipo', 'Criado em', 'Cycle Time (dias)', 'Tags'];
+    const rows = data.map(item => [
+      item.workItemId,
+      `"${(item.title || '').replace(/"/g, '""')}"`,
+      item.state,
+      item.assignedTo || 'N/A',
+      item.team || '',
+      item.codeReviewLevel1 || 'N/A',
+      item.codeReviewLevel2 || 'N/A',
+      item.type,
+      item.createdDate ? format(new Date(item.createdDate), 'dd/MM/yyyy') : '',
+      item.cycleTime ?? '',
+      Array.isArray(item.tags) ? item.tags.join('; ') : (item.tags || ''),
+    ]);
+
+    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `work-items-${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }, [data]);
 
   // Counters for Code Review Level 1 and Level 2 by person
   const crCounters = useMemo(() => {
@@ -61,9 +90,24 @@ const WorkItemTable: React.FC<WorkItemTableProps> = ({ data }) => {
   }, [data]);
 
   const sortedItems = useMemo(() => {
-    let sortableItems = [...data];
+    // First filter by search text
+    let items = [...data];
+    if (searchText.trim()) {
+      const search = searchText.toLowerCase().trim();
+      items = items.filter(item =>
+        (item.title || '').toLowerCase().includes(search) ||
+        (item.assignedTo || '').toLowerCase().includes(search) ||
+        (item.team || '').toLowerCase().includes(search) ||
+        (item.type || '').toLowerCase().includes(search) ||
+        (item.state || '').toLowerCase().includes(search) ||
+        String(item.workItemId).includes(search) ||
+        (item.codeReviewLevel1 || '').toLowerCase().includes(search) ||
+        (item.codeReviewLevel2 || '').toLowerCase().includes(search)
+      );
+    }
+
     if (sortConfig !== null) {
-      sortableItems.sort((a, b) => {
+      items.sort((a, b) => {
         let aValue: any = a[sortConfig.key];
         let bValue: any = b[sortConfig.key];
 
@@ -79,8 +123,8 @@ const WorkItemTable: React.FC<WorkItemTableProps> = ({ data }) => {
         return 0;
       });
     }
-    return sortableItems;
-  }, [data, sortConfig]);
+    return items;
+  }, [data, sortConfig, searchText]);
 
   const requestSort = (key: SortKey) => {
     let direction: SortDirection = 'ascending';
@@ -110,11 +154,27 @@ const WorkItemTable: React.FC<WorkItemTableProps> = ({ data }) => {
 
   return (
     <div className="space-y-4">
-        {/* Total Counter */}
-        <div className="flex items-center justify-between bg-ds-navy p-3 rounded-lg border border-ds-border">
+        {/* Total Counter + Search + Export */}
+        <div className="flex flex-wrap items-center gap-4 bg-ds-navy p-3 rounded-lg border border-ds-border">
           <span className="text-ds-light-text font-semibold text-sm">
-            📊 Total de Itens: <span className="text-ds-green text-lg">{data.length}</span>
+            📊 Total: <span className="text-ds-green text-lg">{data.length}</span>
+            {searchText && <span className="text-ds-text text-xs ml-2">(filtrados: {sortedItems.length})</span>}
           </span>
+          <div className="flex-1">
+            <input
+              type="text"
+              placeholder="🔍 Buscar por título, responsável, time, ID..."
+              value={searchText}
+              onChange={e => { setSearchText(e.target.value); setCurrentPage(1); }}
+              className="bg-ds-dark-blue border border-ds-border text-ds-light-text text-sm rounded-md p-2 w-full max-w-md placeholder-ds-muted"
+            />
+          </div>
+          <button
+            onClick={exportCSV}
+            className="bg-ds-green/10 text-ds-green font-semibold py-2 px-4 rounded-md hover:bg-ds-green/20 transition-colors text-sm flex items-center gap-2"
+          >
+            📥 Exportar CSV
+          </button>
         </div>
 
         {/* Code Review Counters */}
@@ -165,10 +225,20 @@ const WorkItemTable: React.FC<WorkItemTableProps> = ({ data }) => {
                 </tr>
             </thead>
             <tbody>
-                {paginatedItems.map((item) => (
-                    <tr key={item.workItemId} className="bg-ds-navy border-b border-ds-border hover:bg-ds-muted/20">
-                        <td className="px-6 py-4 font-medium text-ds-light-text whitespace-nowrap">{item.workItemId}</td>
-                        <td className="px-6 py-4 max-w-xs truncate" title={item.title}>{item.title}</td>
+                {paginatedItems.map((item) => {
+                    const itemAge = item.createdDate ? differenceInDays(new Date(), new Date(item.createdDate)) : 0;
+                    const isOld = itemAge >= OLD_ITEM_THRESHOLD_DAYS && !['Done', 'Concluído', 'Closed', 'Fechado', 'Finished', 'Resolved', 'Pronto'].includes(item.state);
+                    return (
+                    <tr key={item.workItemId} className={`border-b border-ds-border hover:bg-ds-muted/20 ${isOld ? 'bg-red-900/10' : 'bg-ds-navy'}`}>
+                        <td className="px-6 py-4 font-medium text-ds-light-text whitespace-nowrap">
+                          {item.url ? (
+                            <a href={item.url} target="_blank" rel="noopener noreferrer" className="text-ds-green hover:underline">{item.workItemId}</a>
+                          ) : item.workItemId}
+                        </td>
+                        <td className="px-6 py-4 max-w-xs truncate" title={item.title}>
+                          {item.title}
+                          {isOld && <span className="ml-2 text-xs text-red-400" title={`Criado há ${itemAge} dias`}>🔴 {itemAge}d</span>}
+                        </td>
                         <td className="px-6 py-4">
                             <span className="flex items-center">
                                 <span className="h-2 w-2 rounded-full mr-2" style={{ backgroundColor: STATUS_COLORS[item.state] }}></span>
@@ -183,7 +253,8 @@ const WorkItemTable: React.FC<WorkItemTableProps> = ({ data }) => {
                         <td className="px-6 py-4">{format(item.createdDate, 'dd/MM/yyyy')}</td>
                         <td className="px-6 py-4 text-center">{item.cycleTime !== null ? item.cycleTime : '-'}</td>
                     </tr>
-                ))}
+                    );
+                })}
             </tbody>
         </table>
         

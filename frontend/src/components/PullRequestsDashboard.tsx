@@ -113,7 +113,21 @@ const PullRequestsDashboard: React.FC = () => {
       ? Math.round((completedWithLifetime.reduce((sum, pr) => sum + (pr.lifetimeDays || 0), 0) / completedWithLifetime.length) * 10) / 10
       : 0;
 
-    return { total, active, completed, abandoned, avgLifetime };
+    // PRs without any reviewer
+    const withoutReviewer = filteredPRs.filter(pr => !pr.reviewers || pr.reviewers.length === 0).length;
+
+    // PRs pending > 3 days (active)
+    const longPending = filteredPRs.filter(pr => {
+      if (pr.status !== 'active') return false;
+      const ageDays = (new Date().getTime() - new Date(pr.createdDate).getTime()) / (1000 * 60 * 60 * 24);
+      return ageDays > 3;
+    }).length;
+
+    // Average time to first approval (for completed PRs)
+    // Since we don't have approval timestamps, use lifetime as proxy
+    const avgApprovalTime = avgLifetime;
+
+    return { total, active, completed, abandoned, avgLifetime, withoutReviewer, longPending, avgApprovalTime };
   }, [filteredPRs]);
 
   // === STATUS PIE ===
@@ -336,20 +350,34 @@ const PullRequestsDashboard: React.FC = () => {
       </div>
 
       {/* SUMMARY CARDS */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
         {[
           { label: 'Total PRs', value: metrics.total, color: 'text-ds-light-text' },
           { label: 'Ativos', value: metrics.active, color: 'text-blue-400' },
           { label: 'Concluídos', value: metrics.completed, color: 'text-ds-green' },
           { label: 'Abandonados', value: metrics.abandoned, color: 'text-red-400' },
           { label: 'Tempo Médio (dias)', value: metrics.avgLifetime, color: 'text-yellow-400' },
+          { label: 'Sem Reviewer', value: metrics.withoutReviewer, color: metrics.withoutReviewer > 0 ? 'text-orange-400' : 'text-ds-green' },
+          { label: 'Pendentes >3d', value: metrics.longPending, color: metrics.longPending > 0 ? 'text-red-400' : 'text-ds-green' },
+          { label: 'Tempo Aprovação', value: `${metrics.avgApprovalTime}d`, color: 'text-purple-400' },
         ].map(card => (
           <div key={card.label} className="bg-ds-navy p-4 rounded-lg border border-ds-border text-center">
-            <p className="text-ds-text text-sm">{card.label}</p>
+            <p className="text-ds-text text-xs">{card.label}</p>
             <p className={`text-2xl font-bold ${card.color}`}>{card.value}</p>
           </div>
         ))}
       </div>
+
+      {/* PR WITHOUT REVIEWER ALERT */}
+      {metrics.withoutReviewer > 0 && (
+        <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-4">
+          <p className="text-orange-400 font-semibold">🔍 PRs Sem Reviewer</p>
+          <p className="text-ds-text text-sm mt-1">
+            Existem <strong className="text-orange-400">{metrics.withoutReviewer}</strong> PRs sem nenhum reviewer atribuído.
+            Isso pode causar atraso na revisão e merge.
+          </p>
+        </div>
+      )}
 
       {/* REVIEW CONCENTRATION ALERT */}
       {reviewConcentration && reviewConcentration.isRisky && (

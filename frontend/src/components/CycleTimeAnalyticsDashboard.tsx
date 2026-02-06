@@ -4,7 +4,7 @@ import { CHART_COLORS, STATUS_COLORS } from '../constants';
 import {
   ResponsiveContainer, LineChart, Line, BarChart, Bar,
   XAxis, YAxis, Tooltip, CartesianGrid, Legend, Cell,
-  ScatterChart, Scatter, ZAxis
+  ScatterChart, Scatter, ZAxis, ReferenceLine
 } from 'recharts';
 import { format, subWeeks, subMonths, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachWeekOfInterval, eachMonthOfInterval, differenceInDays, isWithinInterval } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -78,7 +78,7 @@ const CycleTimeAnalyticsDashboard: React.FC<CycleTimeAnalyticsDashboardProps> = 
 
   // Calculate metrics
   const metrics = useMemo(() => {
-    if (filteredItems.length === 0) return { avg: 0, median: 0, p85: 0, min: 0, max: 0, count: 0, avgLeadTime: 0 };
+    if (filteredItems.length === 0) return { avg: 0, median: 0, p50: 0, p85: 0, p95: 0, min: 0, max: 0, count: 0, avgLeadTime: 0 };
     
     const cycleTimes = filteredItems.map(i => i.cycleTime as number).sort((a, b) => a - b);
     const leadTimes = filteredItems.filter(i => i.leadTime != null).map(i => i.leadTime as number);
@@ -88,14 +88,20 @@ const CycleTimeAnalyticsDashboard: React.FC<CycleTimeAnalyticsDashboardProps> = 
     const median = cycleTimes.length % 2 === 0
       ? (cycleTimes[cycleTimes.length / 2 - 1] + cycleTimes[cycleTimes.length / 2]) / 2
       : cycleTimes[Math.floor(cycleTimes.length / 2)];
+    const p50Index = Math.ceil(cycleTimes.length * 0.50) - 1;
+    const p50 = cycleTimes[Math.max(0, p50Index)] || 0;
     const p85Index = Math.ceil(cycleTimes.length * 0.85) - 1;
     const p85 = cycleTimes[p85Index] || 0;
+    const p95Index = Math.ceil(cycleTimes.length * 0.95) - 1;
+    const p95 = cycleTimes[p95Index] || 0;
     const avgLeadTime = leadTimes.length > 0 ? leadTimes.reduce((a, b) => a + b, 0) / leadTimes.length : 0;
 
     return {
       avg: Math.round(avg * 10) / 10,
       median: Math.round(median * 10) / 10,
+      p50: Math.round(p50 * 10) / 10,
       p85: Math.round(p85 * 10) / 10,
+      p95: Math.round(p95 * 10) / 10,
       min: cycleTimes[0],
       max: cycleTimes[cycleTimes.length - 1],
       count: cycleTimes.length,
@@ -297,13 +303,13 @@ const CycleTimeAnalyticsDashboard: React.FC<CycleTimeAnalyticsDashboardProps> = 
       </div>
 
       {/* Metric Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
         <div className="bg-ds-navy p-4 rounded-lg border border-ds-border text-center">
           <p className="text-ds-text text-xs">Itens Concluídos</p>
           <p className="text-2xl font-bold text-ds-light-text">{metrics.count}</p>
         </div>
         <div className="bg-ds-navy p-4 rounded-lg border border-ds-border text-center">
-          <p className="text-ds-text text-xs">Cycle Time Médio</p>
+          <p className="text-ds-text text-xs">CT Médio</p>
           <p className="text-2xl font-bold text-ds-green">{metrics.avg} <span className="text-sm">dias</span></p>
         </div>
         <div className="bg-ds-navy p-4 rounded-lg border border-ds-border text-center">
@@ -311,18 +317,29 @@ const CycleTimeAnalyticsDashboard: React.FC<CycleTimeAnalyticsDashboardProps> = 
           <p className="text-2xl font-bold text-ds-light-text">{metrics.median} <span className="text-sm">dias</span></p>
         </div>
         <div className="bg-ds-navy p-4 rounded-lg border border-ds-border text-center relative group">
+          <p className="text-ds-text text-xs flex items-center justify-center gap-1">P50 <span className="cursor-help">ℹ️</span></p>
+          <p className="text-2xl font-bold text-cyan-400">{metrics.p50} <span className="text-sm">dias</span></p>
+          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 p-2 bg-ds-dark-blue border border-ds-border rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-50 pointer-events-none">
+            <p className="text-ds-light-text text-xs"><strong>P50:</strong> 50% dos itens são concluídos em até este tempo.</p>
+          </div>
+        </div>
+        <div className="bg-ds-navy p-4 rounded-lg border border-ds-border text-center relative group">
           <p className="text-ds-text text-xs flex items-center justify-center gap-1">
-            Cycle Time P85
+            P85
             <span className="cursor-help">ℹ️</span>
           </p>
           <p className="text-2xl font-bold text-yellow-400">{metrics.p85} <span className="text-sm">dias</span></p>
           <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-ds-dark-blue border border-ds-border rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-50 pointer-events-none">
             <p className="text-ds-light-text text-xs">
-              <strong>O que é P85?</strong><br />
-              Percentil 85: 85% dos itens são concluídos em até este tempo. 
-              É uma métrica mais realista que a média, pois descarta outliers extremos. 
-              Use para dar previsões de entrega com alta confiança.
+              <strong>P85:</strong> 85% dos itens são concluídos em até este tempo. É uma métrica mais realista que a média.
             </p>
+          </div>
+        </div>
+        <div className="bg-ds-navy p-4 rounded-lg border border-ds-border text-center relative group">
+          <p className="text-ds-text text-xs flex items-center justify-center gap-1">P95 <span className="cursor-help">ℹ️</span></p>
+          <p className="text-2xl font-bold text-red-400">{metrics.p95} <span className="text-sm">dias</span></p>
+          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 p-2 bg-ds-dark-blue border border-ds-border rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-50 pointer-events-none">
+            <p className="text-ds-light-text text-xs"><strong>P95:</strong> 95% dos itens são concluídos em até este tempo. Use para compromissos de SLA.</p>
           </div>
         </div>
         <div className="bg-ds-navy p-4 rounded-lg border border-ds-border text-center">
@@ -365,6 +382,8 @@ const CycleTimeAnalyticsDashboard: React.FC<CycleTimeAnalyticsDashboardProps> = 
               <Legend />
               <Line type="monotone" dataKey="cycleTime" name="Cycle Time (dias)" stroke={CHART_COLORS.primary} strokeWidth={2} dot={{ r: 4 }} />
               <Line type="monotone" dataKey="leadTime" name="Lead Time (dias)" stroke="#60A5FA" strokeWidth={2} dot={{ r: 4 }} />
+              <ReferenceLine y={metrics.p85} stroke="#FFB86C" strokeDasharray="5 5" label={{ value: `SLA P85: ${metrics.p85}d`, position: 'insideTopRight', fill: '#FFB86C', fontSize: 11 }} />
+              <ReferenceLine y={metrics.p95} stroke="#F56565" strokeDasharray="5 5" label={{ value: `P95: ${metrics.p95}d`, position: 'insideBottomRight', fill: '#F56565', fontSize: 11 }} />
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -407,6 +426,24 @@ const CycleTimeAnalyticsDashboard: React.FC<CycleTimeAnalyticsDashboardProps> = 
             <p className="text-ds-text text-center py-8">Nenhum time com dados suficientes no período selecionado.</p>
           )}
         </div>
+      </div>
+
+      {/* Scatter Plot */}
+      <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
+        <h3 className="text-ds-light-text font-bold text-lg mb-4">Scatter Plot: Cycle Time por Item</h3>
+        <ResponsiveContainer width="100%" height={350}>
+          <ScatterChart margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
+            <XAxis dataKey="index" name="Item" stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} />
+            <YAxis dataKey="cycleTime" name="Cycle Time" stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} />
+            <Tooltip contentStyle={{ backgroundColor: CHART_COLORS.tooltipBg, border: 'none', borderRadius: '8px', color: '#E2E8F0' }}
+              formatter={(value: any, name: string) => [name === 'cycleTime' ? `${value} dias` : value, name === 'cycleTime' ? 'Cycle Time' : name]} />
+            <Scatter name="Itens" data={filteredItems.map((item, idx) => ({ index: idx + 1, cycleTime: item.cycleTime, title: item.title }))} fill="#64FFDA" />
+            <ReferenceLine y={metrics.p50} stroke="#47C5FB" strokeDasharray="5 5" label={{ value: `P50: ${metrics.p50}d`, position: 'insideRight', fill: '#47C5FB', fontSize: 10 }} />
+            <ReferenceLine y={metrics.p85} stroke="#FFB86C" strokeDasharray="5 5" label={{ value: `P85: ${metrics.p85}d`, position: 'insideRight', fill: '#FFB86C', fontSize: 10 }} />
+            <ReferenceLine y={metrics.p95} stroke="#F56565" strokeDasharray="5 5" label={{ value: `P95: ${metrics.p95}d`, position: 'insideRight', fill: '#F56565', fontSize: 10 }} />
+          </ScatterChart>
+        </ResponsiveContainer>
       </div>
 
       {/* Educational info */}

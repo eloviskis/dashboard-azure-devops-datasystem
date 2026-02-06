@@ -50,6 +50,7 @@ import CycleTimeAnalyticsDashboard from './components/CycleTimeAnalyticsDashboar
 import TeamInsightsDashboard from './components/TeamInsightsDashboard.tsx';
 import TabsConfigModal, { loadTabsConfig, saveTabsConfig } from './components/TabsConfigModal.tsx';
 import PullRequestsDashboard from './components/PullRequestsDashboard.tsx';
+import ScrumCTCDashboard from './components/ScrumCTCDashboard.tsx';
 
 // Import Types
 import { WorkItem, WorkItemFilters } from './types.ts';
@@ -57,7 +58,7 @@ import { WorkItem, WorkItemFilters } from './types.ts';
 // Import Metrics
 import { calculatePerformanceMetrics, calculateQualityMetrics } from './utils/metrics.ts';
 
-type Tab = 'team-insights' | 'cycle-analytics' | 'performance' | 'quality' | 'kanban' | 'detailed-throughput' | 'bottlenecks' | 'tags' | 'clients' | 'montecarlo' | 'item-list' | 'rootcause' | 'backlog' | 'impedimentos' | 'po-analysis' | 'pull-requests';
+type Tab = 'team-insights' | 'cycle-analytics' | 'performance' | 'quality' | 'kanban' | 'detailed-throughput' | 'bottlenecks' | 'tags' | 'clients' | 'montecarlo' | 'item-list' | 'rootcause' | 'backlog' | 'impedimentos' | 'po-analysis' | 'pull-requests' | 'scrum-ctc';
 
 const DEFAULT_TAB_CONFIG = [
   { id: 'team-insights', label: 'Insights por Time', visible: true },
@@ -74,8 +75,9 @@ const DEFAULT_TAB_CONFIG = [
   { id: 'rootcause', label: 'Root Cause (Issues)', visible: true },
   { id: 'backlog', label: 'Análise de Backlog', visible: true },
   { id: 'impedimentos', label: 'Impedimentos', visible: true },
-  { id: 'po-analysis', label: 'Análise de PO', visible: true },
+  { id: 'po-analysis', label: 'Análise de Demanda', visible: true },
   { id: 'pull-requests', label: 'Pull Requests & Code Review', visible: true },
+  { id: 'scrum-ctc', label: 'Scrum - CTC', visible: true },
 ];
 
 const App = () => {
@@ -193,6 +195,33 @@ const App = () => {
 
   const { total, completed, inProgress, avgCycleTime } = useMemo(() => calculatePerformanceMetrics(filteredWorkItems), [filteredWorkItems]);
   const { openBugs, openIssues, avgResolutionTime } = useMemo(() => calculateQualityMetrics(filteredWorkItems), [filteredWorkItems]);
+
+  // Comparison with previous period
+  const previousPeriodComparison = useMemo(() => {
+    if (workItemFilters.period === 0) return null;
+    const now = new Date();
+    const periodDays = workItemFilters.period || 180;
+    const prevStart = new Date(now.getTime() - periodDays * 2 * 24 * 60 * 60 * 1000);
+    const prevEnd = new Date(now.getTime() - periodDays * 24 * 60 * 60 * 1000);
+    
+    const prevItems = workItems.filter(item => {
+      const d = new Date(item.changedDate || item.createdDate);
+      return d >= prevStart && d <= prevEnd;
+    });
+    
+    const prevMetrics = calculatePerformanceMetrics(prevItems);
+    const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
+    const prevCompletionRate = prevMetrics.total > 0 ? Math.round((prevMetrics.completed / prevMetrics.total) * 100) : 0;
+    
+    return {
+      completionRate,
+      prevTotal: prevMetrics.total,
+      prevCompleted: prevMetrics.completed,
+      prevCompletionRate,
+      totalDiff: total - prevMetrics.total,
+      completedDiff: completed - prevMetrics.completed,
+    };
+  }, [filteredWorkItems, workItems, workItemFilters.period, total, completed]);
   
   const handleTabClick = (tab: Tab) => {
     setActiveTab(tab);
@@ -243,12 +272,43 @@ const App = () => {
         return (
           <>
             <SectionHeader title="Visão Geral de Performance" />
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-6">
               <SummaryCard title="Total de Itens" value={total} />
               <SummaryCard title="Concluídos no Período" value={completed} />
               <SummaryCard title="Em Progresso" value={inProgress} />
               <SummaryCard title="Cycle Time Médio" value={avgCycleTime} unit="dias" />
+              <SummaryCard title="Taxa de Conclusão" value={`${previousPeriodComparison?.completionRate ?? 0}%`} />
             </div>
+            {/* Comparison with previous period */}
+            {previousPeriodComparison && previousPeriodComparison.prevTotal > 0 && (
+              <div className="bg-ds-navy p-4 rounded-lg border border-ds-border mb-6">
+                <h3 className="text-ds-light-text font-bold text-sm mb-2">📊 Comparativo com Período Anterior</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                  <div>
+                    <p className="text-ds-text text-xs">Total Atual</p>
+                    <p className="text-lg font-bold text-ds-light-text">{total}</p>
+                    <p className={`text-xs ${previousPeriodComparison.totalDiff >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {previousPeriodComparison.totalDiff >= 0 ? '▲' : '▼'} {Math.abs(previousPeriodComparison.totalDiff)} vs anterior
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-ds-text text-xs">Concluídos Atual</p>
+                    <p className="text-lg font-bold text-ds-green">{completed}</p>
+                    <p className={`text-xs ${previousPeriodComparison.completedDiff >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {previousPeriodComparison.completedDiff >= 0 ? '▲' : '▼'} {Math.abs(previousPeriodComparison.completedDiff)} vs anterior
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-ds-text text-xs">Conclusão Atual</p>
+                    <p className="text-lg font-bold text-ds-green">{previousPeriodComparison.completionRate}%</p>
+                  </div>
+                  <div>
+                    <p className="text-ds-text text-xs">Conclusão Anterior</p>
+                    <p className="text-lg font-bold text-ds-text">{previousPeriodComparison.prevCompletionRate}%</p>
+                  </div>
+                </div>
+              </div>
+            )}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
                 <ChartInfoLamp info="Este gráfico mostra a distribuição dos status dos itens de trabalho. Ajuda a identificar gargalos e priorizar ações para melhorar o fluxo de trabalho." />
@@ -284,14 +344,21 @@ const App = () => {
           </>
         );
       case 'quality':
+        const totalQualityItems = filteredWorkItems.length;
+        const bugItems = filteredWorkItems.filter(i => i.type === 'Bug');
+        const defectRate = totalQualityItems > 0 ? Math.round((bugItems.length / totalQualityItems) * 1000) / 10 : 0;
+        const reincidenceItems = filteredWorkItems.filter(i => i.reincidencia && Number(i.reincidencia) > 0);
+        const reincidenceRate = bugItems.length > 0 ? Math.round((reincidenceItems.length / bugItems.length) * 1000) / 10 : 0;
         return (
           <>
             <SectionHeader title="Análise de Qualidade" />
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6 mb-6">
                 <SummaryCard title="Bugs Abertos (Retrabalho)" value={openBugs} />
                 <SummaryCard title="Issues em Aberto (Prod.)" value={openIssues} />
-                <SummaryCard title="Tempo Médio de Resolução" value={avgResolutionTime} unit="dias" />
-                <SummaryCard title="Itens de Qualidade Abertos" value={openBugs + openIssues} />
+                <SummaryCard title="MTTR (Res. Média)" value={avgResolutionTime} unit="dias" />
+                <SummaryCard title="Taxa de Defeito" value={`${defectRate}%`} />
+                <SummaryCard title="Reincidência" value={`${reincidenceRate}%`} />
+                <SummaryCard title="Itens Qualidade Abertos" value={openBugs + openIssues} />
             </div>
              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
@@ -463,9 +530,9 @@ const App = () => {
       case 'po-analysis':
         return (
           <>
-            <SectionHeader title="Análise de Product Owners" />
+            <SectionHeader title="Análise de Demanda" />
             <div className="mb-6">
-              <ChartInfoLamp info="Esta aba analisa quem criou os work items no período, quantidade por pessoa e time, taxa de conclusão e ranking de melhor desempenho." />
+              <ChartInfoLamp info="Esta aba analisa quem criou os work items no período, quantidade por pessoa e time, taxa de conclusão, qualidade da especificação (bugs gerados por item criado) e ranking de melhor desempenho." />
               <POAnalysisDashboard data={filteredWorkItems} />
             </div>
           </>
@@ -475,6 +542,13 @@ const App = () => {
           <>
             <SectionHeader title="Pull Requests & Code Review" />
             <PullRequestsDashboard />
+          </>
+        );
+      case 'scrum-ctc':
+        return (
+          <>
+            <SectionHeader title="Scrum - CTC (Franquia)" />
+            <ScrumCTCDashboard data={filteredWorkItems} />
           </>
         );
       default:
@@ -539,7 +613,7 @@ const App = () => {
             </div>
         </div>
         
-        {activeTab !== 'cycle-analytics' && activeTab !== 'team-insights' && activeTab !== 'pull-requests' && (
+        {activeTab !== 'cycle-analytics' && activeTab !== 'team-insights' && activeTab !== 'pull-requests' && activeTab !== 'scrum-ctc' && (
         <FilterBar 
             activeTab={activeTab}
             workItems={workItems}
