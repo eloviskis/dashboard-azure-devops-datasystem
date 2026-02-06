@@ -1,43 +1,59 @@
-// backend/server.js
+// backend/server.js - PostgreSQL (Neon) version
 const express = require('express');
 const axios = require('axios');
 const cors = require('cors');
 const schedule = require('node-schedule');
-const Database = require('better-sqlite3');
-const path = require('node:path');
+const { neon } = require('@neondatabase/serverless');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
-// JWT Secret - em produção, usar variável de ambiente
+// JWT Secret
 const JWT_SECRET = process.env.JWT_SECRET || 'devops-dashboard-secret-key-2026';
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// SQLite setup
-const dbPath = path.join(__dirname, 'devops.db');
-const db = new Database(dbPath);
-console.log('✅ Database connected:', dbPath);
+// PostgreSQL (Neon) setup
+const DATABASE_URL = process.env.DATABASE_URL;
+if (!DATABASE_URL) {
+  console.error('❌ DATABASE_URL not configured');
+}
 
-// Helper functions for better-sqlite3
-const dbAllAsync = (query, params = []) => {
+const sql = DATABASE_URL ? neon(DATABASE_URL) : null;
+console.log('✅ Database connection configured');
+
+// Helper functions for Neon PostgreSQL
+const dbAllAsync = async (query, params = []) => {
   try {
-    return db.prepare(query).all(...params);
+    if (!sql) throw new Error('Database not configured');
+    const result = await sql(query, params);
+    return result;
   } catch (err) {
     console.error('❌ Error in dbAllAsync:', err.message);
     throw err;
   }
 };
 
-const dbRunAsync = (query, params = []) => {
+const dbRunAsync = async (query, params = []) => {
   try {
-    const stmt = db.prepare(query);
-    const info = stmt.run(...params);
-    return { id: info.lastInsertRowid, changes: info.changes };
+    if (!sql) throw new Error('Database not configured');
+    const result = await sql(query, params);
+    return { changes: result.length || 0 };
   } catch (err) {
     console.error('❌ Error in dbRunAsync:', err.message);
+    throw err;
+  }
+};
+
+const dbGetAsync = async (query, params = []) => {
+  try {
+    if (!sql) throw new Error('Database not configured');
+    const result = await sql(query, params);
+    return result[0] || null;
+  } catch (err) {
+    console.error('❌ Error in dbGetAsync:', err.message);
     throw err;
   }
 };
@@ -49,7 +65,7 @@ function extractTeam(areaPath) {
   return parts.length > 1 ? parts[parts.length - 1] : areaPath;
 }
 
-// Generic function to calculate difference in days
+// Calculate difference in days
 function calculateDaysBetween(startDate, endDate) {
   if (!startDate || !endDate) return null;
   const start = new Date(startDate);
@@ -57,17 +73,14 @@ function calculateDaysBetween(startDate, endDate) {
   return Math.round((end - start) / (1000 * 60 * 60 * 24));
 }
 
-// Calculate cycle time (from first activation to close)
 function calculateCycleTime(firstActivationDate, closedDate) {
   return calculateDaysBetween(firstActivationDate, closedDate);
 }
 
-// Calculate lead time (from creation to close)
 function calculateLeadTime(createdDate, closedDate) {
   return calculateDaysBetween(createdDate, closedDate);
 }
 
-// Calculate age in days
 function calculateAge(changedDate) {
   if (!changedDate) return 0;
   const changed = new Date(changedDate);
@@ -76,166 +89,144 @@ function calculateAge(changedDate) {
 }
 
 // Initialize database
-(async () => {
-  // Tabela de Work Items
-  dbRunAsync(`
-    CREATE TABLE IF NOT EXISTS work_items (
-      id INTEGER PRIMARY KEY,
-      workItemId INTEGER UNIQUE,
-      title TEXT,
-      state TEXT,
-      type TEXT,
-      assignedTo TEXT,
-      team TEXT,
-      areaPath TEXT,
-      iterationPath TEXT,
-      createdDate TEXT,
-      changedDate TEXT,
-      closedDate TEXT,
-      firstActivationDate TEXT,
-      storyPoints INTEGER,
-      tags TEXT,
-      codeReviewLevel1 TEXT,
-      codeReviewLevel2 TEXT,
-      codeReviewLevel1Raw TEXT,
-      codeReviewLevel2Raw TEXT,
-      tipoCliente TEXT,
-      url TEXT,
-      syncedAt TEXT,
-      priority TEXT,
-      customType TEXT,
-      rootCauseStatus TEXT,
-      squad TEXT,
-      area TEXT,
-      reincidencia TEXT,
-      performanceDays TEXT,
-      qa TEXT,
-      complexity TEXT,
-      causaRaiz TEXT
-    )
-  `);
-  console.log('✅ work_items table ready');
-  
-  // Adiciona novas colunas se não existirem (para bancos de dados existentes)
-  const extraColumns = [
-    'firstActivationDate TEXT',
-    'priority TEXT',
-    'customType TEXT',
-    'rootCauseStatus TEXT',
-    'squad TEXT',
-    'area TEXT',
-    'reincidencia TEXT',
-    'performanceDays TEXT',
-    'qa TEXT',
-    'complexity TEXT',
-    'causaRaiz TEXT',
-    'createdBy TEXT',
-    'po TEXT',
-    'readyDate TEXT',
-    'doneDate TEXT'
-  ];
-  for (const col of extraColumns) {
-    const colName = col.split(' ')[0];
-    try {
-      dbRunAsync(`ALTER TABLE work_items ADD COLUMN ${col}`);
-      console.log(`✅ "${colName}" column added to work_items table.`);
-    } catch (e) {
-      if (e.message.includes('duplicate column name') || e.message.includes('already exists')) {
-        // Coluna já existe
-      } else {
-        console.error(`❌ Error adding column ${colName}:`, e.message);
-      }
+const initDatabase = async () => {
+  if (!sql) {
+    console.log('⚠️ Database not connected - skipping initialization');
+    return;
+  }
+
+  try {
+    // Tabela de Work Items
+    await sql`
+      CREATE TABLE IF NOT EXISTS work_items (
+        id SERIAL PRIMARY KEY,
+        work_item_id INTEGER UNIQUE,
+        title TEXT,
+        state TEXT,
+        type TEXT,
+        assigned_to TEXT,
+        team TEXT,
+        area_path TEXT,
+        iteration_path TEXT,
+        created_date TEXT,
+        changed_date TEXT,
+        closed_date TEXT,
+        first_activation_date TEXT,
+        story_points INTEGER,
+        tags TEXT,
+        code_review_level1 TEXT,
+        code_review_level2 TEXT,
+        code_review_level1_raw TEXT,
+        code_review_level2_raw TEXT,
+        tipo_cliente TEXT,
+        url TEXT,
+        synced_at TEXT,
+        priority TEXT,
+        custom_type TEXT,
+        root_cause_status TEXT,
+        squad TEXT,
+        area TEXT,
+        reincidencia TEXT,
+        performance_days TEXT,
+        qa TEXT,
+        complexity TEXT,
+        causa_raiz TEXT,
+        created_by TEXT,
+        po TEXT,
+        ready_date TEXT,
+        done_date TEXT
+      )
+    `;
+    console.log('✅ work_items table ready');
+
+    // Tabela de Pull Requests
+    await sql`
+      CREATE TABLE IF NOT EXISTS pull_requests (
+        id SERIAL PRIMARY KEY,
+        pull_request_id INTEGER UNIQUE,
+        title TEXT,
+        description TEXT,
+        status TEXT,
+        created_by TEXT,
+        created_date TEXT,
+        closed_date TEXT,
+        source_ref_name TEXT,
+        target_ref_name TEXT,
+        repository_id TEXT,
+        repository_name TEXT,
+        labels TEXT,
+        reviewers TEXT,
+        votes TEXT,
+        has_valida_cr_label BOOLEAN,
+        url TEXT,
+        synced_at TEXT
+      )
+    `;
+    console.log('✅ pull_requests table ready');
+
+    // Tabela de Commits
+    await sql`
+      CREATE TABLE IF NOT EXISTS commits (
+        id SERIAL PRIMARY KEY,
+        commit_id TEXT UNIQUE,
+        author TEXT,
+        author_email TEXT,
+        committer TEXT,
+        committer_email TEXT,
+        commit_date TEXT,
+        message TEXT,
+        repository_id TEXT,
+        repository_name TEXT,
+        pull_request_id INTEGER,
+        synced_at TEXT
+      )
+    `;
+    console.log('✅ commits table ready');
+
+    // Tabela de Sync Log
+    await sql`
+      CREATE TABLE IF NOT EXISTS sync_log (
+        id SERIAL PRIMARY KEY,
+        sync_time TEXT,
+        items_count INTEGER,
+        pull_requests_count INTEGER,
+        commits_count INTEGER,
+        status TEXT,
+        error_message TEXT
+      )
+    `;
+    console.log('✅ sync_log table ready');
+
+    // Tabela de Usuários
+    await sql`
+      CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        username TEXT UNIQUE NOT NULL,
+        email TEXT UNIQUE NOT NULL,
+        password TEXT NOT NULL,
+        role TEXT DEFAULT 'user',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `;
+    console.log('✅ users table ready');
+
+    // Criar usuário admin padrão se não existir
+    const adminExists = await sql`SELECT id FROM users WHERE username = 'admin'`;
+    if (adminExists.length === 0) {
+      const hashedPassword = bcrypt.hashSync('admin123', 10);
+      await sql`INSERT INTO users (username, email, password, role) VALUES ('admin', 'admin@datasystem.com', ${hashedPassword}, 'admin')`;
+      console.log('✅ Default admin user created (admin/admin123)');
     }
+
+    console.log('✅ Database initialized');
+  } catch (error) {
+    console.error('❌ Error initializing database:', error.message);
   }
+};
 
-
-  // Tabela de Pull Requests
-  dbRunAsync(`
-    CREATE TABLE IF NOT EXISTS pull_requests (
-      id INTEGER PRIMARY KEY,
-      pullRequestId INTEGER UNIQUE,
-      title TEXT,
-      description TEXT,
-      status TEXT,
-      createdBy TEXT,
-      createdDate TEXT,
-      closedDate TEXT,
-      sourceRefName TEXT,
-      targetRefName TEXT,
-      repositoryId TEXT,
-      repositoryName TEXT,
-      labels TEXT,
-      reviewers TEXT,
-      votes TEXT,
-      hasValidaCRLabel INTEGER,
-      url TEXT,
-      syncedAt TEXT
-    )
-  `);
-  console.log('✅ pull_requests table ready');
-
-  // Tabela de Commits
-  dbRunAsync(`
-    CREATE TABLE IF NOT EXISTS commits (
-      id INTEGER PRIMARY KEY,
-      commitId TEXT UNIQUE,
-      author TEXT,
-      authorEmail TEXT,
-      committer TEXT,
-      committerEmail TEXT,
-      commitDate TEXT,
-      message TEXT,
-      repositoryId TEXT,
-      repositoryName TEXT,
-      pullRequestId INTEGER,
-      syncedAt TEXT
-    )
-  `);
-  console.log('✅ commits table ready');
-
-  // Tabela de Sync Log
-  dbRunAsync(`
-    CREATE TABLE IF NOT EXISTS sync_log (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      syncTime TEXT,
-      itemsCount INTEGER,
-      pullRequestsCount INTEGER,
-      commitsCount INTEGER,
-      status TEXT,
-      errorMessage TEXT
-    )
-  `);
-  console.log('✅ sync_log table ready');
-
-  // Tabela de Usuários
-  dbRunAsync(`
-    CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      username TEXT UNIQUE NOT NULL,
-      email TEXT UNIQUE NOT NULL,
-      password TEXT NOT NULL,
-      role TEXT DEFAULT 'user',
-      createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
-      updatedAt TEXT DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-  console.log('✅ users table ready');
-
-  // Criar usuário admin padrão se não existir
-  const adminExists = db.prepare('SELECT id FROM users WHERE username = ?').get('admin');
-  if (!adminExists) {
-    const hashedPassword = bcrypt.hashSync('admin123', 10);
-    db.prepare('INSERT INTO users (username, email, password, role) VALUES (?, ?, ?, ?)').run(
-      'admin',
-      'admin@datasystem.com',
-      hashedPassword,
-      'admin'
-    );
-    console.log('✅ Default admin user created (admin/admin123)');
-  }
-
-  console.log('✅ Database initialized');
-})();
+// Initialize database on startup
+initDatabase();
 
 // Azure DevOps configuration
 const AZURE_CONFIG = {
@@ -244,332 +235,131 @@ const AZURE_CONFIG = {
   pat: process.env.AZURE_PAT || 'your-token'
 };
 
-// Validar configuração
 const isConfigured = () => {
   return AZURE_CONFIG.organization !== 'your-organization' && 
          AZURE_CONFIG.project !== 'your-project' && 
-         AZURE_CONFIG.pat !== 'your-token'
+         AZURE_CONFIG.pat !== 'your-token' &&
+         AZURE_CONFIG.pat !== '';
 };
 
 console.log('\n📋 Azure DevOps Configuration:');
 console.log('   Organization:', AZURE_CONFIG.organization);
 console.log('   Project:', AZURE_CONFIG.project);
 console.log('   PAT:', AZURE_CONFIG.pat ? '✅ Configured' : '❌ Missing');
-console.log('   Status:', isConfigured() ? '✅ Ready' : '⚠️  Not configured - using mock data\n');
+console.log('   Status:', isConfigured() ? '✅ Ready' : '⚠️ Not configured\n');
 
 const getAuthHeader = () => {
   const credentials = Buffer.from(`:${AZURE_CONFIG.pat}`).toString('base64');
   return { 'Authorization': `Basic ${credentials}` };
 };
 
-// Fetch work items from Azure DevOps
-async function fetchWorkItems() {
+// Sync Data function
+async function syncData() {
+  if (!isConfigured()) {
+    console.log('⚠️ Azure DevOps not configured - skipping sync');
+    return { status: 'skipped', message: 'Not configured' };
+  }
+  if (!sql) {
+    console.log('⚠️ Database not configured - skipping sync');
+    return { status: 'skipped', message: 'Database not configured' };
+  }
+
+  const startTime = new Date();
+  console.log(`🔄 Starting sync at ${startTime.toISOString()}`);
+
   try {
-    if (!isConfigured()) {
-      console.log('⚠️  Azure DevOps not configured - skipping fetch');
-      return [];
+    const baseUrl = `https://dev.azure.com/${AZURE_CONFIG.organization}/${AZURE_CONFIG.project}`;
+    
+    // Fetch Work Items usando WIQL
+    const wiqlUrl = `${baseUrl}/_apis/wit/wiql?api-version=7.0`;
+    const wiqlQuery = {
+      query: `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = '${AZURE_CONFIG.project}' AND [System.ChangedDate] >= @Today - 180 ORDER BY [System.ChangedDate] DESC`
+    };
+
+    const wiqlResponse = await axios.post(wiqlUrl, wiqlQuery, { headers: getAuthHeader() });
+    const workItemIds = wiqlResponse.data.workItems?.map(wi => wi.id) || [];
+    
+    console.log(`   Found ${workItemIds.length} work items`);
+
+    if (workItemIds.length > 0) {
+      // Buscar em batches de 200
+      const batchSize = 200;
+      let allWorkItems = [];
+
+      for (let i = 0; i < workItemIds.length; i += batchSize) {
+        const batch = workItemIds.slice(i, i + batchSize);
+        const idsParam = batch.join(',');
+        const detailsUrl = `${baseUrl}/_apis/wit/workitems?ids=${idsParam}&$expand=all&api-version=7.0`;
+        
+        const detailsResponse = await axios.get(detailsUrl, { headers: getAuthHeader() });
+        allWorkItems = allWorkItems.concat(detailsResponse.data.value || []);
+      }
+
+      // Salvar no banco
+      for (const item of allWorkItems) {
+        const fields = item.fields || {};
+        const workItemId = item.id;
+        const title = fields['System.Title'] || '';
+        const state = fields['System.State'] || '';
+        const type = fields['System.WorkItemType'] || '';
+        const assignedTo = fields['System.AssignedTo']?.displayName || '';
+        const areaPath = fields['System.AreaPath'] || '';
+        const team = extractTeam(areaPath);
+        const iterationPath = fields['System.IterationPath'] || '';
+        const createdDate = fields['System.CreatedDate'] || '';
+        const changedDate = fields['System.ChangedDate'] || '';
+        const closedDate = fields['Microsoft.VSTS.Common.ClosedDate'] || '';
+        const storyPoints = fields['Microsoft.VSTS.Scheduling.StoryPoints'] || null;
+        const tags = fields['System.Tags'] || '';
+        const tipoCliente = fields['Custom.TipoCliente'] || '';
+        const priority = fields['Microsoft.VSTS.Common.Priority']?.toString() || '';
+        const url = item._links?.html?.href || '';
+
+        await sql`
+          INSERT INTO work_items (work_item_id, title, state, type, assigned_to, team, area_path, iteration_path,
+            created_date, changed_date, closed_date, story_points, tags, tipo_cliente, priority, url, synced_at)
+          VALUES (${workItemId}, ${title}, ${state}, ${type}, ${assignedTo}, ${team}, ${areaPath}, ${iterationPath},
+            ${createdDate}, ${changedDate}, ${closedDate}, ${storyPoints}, ${tags}, ${tipoCliente}, ${priority}, ${url}, ${new Date().toISOString()})
+          ON CONFLICT (work_item_id) DO UPDATE SET
+            title = EXCLUDED.title, state = EXCLUDED.state, type = EXCLUDED.type, assigned_to = EXCLUDED.assigned_to,
+            team = EXCLUDED.team, area_path = EXCLUDED.area_path, iteration_path = EXCLUDED.iteration_path,
+            created_date = EXCLUDED.created_date, changed_date = EXCLUDED.changed_date, closed_date = EXCLUDED.closed_date,
+            story_points = EXCLUDED.story_points, tags = EXCLUDED.tags, tipo_cliente = EXCLUDED.tipo_cliente,
+            priority = EXCLUDED.priority, url = EXCLUDED.url, synced_at = EXCLUDED.synced_at
+        `;
+      }
+
+      console.log(`   ✅ Saved ${allWorkItems.length} work items to database`);
     }
 
-    const wiql = `
-      SELECT [System.Id], [System.Title], [System.State], [System.WorkItemType],
-             [System.AssignedTo], [System.AreaPath], [System.IterationPath], [System.CreatedDate],
-             [System.ChangedDate], [Microsoft.VSTS.Common.ClosedDate], [Microsoft.VSTS.Scheduling.StoryPoints], [System.Tags]
-      FROM workitems
-      WHERE [System.TeamProject] = '${AZURE_CONFIG.project}'
-      AND [System.State] <> 'Removed'
-      AND [System.ChangedDate] >= @today - 180
-      ORDER BY [System.ChangedDate] DESC
+    // Log sync
+    await sql`
+      INSERT INTO sync_log (sync_time, items_count, status)
+      VALUES (${new Date().toISOString()}, ${workItemIds.length}, 'success')
     `;
 
-    const queryUrl = `https://dev.azure.com/${AZURE_CONFIG.organization}/${AZURE_CONFIG.project}/_apis/wit/wiql?api-version=7.1`;
-    
-    console.log('🔍 Fetching work items from:', queryUrl);
-    
-    const queryResponse = await axios.post(queryUrl, { query: wiql }, {
-      headers: getAuthHeader(),
-      timeout: 60000
-    });
+    const endTime = new Date();
+    console.log(`✅ Sync completed in ${(endTime - startTime) / 1000}s`);
 
-    console.log('✅ Query returned:', queryResponse.data.workItems?.length || 0, 'items');
-
-    const itemIds = queryResponse.data.workItems?.map(i => i.id) || [];
-    
-    if (itemIds.length === 0) {
-      console.log('⚠️ No work items found');
-      return [];
-    }
-
-    const workItems = [];
-
-    const batchSize = 100;
-    for (let i = 0; i < itemIds.length; i += batchSize) {
-      const batch = itemIds.slice(i, i + batchSize);
-      
-      const fields = [
-        'System.Id',
-        'System.Title',
-        'System.State',
-        'System.WorkItemType',
-        'System.AssignedTo',
-        'System.CreatedBy',
-        'System.AreaPath',
-        'System.IterationPath',
-        'System.CreatedDate',
-        'System.ChangedDate',
-        'Microsoft.VSTS.Common.ClosedDate',
-        'Microsoft.VSTS.Scheduling.StoryPoints',
-        'System.Tags',
-        'Custom.ab075d4c-04f5-4f96-b294-4ad0f5987028',
-        'Custom.60cee051-7e66-4753-99d6-4bc8717fae0e',
-        'Custom.Tipocliente',
-        'Microsoft.VSTS.Common.Priority',
-        'Custom.Type',
-        'Custom.RootCauseStatus',
-        'Custom.Squad',
-        'Custom.Area',
-        'Custom.Complexity',
-        'Custom.REINCIDENCIA',
-        'Custom.PerformanceDays',
-        'Custom.QA',
-        'Custom.PO',
-        'Custom.Rootcausetask',
-        'Microsoft.VSTS.CMMI.RootCause',
-        'Custom.DOR'
-      ];
-      
-      const batchUrl = `https://dev.azure.com/${AZURE_CONFIG.organization}/${AZURE_CONFIG.project}/_apis/wit/workitems?ids=${batch.join(',')}&fields=${fields.join(',')}&api-version=7.1`;
-      
-      try {
-        console.log(`📦 Processing batch ${Math.floor(i / batchSize) + 1} (items ${i} to ${Math.min(i + batchSize, itemIds.length)})`);
-        
-        const batchResponse = await axios.get(batchUrl, { 
-          headers: getAuthHeader(),
-          timeout: 60000
-        });
-        
-        const batchItems = batchResponse.data.value || [];
-        workItems.push(...batchItems);
-        
-        console.log(`   ✅ Batch processed: ${batchItems.length} items`);
-        
-        await new Promise(resolve => setTimeout(resolve, 200));
-      } catch (batchError) {
-        console.error(`❌ Error processing batch:`, batchError.message);
-      }
-    }
-
-    console.log(`✅ Total work items fetched: ${workItems.length}`);
-    return workItems;
-  } catch (error) {
-    console.error('❌ Error fetching work items:', error.message);
-    if (error.response) {
-      console.error('   Status:', error.response.status);
-      console.error('   Data:', error.response.data);
-    }
-    throw error;
-  }
-}
-
-// 🆕 Função para buscar a data da primeira ativação de um item
-async function findFirstActivationDate(workItemId) {
-    try {
-        const updatesUrl = `https://dev.azure.com/${AZURE_CONFIG.organization}/${AZURE_CONFIG.project}/_apis/wit/workitems/${workItemId}/updates?api-version=7.1`;
-        const updatesResponse = await axios.get(updatesUrl, { headers: getAuthHeader() });
-        const updates = updatesResponse.data.value || [];
-
-        // Encontra a primeira atualização onde o estado se tornou "Active"
-        const activationUpdate = updates.find(update => 
-            update.fields &&
-            update.fields['System.State'] &&
-            update.fields['System.State'].newValue === 'Active'
-        );
-        
-        return activationUpdate ? activationUpdate.fields['System.ChangedDate'].newValue || activationUpdate.revisedDate : null;
-    } catch (error) {
-        console.error(`❌ Error fetching history for item ${workItemId}:`, error.message);
-        return null;
-    }
-}
-
-
-// Process a single work item
-async function processWorkItem(item) {
-  const fields = item.fields || {};
-  const team = extractTeam(fields['System.AreaPath']);
-  
-  const codeReviewLevel1Raw = fields['Custom.ab075d4c-04f5-4f96-b294-4ad0f5987028'];
-  const codeReviewLevel2Raw = fields['Custom.60cee051-7e66-4753-99d6-4bc8717fae0e'];
-  const tipoClienteRaw = fields['Custom.Tipocliente'];
-  
-  const codeReviewLevel1 = codeReviewLevel1Raw && typeof codeReviewLevel1Raw === 'object' ? codeReviewLevel1Raw.displayName : (codeReviewLevel1Raw || null);
-  const codeReviewLevel2 = codeReviewLevel2Raw && typeof codeReviewLevel2Raw === 'object' ? codeReviewLevel2Raw.displayName : (codeReviewLevel2Raw || null);
-  const tipoCliente = tipoClienteRaw && typeof tipoClienteRaw === 'object' ? tipoClienteRaw.displayName : (tipoClienteRaw || null);
-
-  // Campos customizados de Root Cause - nomes corretos do Azure DevOps
-  const priority = fields['Microsoft.VSTS.Common.Priority'] || null;
-  const customType = fields['Custom.Type'] || null;
-  const rootCauseStatus = fields['Custom.RootCauseStatus'] || null;
-  const squad = fields['Custom.Squad'] || null;
-  const area = fields['Custom.Area'] || null;
-  const complexity = fields['Custom.Complexity'] || null;
-  const reincidencia = fields['Custom.REINCIDENCIA'] || null;
-  const performanceDays = fields['Custom.PerformanceDays'] || null;
-  // Campo Causa Raiz - Microsoft.VSTS.CMMI.RootCause (campo padrão CMMI)
-  const causaRaiz = fields['Microsoft.VSTS.CMMI.RootCause'] || null;
-  // QA e PO são objetos com displayName
-  const qaRaw = fields['Custom.QA'];
-  const poRaw = fields['Custom.PO'];
-  const qa = qaRaw && typeof qaRaw === 'object' ? qaRaw.displayName : (qaRaw || null);
-  const po = poRaw && typeof poRaw === 'object' ? poRaw.displayName : (poRaw || null);
-  
-  // Campo System.CreatedBy (quem criou o work item)
-  const createdByRaw = fields['System.CreatedBy'];
-  const createdBy = createdByRaw && typeof createdByRaw === 'object' ? createdByRaw.displayName : (createdByRaw || null);
-  
-  // Campo DOR (Definition of Ready) - quando o item ficou pronto para ser desenvolvido
-  const readyDate = fields['Custom.DOR'] || null;
-  // Campo Done - quando o item foi concluído (usando System.ClosedDate como fallback)
-  const doneDate = fields['System.ClosedDate'] || null;
-
-  const existing = await dbAllAsync('SELECT workItemId, firstActivationDate FROM work_items WHERE workItemId = ?', [item.id]);
-  
-  let firstActivationDate = null;
-  if (existing.length > 0) {
-    firstActivationDate = existing[0].firstActivationDate;
-  }
-  
-  // Busca a data de ativação apenas se o item estiver "Active" ou além, e se ainda não tivermos a data
-  if (!firstActivationDate && fields['System.State'] !== 'New' && fields['System.State'] !== 'Para Desenvolver') {
-    console.log(`   -> Fetching history for item ${item.id} to find activation date...`);
-    firstActivationDate = await findFirstActivationDate(item.id);
-  }
-
-  const commonParams = [
-    fields['System.Title'],
-    fields['System.State'],
-    fields['System.WorkItemType'],
-    fields['System.AssignedTo']?.displayName || null,
-    team,
-    fields['System.AreaPath'],
-    fields['System.IterationPath'],
-    fields['System.CreatedDate'],
-    fields['System.ChangedDate'],
-    fields['Microsoft.VSTS.Common.ClosedDate'] || null,
-    firstActivationDate,
-    fields['Microsoft.VSTS.Scheduling.StoryPoints'] || null,
-    fields['System.Tags'] || null,
-    codeReviewLevel1,
-    codeReviewLevel2,
-    JSON.stringify(codeReviewLevel1Raw),
-    JSON.stringify(codeReviewLevel2Raw),
-    tipoCliente,
-    item.url,
-    new Date().toISOString(),
-    priority,
-    customType,
-    rootCauseStatus,
-    squad,
-    area,
-    reincidencia,
-    performanceDays,
-    qa,
-    complexity,
-    causaRaiz,
-    createdBy,
-    po,
-    readyDate,
-    doneDate
-  ];
-
-  if (existing.length > 0) {
-    await dbRunAsync(`
-      UPDATE work_items SET
-        title = ?, state = ?, type = ?, assignedTo = ?, team = ?,
-        areaPath = ?, iterationPath = ?, createdDate = ?, changedDate = ?,
-        closedDate = ?, firstActivationDate = ?, storyPoints = ?, tags = ?,
-        codeReviewLevel1 = ?, codeReviewLevel2 = ?,
-        codeReviewLevel1Raw = ?, codeReviewLevel2Raw = ?, tipoCliente = ?,
-        url = ?, syncedAt = ?,
-        priority = ?, customType = ?, rootCauseStatus = ?, squad = ?,
-        area = ?, reincidencia = ?, performanceDays = ?, qa = ?, complexity = ?, causaRaiz = ?,
-        createdBy = ?, po = ?, readyDate = ?, doneDate = ?
-      WHERE workItemId = ?
-    `, [...commonParams, item.id]);
-    return 'updated';
-  }
-  
-  await dbRunAsync(`
-    INSERT INTO work_items (
-      workItemId, title, state, type, assignedTo, team,
-      areaPath, iterationPath, createdDate, changedDate,
-      closedDate, firstActivationDate, storyPoints, tags, codeReviewLevel1, codeReviewLevel2,
-      codeReviewLevel1Raw, codeReviewLevel2Raw, tipoCliente, url, syncedAt,
-      priority, customType, rootCauseStatus, squad, area, reincidencia, performanceDays, qa, complexity, causaRaiz, createdBy, po, readyDate, doneDate
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `, [item.id, ...commonParams]);
-  return 'inserted';
-}
-
-// Sync data from Azure DevOps
-async function syncData() {
-  try {
-    console.log('\n🔄 Starting sync...');
-    
-    const workItems = await fetchWorkItems();
-    console.log(`📊 Processing ${workItems.length} work items...`);
-    
-    let itemsInserted = 0;
-    let itemsUpdated = 0;
-
-    for (const item of workItems) {
-      try {
-        const result = await processWorkItem(item);
-        if (result === 'updated') itemsUpdated++;
-        if (result === 'inserted') itemsInserted++;
-      } catch (itemError) {
-        console.error(`❌ Error processing item ${item.id}:`, itemError.message);
-      }
-    }
-
-    console.log(`✅ Sync completed: ${itemsInserted} inserted, ${itemsUpdated} updated`);
-
-    await dbRunAsync(`
-      INSERT INTO sync_log (syncTime, itemsCount, pullRequestsCount, commitsCount, status, errorMessage)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `, [new Date().toISOString(), workItems.length, 0, 0, 'success', null]);
-
-    return { success: true, itemsInserted, itemsUpdated };
+    return { status: 'success', itemsCount: workItemIds.length };
   } catch (error) {
     console.error('❌ Sync error:', error.message);
-
-    await dbRunAsync(`
-      INSERT INTO sync_log (syncTime, itemsCount, pullRequestsCount, commitsCount, status, errorMessage)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `, [new Date().toISOString(), 0, 0, 0, 'error', error.message]);
-
-    return { success: false, error: error.message };
+    
+    if (sql) {
+      await sql`
+        INSERT INTO sync_log (sync_time, items_count, status, error_message)
+        VALUES (${new Date().toISOString()}, 0, 'error', ${error.message})
+      `;
+    }
+    
+    return { status: 'error', message: error.message };
   }
 }
-
-// ===========================================
-// API ENDPOINTS
-// ===========================================
-
-// Health Check
-app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'OK', 
-    timestamp: new Date().toISOString(),
-    database: dbPath,
-    azureConfigured: isConfigured()
-  });
-});
 
 // ===========================================
 // AUTHENTICATION ENDPOINTS
 // ===========================================
 
-// Middleware para verificar JWT
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
@@ -587,7 +377,6 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
-// Middleware para verificar se é admin
 const requireAdmin = (req, res, next) => {
   if (req.user.role !== 'admin') {
     return res.status(403).json({ error: 'Acesso negado. Requer permissão de administrador.' });
@@ -604,7 +393,8 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(400).json({ error: 'Username e password são obrigatórios' });
     }
 
-    const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
+    const users = await sql`SELECT * FROM users WHERE username = ${username}`;
+    const user = users[0];
 
     if (!user) {
       return res.status(401).json({ error: 'Credenciais inválidas' });
@@ -636,7 +426,6 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-// Verificar token
 app.get('/api/auth/verify', authenticateToken, (req, res) => {
   res.json({ valid: true, user: req.user });
 });
@@ -645,10 +434,9 @@ app.get('/api/auth/verify', authenticateToken, (req, res) => {
 // USER MANAGEMENT ENDPOINTS
 // ===========================================
 
-// Listar todos os usuários (admin only)
-app.get('/api/users', authenticateToken, requireAdmin, (req, res) => {
+app.get('/api/users', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const users = db.prepare('SELECT id, username, email, role, createdAt, updatedAt FROM users ORDER BY createdAt DESC').all();
+    const users = await sql`SELECT id, username, email, role, created_at, updated_at FROM users ORDER BY created_at DESC`;
     res.json(users);
   } catch (error) {
     console.error('❌ Error fetching users:', error);
@@ -656,7 +444,6 @@ app.get('/api/users', authenticateToken, requireAdmin, (req, res) => {
   }
 });
 
-// Criar novo usuário (admin only)
 app.post('/api/users', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { username, email, password, role = 'user' } = req.body;
@@ -665,22 +452,20 @@ app.post('/api/users', authenticateToken, requireAdmin, async (req, res) => {
       return res.status(400).json({ error: 'Username, email e password são obrigatórios' });
     }
 
-    // Verificar se username ou email já existem
-    const existingUser = db.prepare('SELECT id FROM users WHERE username = ? OR email = ?').get(username, email);
-    if (existingUser) {
+    const existing = await sql`SELECT id FROM users WHERE username = ${username} OR email = ${email}`;
+    if (existing.length > 0) {
       return res.status(400).json({ error: 'Username ou email já existe' });
     }
 
     const hashedPassword = bcrypt.hashSync(password, 10);
-    const result = db.prepare('INSERT INTO users (username, email, password, role) VALUES (?, ?, ?, ?)').run(
-      username,
-      email,
-      hashedPassword,
-      role
-    );
+    const result = await sql`
+      INSERT INTO users (username, email, password, role) 
+      VALUES (${username}, ${email}, ${hashedPassword}, ${role})
+      RETURNING id
+    `;
 
     res.status(201).json({
-      id: result.lastInsertRowid,
+      id: result[0].id,
       username,
       email,
       role
@@ -691,66 +476,66 @@ app.post('/api/users', authenticateToken, requireAdmin, async (req, res) => {
   }
 });
 
-// Atualizar usuário (admin only)
 app.put('/api/users/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const { username, email, password, role } = req.body;
 
-    const existingUser = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
-    if (!existingUser) {
+    const existingUsers = await sql`SELECT * FROM users WHERE id = ${id}`;
+    if (existingUsers.length === 0) {
       return res.status(404).json({ error: 'Usuário não encontrado' });
     }
 
-    // Verificar se username ou email já existem em outro usuário
+    const existingUser = existingUsers[0];
+
     if (username || email) {
-      const conflict = db.prepare('SELECT id FROM users WHERE (username = ? OR email = ?) AND id != ?').get(
-        username || existingUser.username,
-        email || existingUser.email,
-        id
-      );
-      if (conflict) {
+      const conflict = await sql`
+        SELECT id FROM users 
+        WHERE (username = ${username || existingUser.username} OR email = ${email || existingUser.email}) 
+        AND id != ${id}
+      `;
+      if (conflict.length > 0) {
         return res.status(400).json({ error: 'Username ou email já existe' });
       }
     }
 
-    const updates = [];
-    const params = [];
+    const newUsername = username || existingUser.username;
+    const newEmail = email || existingUser.email;
+    const newPassword = password ? bcrypt.hashSync(password, 10) : existingUser.password;
+    const newRole = role || existingUser.role;
 
-    if (username) { updates.push('username = ?'); params.push(username); }
-    if (email) { updates.push('email = ?'); params.push(email); }
-    if (password) { updates.push('password = ?'); params.push(bcrypt.hashSync(password, 10)); }
-    if (role) { updates.push('role = ?'); params.push(role); }
-    updates.push('updatedAt = CURRENT_TIMESTAMP');
+    await sql`
+      UPDATE users SET 
+        username = ${newUsername}, 
+        email = ${newEmail}, 
+        password = ${newPassword}, 
+        role = ${newRole},
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = ${id}
+    `;
 
-    params.push(id);
-
-    db.prepare(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`).run(...params);
-
-    const updatedUser = db.prepare('SELECT id, username, email, role, createdAt, updatedAt FROM users WHERE id = ?').get(id);
-    res.json(updatedUser);
+    const updated = await sql`SELECT id, username, email, role, created_at, updated_at FROM users WHERE id = ${id}`;
+    res.json(updated[0]);
   } catch (error) {
     console.error('❌ Error updating user:', error);
     res.status(500).json({ error: 'Erro ao atualizar usuário' });
   }
 });
 
-// Deletar usuário (admin only)
-app.delete('/api/users/:id', authenticateToken, requireAdmin, (req, res) => {
+app.delete('/api/users/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Não permitir deletar o próprio usuário
     if (parseInt(id) === req.user.id) {
       return res.status(400).json({ error: 'Não é possível deletar seu próprio usuário' });
     }
 
-    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
-    if (!user) {
+    const users = await sql`SELECT * FROM users WHERE id = ${id}`;
+    if (users.length === 0) {
       return res.status(404).json({ error: 'Usuário não encontrado' });
     }
 
-    db.prepare('DELETE FROM users WHERE id = ?').run(id);
+    await sql`DELETE FROM users WHERE id = ${id}`;
     res.json({ message: 'Usuário deletado com sucesso' });
   } catch (error) {
     console.error('❌ Error deleting user:', error);
@@ -758,73 +543,65 @@ app.delete('/api/users/:id', authenticateToken, requireAdmin, (req, res) => {
   }
 });
 
-// Get all work items with calculations
+// ===========================================
+// API ENDPOINTS
+// ===========================================
+
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    database: DATABASE_URL ? 'PostgreSQL (Neon)' : 'Not configured',
+    azureConfigured: isConfigured()
+  });
+});
+
 app.get('/api/items', async (req, res) => {
   try {
     console.log('📊 GET /api/items - Fetching work items...');
     
-    const rows = await dbAllAsync('SELECT * FROM work_items ORDER BY changedDate DESC');
+    const rows = await sql`SELECT * FROM work_items ORDER BY changed_date DESC`;
     
     console.log(`   Found ${rows.length} items in database`);
 
     const items = rows.map(row => {
-      // 🆕 Use a data de ativação para o Cycle Time e a data de criação para o Lead Time
-      const cycleTime = calculateCycleTime(row.firstActivationDate, row.closedDate);
-      const leadTime = calculateLeadTime(row.createdDate, row.closedDate);
-      const age = calculateAge(row.changedDate);
-
-      // Parse code reviewer fields
-      let codeReviewLevel1Field = null;
-      let codeReviewLevel2Field = null;
-      
-      try {
-        if (row.codeReviewLevel1Raw && row.codeReviewLevel1Raw !== 'null') {
-          codeReviewLevel1Field = JSON.parse(row.codeReviewLevel1Raw);
-        }
-        if (row.codeReviewLevel2Raw && row.codeReviewLevel2Raw !== 'null') {
-          codeReviewLevel2Field = JSON.parse(row.codeReviewLevel2Raw);
-        }
-      } catch (e) {
-        console.warn(`⚠️ Failed to parse code review fields for workItem ${row.workItemId || 'unknown'}:`, e.message);
-        codeReviewLevel1Field = null;
-        codeReviewLevel2Field = null;
-      }
+      const cycleTime = calculateCycleTime(row.first_activation_date, row.closed_date);
+      const leadTime = calculateLeadTime(row.created_date, row.closed_date);
+      const age = calculateAge(row.changed_date);
 
       return {
-        workItemId: row.workItemId,
+        workItemId: row.work_item_id,
         title: row.title,
         state: row.state,
         type: row.type,
-        assignedTo: row.assignedTo,
+        assignedTo: row.assigned_to,
         team: row.team,
-        areaPath: row.areaPath,
-        iterationPath: row.iterationPath,
-        createdDate: row.createdDate,
-        changedDate: row.changedDate,
-        closedDate: row.closedDate,
-        storyPoints: row.storyPoints,
+        areaPath: row.area_path,
+        iterationPath: row.iteration_path,
+        createdDate: row.created_date,
+        changedDate: row.changed_date,
+        closedDate: row.closed_date,
+        storyPoints: row.story_points,
         tags: row.tags,
         cycleTime,
         leadTime,
         age,
         url: row.url,
-        'Custom.ab075d4c-04f5-4f96-b294-4ad0f5987028': codeReviewLevel1Field,
-        'Custom.60cee051-7e66-4753-99d6-4bc8717fae0e': codeReviewLevel2Field,
-        tipoCliente: row.tipoCliente,
+        tipoCliente: row.tipo_cliente,
         priority: row.priority,
-        customType: row.customType,
-        rootCauseStatus: row.rootCauseStatus,
+        customType: row.custom_type,
+        rootCauseStatus: row.root_cause_status,
         squad: row.squad,
         area: row.area,
         reincidencia: row.reincidencia,
-        performanceDays: row.performanceDays,
+        performanceDays: row.performance_days,
         qa: row.qa,
         complexity: row.complexity,
-        causaRaiz: row.causaRaiz,
-        createdBy: row.createdBy,
+        causaRaiz: row.causa_raiz,
+        createdBy: row.created_by,
         po: row.po,
-        readyDate: row.readyDate,
-        doneDate: row.doneDate
+        readyDate: row.ready_date,
+        doneDate: row.done_date
       };
     });
 
@@ -835,33 +612,33 @@ app.get('/api/items', async (req, res) => {
   }
 });
 
-// Get items by period
 app.get('/api/items/period/:days', async (req, res) => {
   try {
-    const days = Number.parseInt(req.params.days, 10);
+    const days = parseInt(req.params.days, 10);
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - days);
     const cutoffDateStr = cutoffDate.toISOString();
 
-    const rows = await dbAllAsync(
-      'SELECT * FROM work_items WHERE changedDate >= ? ORDER BY changedDate DESC',
-      [cutoffDateStr]
-    );
+    const rows = await sql`
+      SELECT * FROM work_items 
+      WHERE changed_date >= ${cutoffDateStr} 
+      ORDER BY changed_date DESC
+    `;
 
     const items = rows.map(row => ({
-      workItemId: row.workItemId,
+      workItemId: row.work_item_id,
       title: row.title,
       state: row.state,
       type: row.type,
-      assignedTo: row.assignedTo,
+      assignedTo: row.assigned_to,
       team: row.team,
-      areaPath: row.areaPath,
-      createdDate: row.createdDate,
-      changedDate: row.changedDate,
-      closedDate: row.closedDate,
-      cycleTime: calculateCycleTime(row.firstActivationDate, row.closedDate), // 🆕 Corrigido
-      leadTime: calculateLeadTime(row.createdDate, row.closedDate), // 🆕 Corrigido
-      age: calculateAge(row.changedDate)
+      areaPath: row.area_path,
+      createdDate: row.created_date,
+      changedDate: row.changed_date,
+      closedDate: row.closed_date,
+      cycleTime: calculateCycleTime(row.first_activation_date, row.closed_date),
+      leadTime: calculateLeadTime(row.created_date, row.closed_date),
+      age: calculateAge(row.changed_date)
     }));
 
     res.json(items);
@@ -870,27 +647,24 @@ app.get('/api/items/period/:days', async (req, res) => {
   }
 });
 
-// Sync Status Endpoint
 app.get('/api/sync/status', async (req, res) => {
   try {
-    const row = db.prepare('SELECT * FROM sync_log ORDER BY syncTime DESC LIMIT 1').get();
-    res.json(row || { status: 'No sync yet' });
+    const rows = await sql`SELECT * FROM sync_log ORDER BY sync_time DESC LIMIT 1`;
+    res.json(rows[0] || { status: 'No sync yet' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Sync Log Endpoint
 app.get('/api/sync/log', async (req, res) => {
   try {
-    const rows = await dbAllAsync('SELECT * FROM sync_log ORDER BY syncTime DESC LIMIT 50');
+    const rows = await sql`SELECT * FROM sync_log ORDER BY sync_time DESC LIMIT 50`;
     res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Manual Sync Trigger
 app.post('/api/sync', async (req, res) => {
   try {
     console.log('🔄 Manual sync triggered');
@@ -901,24 +675,23 @@ app.post('/api/sync', async (req, res) => {
   }
 });
 
-// Statistics Endpoint
 app.get('/api/stats', async (req, res) => {
   try {
     const { period = '30' } = req.query;
-    const days = Number.parseInt(period, 10);
+    const days = parseInt(period, 10);
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - days);
     const cutoffDateStr = cutoffDate.toISOString();
 
     const [total, byState, byType, byTeam] = await Promise.all([
-      dbAllAsync('SELECT COUNT(*) as count FROM work_items WHERE changedDate >= ?', [cutoffDateStr]),
-      dbAllAsync('SELECT state, COUNT(*) as count FROM work_items WHERE changedDate >= ? GROUP BY state', [cutoffDateStr]),
-      dbAllAsync('SELECT type, COUNT(*) as count FROM work_items WHERE changedDate >= ? GROUP BY type', [cutoffDateStr]),
-      dbAllAsync('SELECT team, COUNT(*) as count FROM work_items WHERE changedDate >= ? GROUP BY team', [cutoffDateStr])
+      sql`SELECT COUNT(*) as count FROM work_items WHERE changed_date >= ${cutoffDateStr}`,
+      sql`SELECT state, COUNT(*) as count FROM work_items WHERE changed_date >= ${cutoffDateStr} GROUP BY state`,
+      sql`SELECT type, COUNT(*) as count FROM work_items WHERE changed_date >= ${cutoffDateStr} GROUP BY type`,
+      sql`SELECT team, COUNT(*) as count FROM work_items WHERE changed_date >= ${cutoffDateStr} GROUP BY team`
     ]);
 
     res.json({
-      total: total[0].count,
+      total: parseInt(total[0]?.count || 0),
       byState,
       byType,
       byTeam
@@ -930,30 +703,17 @@ app.get('/api/stats', async (req, res) => {
 
 // 404 Handler
 app.use((req, res) => {
-  console.log('❌ 404 - Route not found:', req.method, req.path);
   res.status(404).json({ 
     error: 'Route not found',
     path: req.path,
-    method: req.method,
-    availableRoutes: [
-      'GET /health',
-      'GET /api/items',
-      'GET /api/items/period/:days',
-      'GET /api/stats',
-      'GET /api/sync/status',
-      'GET /api/sync/log',
-      'POST /api/sync'
-    ]
+    method: req.method
   });
 });
 
 // Error Handler
 app.use((err, req, res, next) => {
   console.error('❌ Server error:', err);
-  res.status(500).json({ 
-    error: 'Internal server error',
-    message: err.message 
-  });
+  res.status(500).json({ error: 'Internal server error', message: err.message });
 });
 
 // Schedule sync every 30 minutes
@@ -968,34 +728,12 @@ if (isConfigured()) {
 // Start server
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
-  console.log('\n' + '='.repeat(50));
   console.log(`✅ Server running on http://localhost:${PORT}`);
-  console.log(`📊 Azure DevOps: ${AZURE_CONFIG.organization}/${AZURE_CONFIG.project}`);
-  console.log(`💾 Database: ${dbPath}`);
-  console.log('='.repeat(50) + '\n');
   
-  if (isConfigured()) {
-    console.log('🔄 Starting initial sync...\n');
+  if (isConfigured() && DATABASE_URL) {
+    console.log('🔄 Starting initial sync...');
     syncData();
-  } else {
-    console.log('⚠️  Azure DevOps not configured');
-    console.log('   Create a .env file with:');
-    console.log('   AZURE_ORG=your-organization');
-    console.log('   AZURE_PROJECT=your-project');
-    console.log('   AZURE_PAT=your-personal-access-token\n');
   }
-});
-
-// Graceful shutdown
-process.on('SIGINT', () => {
-  console.log('\n👋 Shutting down gracefully...');
-  try {
-    db.close();
-    console.log('✅ Database closed');
-  } catch (err) {
-    console.error('❌ Error closing database:', err.message);
-  }
-  process.exit(0);
 });
 
 // Export for Vercel serverless
