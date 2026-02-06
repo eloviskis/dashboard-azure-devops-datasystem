@@ -19,8 +19,16 @@ const Header: React.FC<HeaderProps> = ({ lastSyncStatus, onOpenUserManagement })
             return { color: 'gray', text: 'Verificando status...' };
         }
         if (lastSyncStatus.status === 'success') {
-            const timeAgo = formatDistanceToNow(new Date(lastSyncStatus.syncTime), { addSuffix: true, locale: ptBR });
-            return { color: 'green', text: `Dados sincronizados ${timeAgo}` };
+            try {
+                const syncDate = new Date(lastSyncStatus.syncTime);
+                if (isNaN(syncDate.getTime())) {
+                    return { color: 'green', text: 'Dados sincronizados' };
+                }
+                const timeAgo = formatDistanceToNow(syncDate, { addSuffix: true, locale: ptBR });
+                return { color: 'green', text: `Dados sincronizados ${timeAgo}` };
+            } catch {
+                return { color: 'green', text: 'Dados sincronizados' };
+            }
         }
         if (lastSyncStatus.status === 'error') {
             return { color: 'red', text: 'Falha na última sincronização' };
