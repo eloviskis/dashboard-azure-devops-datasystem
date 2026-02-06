@@ -9,9 +9,11 @@ import { useAuth } from '../contexts/AuthContext';
 interface HeaderProps {
     lastSyncStatus: SyncStatus | null;
     onOpenUserManagement?: () => void;
+    onSync?: () => void;
+    syncing?: boolean;
 }
 
-const Header: React.FC<HeaderProps> = ({ lastSyncStatus, onOpenUserManagement }) => {
+const Header: React.FC<HeaderProps> = ({ lastSyncStatus, onOpenUserManagement, onSync, syncing }) => {
     const { user, logout, isAdmin } = useAuth();
     
     const syncInfo = useMemo(() => {
@@ -61,6 +63,24 @@ const Header: React.FC<HeaderProps> = ({ lastSyncStatus, onOpenUserManagement })
             
             {/* User Info & Logout */}
             <div className="flex items-center gap-4">
+                {/* Sync Button */}
+                {onSync && (
+                    <button
+                        onClick={onSync}
+                        disabled={syncing}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors text-sm font-semibold ${
+                            syncing
+                                ? 'bg-ds-green/20 text-ds-green cursor-not-allowed'
+                                : 'bg-ds-green/10 text-ds-green hover:bg-ds-green/20'
+                        }`}
+                        title="Sincronizar dados do Azure DevOps"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 ${syncing ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        <span className="hidden sm:inline">{syncing ? 'Sincronizando...' : 'Sincronizar'}</span>
+                    </button>
+                )}
                 {isAdmin && onOpenUserManagement && (
                     <button
                         onClick={onOpenUserManagement}

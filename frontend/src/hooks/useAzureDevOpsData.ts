@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { WorkItem } from '../types.ts';
-import { getWorkItems, getLastSyncStatus } from '../services/azureDevOpsService.ts';
+import { getWorkItems, getLastSyncStatus, triggerFullSync } from '../services/azureDevOpsService.ts';
 
 export interface SyncStatus {
     syncTime: string;
@@ -13,34 +13,45 @@ export const useAzureDevOpsData = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<Error | null>(null);
   const [lastSyncStatus, setLastSyncStatus] = useState<SyncStatus | null>(null);
+  const [syncing, setSyncing] = useState(false);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        // Apenas mostra o loading na primeira carga
-        if(loading) setError(null);
-        
-        const [data, syncStatus] = await Promise.all([
-            getWorkItems(),
-            getLastSyncStatus()
-        ]);
-        setWorkItems(data);
-        setLastSyncStatus(syncStatus);
+  const fetchData = useCallback(async (isInitial = false) => {
+    try {
+      if (isInitial) setError(null);
+      
+      const [data, syncStatus] = await Promise.all([
+          getWorkItems(),
+          getLastSyncStatus()
+      ]);
+      setWorkItems(data);
+      setLastSyncStatus(syncStatus);
 
-      } catch (e) {
-        setError(e instanceof Error ? e : new Error('An unknown error occurred'));
-      } finally {
-        if(loading) setLoading(false);
-      }
-    };
-
-    // Carga inicial
-    fetchData();
-    // Recarrega os dados a cada 5 minutos
-    const interval = setInterval(fetchData, 5 * 60 * 1000); 
-
-    return () => clearInterval(interval);
+    } catch (e) {
+      setError(e instanceof Error ? e : new Error('An unknown error occurred'));
+    } finally {
+      if (isInitial) setLoading(false);
+    }
   }, []);
 
-  return { workItems, loading, error, lastSyncStatus };
+  const handleSync = useCallback(async () => {
+    setSyncing(true);
+    try {
+      await triggerFullSync();
+      // Aguarda um pouco para o backend processar
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      await fetchData();
+    } catch (e) {
+      console.error('Sync error:', e);
+    } finally {
+      setSyncing(false);
+    }
+  }, [fetchData]);
+
+  useEffect(() => {
+    fetchData(true);
+    const interval = setInterval(() => fetchData(), 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [fetchData]);
+
+  return { workItems, loading, error, lastSyncStatus, syncing, handleSync };
 };

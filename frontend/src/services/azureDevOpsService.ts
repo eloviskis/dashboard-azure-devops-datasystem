@@ -91,6 +91,17 @@ export const getPullRequests = async (): Promise<PullRequest[]> => {
   }
 };
 
+export const triggerFullSync = async (): Promise<any> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/sync`, { method: 'POST' });
+    if (!response.ok) throw new Error('Failed to trigger sync');
+    return await response.json();
+  } catch (error) {
+    console.error("Error triggering full sync:", error);
+    return null;
+  }
+};
+
 export const syncPullRequests = async (): Promise<any> => {
   try {
     const response = await fetch(`${API_BASE_URL}/api/sync/pull-requests`, { method: 'POST' });

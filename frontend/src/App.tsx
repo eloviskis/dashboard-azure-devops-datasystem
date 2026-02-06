@@ -84,7 +84,7 @@ const App = () => {
   const { isAuthenticated, isLoading: authLoading, isAdmin } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>('team-insights');
   const [showUserManagement, setShowUserManagement] = useState(false);
-  const { workItems, loading: loadingWIs, error: errorWIs, lastSyncStatus } = useAzureDevOpsData();
+  const { workItems, loading: loadingWIs, error: errorWIs, lastSyncStatus, syncing, handleSync } = useAzureDevOpsData();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [aiInsight, setAiInsight] = useState('');
@@ -581,7 +581,7 @@ const App = () => {
 
   return (
     <div className="min-h-screen bg-ds-dark-blue">
-      <Header lastSyncStatus={lastSyncStatus} onOpenUserManagement={isAdmin ? () => setShowUserManagement(true) : undefined} />
+      <Header lastSyncStatus={lastSyncStatus} onOpenUserManagement={isAdmin ? () => setShowUserManagement(true) : undefined} onSync={handleSync} syncing={syncing} />
 
       {showUserManagement ? (
         <div className="p-6 md:p-10">
