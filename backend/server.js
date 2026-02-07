@@ -1,12 +1,15 @@
-// backend/server.js - PostgreSQL (Neon) version
+// backend/server.js - PostgreSQL version (compatible with Neon serverless & standard pg)
 const express = require('express');
 const axios = require('axios');
 const cors = require('cors');
 const schedule = require('node-schedule');
-const { neon } = require('@neondatabase/serverless');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
+
+// Database driver: use pg (node-postgres) Pool with a tagged-template-literal
+// compatible `sql` function, same API as @neondatabase/serverless
+const { Pool } = require('pg');
 
 // JWT Secret
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -21,21 +24,45 @@ app.use(cors({
     'https://dashboard-azure-devops-datasystem.vercel.app',
     'https://dashboard-azure-devops-datasystem-git-main-eloviskis.vercel.app',
     /\.vercel\.app$/,
+    'https://devops-datasystem.vercel.app',
     'http://localhost:5173',
-    'http://localhost:3000'
+    'http://localhost:3000',
+    'http://31.97.64.250',
+    'https://31.97.64.250'
   ],
   credentials: true
 }));
 app.use(express.json());
 
-// PostgreSQL (Neon) setup
+// PostgreSQL setup (works with local PG, Neon, Supabase, any PG-compatible DB)
 const DATABASE_URL = process.env.DATABASE_URL;
 if (!DATABASE_URL) {
   console.error('❌ DATABASE_URL not configured');
 }
 
-const sql = DATABASE_URL ? neon(DATABASE_URL) : null;
-console.log('✅ Database connection configured');
+let pool = null;
+let sql = null;
+
+if (DATABASE_URL) {
+  pool = new Pool({
+    connectionString: DATABASE_URL,
+    // Enable SSL only for cloud providers (Neon/Supabase URLs contain 'neon' or 'supabase')
+    ssl: /neon\.tech|supabase\.co/.test(DATABASE_URL) ? { rejectUnauthorized: false } : false,
+    max: 10,
+    idleTimeoutMillis: 30000,
+  });
+
+  // Tagged template literal function compatible with Neon's sql`...` API
+  // Usage: await sql`SELECT * FROM users WHERE id = ${id}`
+  sql = (strings, ...values) => {
+    const text = strings.reduce((prev, curr, i) => prev + '$' + i + curr);
+    return pool.query(text, values).then(res => res.rows);
+  };
+
+  console.log('✅ Database connection pool configured');
+} else {
+  console.log('⚠️ No DATABASE_URL — database features disabled');
+}
 
 // Helper functions for Neon PostgreSQL
 const dbAllAsync = async (query, params = []) => {
@@ -772,11 +799,20 @@ app.delete('/api/users/:id', authenticateToken, requireAdmin, async (req, res) =
 // API ENDPOINTS
 // ===========================================
 
-app.get('/health', (req, res) => {
+app.get('/health', async (req, res) => {
+  let dbStatus = 'Not configured';
+  if (pool) {
+    try {
+      await pool.query('SELECT 1');
+      dbStatus = 'PostgreSQL (Connected)';
+    } catch (e) {
+      dbStatus = `PostgreSQL (Error: ${e.message})`;
+    }
+  }
   res.json({ 
     status: 'OK', 
     timestamp: new Date().toISOString(),
-    database: DATABASE_URL ? 'PostgreSQL (Neon)' : 'Not configured',
+    database: dbStatus,
     azureConfigured: isConfigured()
   });
 });
