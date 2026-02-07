@@ -9,7 +9,11 @@ const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
 // JWT Secret
-const JWT_SECRET = process.env.JWT_SECRET || 'devops-dashboard-secret-key-2026';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  console.error('\u274c FATAL: JWT_SECRET environment variable is required. Set it in .env or Vercel env vars.');
+  process.exit(1);
+}
 
 const app = express();
 app.use(cors({
@@ -777,7 +781,7 @@ app.get('/health', (req, res) => {
   });
 });
 
-app.get('/api/items', async (req, res) => {
+app.get('/api/items', authenticateToken, async (req, res) => {
   try {
     console.log('📊 GET /api/items - Fetching work items...');
     
@@ -833,11 +837,11 @@ app.get('/api/items', async (req, res) => {
     res.json(items);
   } catch (err) {
     console.error('❌ Error in /api/items:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Failed to fetch work items' });
   }
 });
 
-app.get('/api/items/period/:days', async (req, res) => {
+app.get('/api/items/period/:days', authenticateToken, async (req, res) => {
   try {
     const days = parseInt(req.params.days, 10);
     const cutoffDate = new Date();
@@ -889,29 +893,29 @@ app.get('/api/items/period/:days', async (req, res) => {
 
     res.json(items);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Failed to fetch items by period' });
   }
 });
 
-app.get('/api/sync/status', async (req, res) => {
+app.get('/api/sync/status', authenticateToken, async (req, res) => {
   try {
     const rows = await sql`SELECT * FROM sync_log ORDER BY sync_time DESC LIMIT 1`;
     res.json(rows[0] || { status: 'No sync yet' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Failed to fetch sync status' });
   }
 });
 
-app.get('/api/sync/log', async (req, res) => {
+app.get('/api/sync/log', authenticateToken, async (req, res) => {
   try {
     const rows = await sql`SELECT * FROM sync_log ORDER BY sync_time DESC LIMIT 50`;
     res.json(rows);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Failed to fetch sync log' });
   }
 });
 
-app.post('/api/sync', async (req, res) => {
+app.post('/api/sync', authenticateToken, async (req, res) => {
   try {
     console.log('🔄 Manual sync triggered');
     const [wiResult, prResult] = await Promise.all([syncData(), syncPullRequests()]);
@@ -921,7 +925,7 @@ app.post('/api/sync', async (req, res) => {
   }
 });
 
-app.get('/api/stats', async (req, res) => {
+app.get('/api/stats', authenticateToken, async (req, res) => {
   try {
     const { period = '30' } = req.query;
     const days = parseInt(period, 10);
@@ -943,7 +947,7 @@ app.get('/api/stats', async (req, res) => {
       byTeam
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Failed to fetch stats' });
   }
 });
 
@@ -951,7 +955,7 @@ app.get('/api/stats', async (req, res) => {
 // PULL REQUEST ENDPOINTS
 // ===========================================
 
-app.get('/api/pull-requests', async (req, res) => {
+app.get('/api/pull-requests', authenticateToken, async (req, res) => {
   try {
     console.log('📊 GET /api/pull-requests - Fetching pull requests...');
     const rows = await sql`SELECT * FROM pull_requests ORDER BY created_date DESC`;
@@ -991,11 +995,11 @@ app.get('/api/pull-requests', async (req, res) => {
     res.json(items);
   } catch (err) {
     console.error('❌ Error in /api/pull-requests:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Failed to fetch pull requests' });
   }
 });
 
-app.post('/api/sync/pull-requests', async (req, res) => {
+app.post('/api/sync/pull-requests', authenticateToken, async (req, res) => {
   try {
     console.log('🔄 Manual PR sync triggered');
     const result = await syncPullRequests();
@@ -1017,7 +1021,7 @@ app.use((req, res) => {
 // Error Handler
 app.use((err, req, res, next) => {
   console.error('❌ Server error:', err);
-  res.status(500).json({ error: 'Internal server error', message: err.message });
+  res.status(500).json({ error: 'Internal server error' });
 });
 
 // Schedule sync every 30 minutes

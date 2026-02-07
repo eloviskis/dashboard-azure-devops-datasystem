@@ -5,6 +5,12 @@ import { SyncStatus } from '../hooks/useAzureDevOpsData.ts';
 // Permite usar URL pública do backend via variável de ambiente ou localhost
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://backend-hazel-three-14.vercel.app';
 
+// Helper: retorna headers com token JWT de autenticação
+const getAuthHeaders = (): HeadersInit => {
+  const token = localStorage.getItem('auth_token');
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
+};
+
 // Função para transformar os dados brutos da API no tipo WorkItem
 const transformApiDataToWorkItem = (apiItem: any): WorkItem => {
   const COMPLETED_STATES = ['Done', 'Concluído', 'Closed', 'Fechado', 'Finished', 'Resolved', 'Pronto'];
@@ -83,7 +89,7 @@ const transformApiDataToWorkItem = (apiItem: any): WorkItem => {
 
 export const getWorkItems = async (): Promise<WorkItem[]> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/items`);
+    const response = await fetch(`${API_BASE_URL}/api/items`, { headers: getAuthHeaders() });
     if (!response.ok) {
       const errorData = await response.text();
       console.error('Backend error response:', errorData);
@@ -100,7 +106,7 @@ export const getWorkItems = async (): Promise<WorkItem[]> => {
 
 export const getLastSyncStatus = async (): Promise<SyncStatus> => {
     try {
-        const response = await fetch(`${API_BASE_URL}/api/sync/status`);
+        const response = await fetch(`${API_BASE_URL}/api/sync/status`, { headers: getAuthHeaders() });
         if (!response.ok) {
             throw new Error('Failed to fetch sync status');
         }
@@ -118,7 +124,7 @@ export const getLastSyncStatus = async (): Promise<SyncStatus> => {
 
 export const getPullRequests = async (): Promise<PullRequest[]> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/pull-requests`);
+    const response = await fetch(`${API_BASE_URL}/api/pull-requests`, { headers: getAuthHeaders() });
     if (!response.ok) {
       throw new Error(`Failed to fetch pull requests: ${response.status}`);
     }
@@ -133,7 +139,7 @@ export const triggerFullSync = async (): Promise<any> => {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 55000); // 55s timeout (Vercel limit ~60s)
   try {
-    const response = await fetch(`${API_BASE_URL}/api/sync`, { method: 'POST', signal: controller.signal });
+    const response = await fetch(`${API_BASE_URL}/api/sync`, { method: 'POST', headers: getAuthHeaders(), signal: controller.signal });
     clearTimeout(timeoutId);
     if (!response.ok) throw new Error('Failed to trigger sync');
     return await response.json();
@@ -151,7 +157,7 @@ export const triggerFullSync = async (): Promise<any> => {
 
 export const syncPullRequests = async (): Promise<any> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/sync/pull-requests`, { method: 'POST' });
+    const response = await fetch(`${API_BASE_URL}/api/sync/pull-requests`, { method: 'POST', headers: getAuthHeaders() });
     if (!response.ok) throw new Error('Failed to sync PRs');
     return await response.json();
   } catch (error) {

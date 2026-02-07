@@ -1,5 +1,0 @@
-{
-  "name": "Dashboard Real-Time do Azure DevOps",
-  "description": "Um painel interativo que exibe informações e gráficos em tempo real sobre o desempenho de equipes e indivíduos em projetos no Azure DevOps. Possui atualizações de dados ao vivo, filtros interativos e várias visualizações como gráficos de pizza, barras e linhas para acompanhar a produtividade e o status do projeto.",
-  "requestFramePermissions": []
-}
