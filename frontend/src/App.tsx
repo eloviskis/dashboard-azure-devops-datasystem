@@ -359,14 +359,17 @@ const App = () => {
             {/* Seção de Itens Envelhecidos e WIP Limits */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
               <div className="h-[500px]">
+                <ChartInfoLamp info="Mostra os itens mais antigos em progresso, ajudando a identificar trabalho estagnado que pode precisar de atenção ou repriorização." />
                 <AgingItemsCard workItems={filteredWorkItems} />
               </div>
               <div className="h-[500px]">
+                <ChartInfoLamp info="Exibe os limites de trabalho em progresso (WIP) por coluna, time e pessoa. WIP alto pode indicar sobrecarga e multitasking excessivo." />
                 <WIPLimits workItems={filteredWorkItems} />
               </div>
             </div>
             {/* Activity Heatmap */}
             <div className="mt-6">
+              <ChartInfoLamp info="Mapa de calor mostrando os horários e dias com maior atividade de movimentação de itens. Útil para entender padrões de trabalho da equipe." />
               <ActivityHeatmap data={filteredWorkItems} />
             </div>
           </>
@@ -407,6 +410,7 @@ const App = () => {
             </div>
             {/* Rework Analysis */}
             <div className="mt-6">
+              <ChartInfoLamp info="Analisa a taxa de retrabalho por time e pessoa. Identifica reincidência de bugs, ajudando a priorizar melhorias de qualidade e processo." />
               <ReworkAnalysisChart data={filteredWorkItems} />
             </div>
           </>
@@ -456,6 +460,7 @@ const App = () => {
                 </div>
             </div>
             {/* Flow Efficiency */}
+            <ChartInfoLamp info="Mostra a eficiência do fluxo por time: % de tempo que os itens passam em trabalho ativo vs. tempo total em fila. Ajuda a reduzir tempos de espera." />
             <FlowEfficiencyChart data={filteredWorkItems} />
           </>
         );

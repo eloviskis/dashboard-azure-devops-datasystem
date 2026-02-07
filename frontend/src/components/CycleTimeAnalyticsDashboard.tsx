@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { WorkItem } from '../types';
 import { CHART_COLORS, STATUS_COLORS } from '../constants';
+import ChartInfoLamp from './ChartInfoLamp';
 import {
   ResponsiveContainer, LineChart, Line, BarChart, Bar,
   XAxis, YAxis, Tooltip, CartesianGrid, Legend, Cell,
@@ -400,6 +401,7 @@ const CycleTimeAnalyticsDashboard: React.FC<CycleTimeAnalyticsDashboardProps> = 
           <h3 className="text-ds-light-text font-bold text-lg mb-4">
             Tendência: Cycle Time vs Lead Time
           </h3>
+          <ChartInfoLamp info="Evolução do cycle time e lead time médios por período, com linhas de referência SLA (P85 e P95). Ajuda a identificar tendências de melhora ou piora no fluxo." />
           <ResponsiveContainer width="100%" height={350}>
             <LineChart data={trendData}>
               <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
@@ -418,6 +420,7 @@ const CycleTimeAnalyticsDashboard: React.FC<CycleTimeAnalyticsDashboardProps> = 
         {/* Team Ranking */}
         <div className="lg:col-span-2 bg-ds-navy p-4 rounded-lg border border-ds-border">
           <h3 className="text-ds-light-text font-bold text-lg mb-4">🏆 Ranking de Times por Cycle Time</h3>
+          <ChartInfoLamp info="Ranking dos times ordenados pelo cycle time médio, incluindo mediana e P85. Times com mínimo de 3 itens concluídos." />
           {teamRanking.length > 0 ? (
             <div className="overflow-x-auto">
               <table className="w-full text-sm text-left text-ds-text">
@@ -458,6 +461,7 @@ const CycleTimeAnalyticsDashboard: React.FC<CycleTimeAnalyticsDashboardProps> = 
       {/* Scatter Plot */}
       <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
         <h3 className="text-ds-light-text font-bold text-lg mb-4">Scatter Plot: Cycle Time por Item</h3>
+        <ChartInfoLamp info="Dispersão do cycle time de cada item concluído, com linhas de referência P50, P85 e P95. Pontos acima do P85 são outliers que merecem investigação." />
         <ResponsiveContainer width="100%" height={350}>
           <ScatterChart margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
@@ -476,6 +480,7 @@ const CycleTimeAnalyticsDashboard: React.FC<CycleTimeAnalyticsDashboardProps> = 
       {/* Cycle Time por Tipo de Item (#11) */}
       <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
         <h3 className="text-ds-light-text font-bold text-lg mb-4">📊 Cycle Time por Tipo de Item</h3>
+        <ChartInfoLamp info="Comparação do cycle time médio e P85 entre tipos de work item (Bug, PBI, Issue, etc.). Ajuda a entender quais tipos levam mais tempo." />
         {(() => {
           const typeMap: Record<string, number[]> = {};
           filteredItems.forEach(item => {
@@ -524,6 +529,7 @@ const CycleTimeAnalyticsDashboard: React.FC<CycleTimeAnalyticsDashboardProps> = 
       {/* Top Outliers (#12) */}
       <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
         <h3 className="text-ds-light-text font-bold text-lg mb-4">🐌 Top 15 Outliers de Cycle Time</h3>
+        <ChartInfoLamp info="Os 15 itens com maior cycle time no período. Útil para investigar causas de atraso e tomar ações pontuais." />
         {(() => {
           const outliers = [...filteredItems]
             .filter(i => i.cycleTime != null)

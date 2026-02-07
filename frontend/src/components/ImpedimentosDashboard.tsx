@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { WorkItem } from '../types';
+import ChartInfoLamp from './ChartInfoLamp';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts';
 
 interface Props {
@@ -335,6 +336,7 @@ const ImpedimentosDashboard: React.FC<Props> = ({ data }) => {
             {/* Impedimentos por Time */}
             <div className="bg-ds-navy p-6 rounded-lg border border-ds-border">
               <h3 className="text-xl font-bold text-white mb-4">👥 Impedimentos por Time</h3>
+              <ChartInfoLamp info="Distribuição de impedimentos por time. Clique nas barras para ver a lista de itens impedidos de cada equipe." />
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={impedimentosPorTime} margin={{ top: 20, right: 30, left: 20, bottom: 80 }}>
                   <XAxis 
@@ -369,6 +371,7 @@ const ImpedimentosDashboard: React.FC<Props> = ({ data }) => {
             {/* Impedimentos por Tipo */}
             <div className="bg-ds-navy p-6 rounded-lg border border-ds-border">
               <h3 className="text-xl font-bold text-white mb-4">🏷️ Impedimentos por Tipo</h3>
+              <ChartInfoLamp info="Distribuição dos impedimentos por tipo de work item (Bug, Issue, PBI, etc.)." />
               <ResponsiveContainer width="100%" height={300}>
                 <PieChart>
                   <Pie
@@ -398,6 +401,7 @@ const ImpedimentosDashboard: React.FC<Props> = ({ data }) => {
           {/* Impedimentos por Tempo Parado */}
           <div className="bg-ds-navy p-6 rounded-lg border border-ds-border">
             <h3 className="text-xl font-bold text-white mb-4">⏱️ Distribuição por Tempo Parado</h3>
+            <ChartInfoLamp info="Distribuição dos impedimentos por faixa de tempo parado (0-3d, 4-7d, 8-14d, 15-30d, 30d+). Muitos itens na faixa alta indica problemas sistêmicos." />
             <ResponsiveContainer width="100%" height={250}>
               <BarChart data={impedimentosPorTempoParado} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
                 <XAxis 
@@ -429,6 +433,7 @@ const ImpedimentosDashboard: React.FC<Props> = ({ data }) => {
               <div className="text-4xl">🚨</div>
               <div>
                 <h3 className="text-2xl font-bold text-white">Top 10 Impedimentos Mais Críticos</h3>
+                <ChartInfoLamp info="Os 10 impedimentos mais antigos/críticos ordenados por dias parados. Clique nos links para abrir no Azure DevOps." />
                 <p className="text-red-200 text-sm">Itens com maior tempo parado - requerem atenção imediata</p>
               </div>
             </div>

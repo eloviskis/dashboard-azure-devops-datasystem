@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { WorkItem } from '../types';
 import { CHART_COLORS } from '../constants';
+import ChartInfoLamp from './ChartInfoLamp';
 import {
   ResponsiveContainer, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Cell, Legend, LineChart, Line
@@ -431,6 +432,7 @@ const TeamInsightsDashboard: React.FC<TeamInsightsDashboardProps> = ({ data }) =
           {/* Radar Chart */}
           <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
             <h3 className="text-ds-light-text font-bold text-lg mb-4">📊 Comparativo com Média Global</h3>
+            <ChartInfoLamp info="Radar comparando o time selecionado com a média global em múltiplas dimensões. Eixos normalizados de 0-100 para comparação justa." />
             <ResponsiveContainer width="100%" height={350}>
               <RadarChart data={radarData}>
                 <PolarGrid stroke={CHART_COLORS.grid} />
@@ -450,6 +452,7 @@ const TeamInsightsDashboard: React.FC<TeamInsightsDashboardProps> = ({ data }) =
             {predictability && (
               <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
                 <h3 className="text-ds-light-text font-bold text-lg mb-4">🎯 Previsibilidade do Time</h3>
+                <ChartInfoLamp info="Mede o quão previsível é o time com base no coeficiente de variação (CV) do cycle time. CV < 30% = ótimo, 30-50% = razoável, >50% = imprevisível." />
                 <div className="flex items-center gap-6">
                   <div className="text-center">
                     <p className={`text-4xl font-bold ${predictability.score >= 80 ? 'text-green-400' : predictability.score >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>
@@ -488,6 +491,7 @@ const TeamInsightsDashboard: React.FC<TeamInsightsDashboardProps> = ({ data }) =
             {scoreTrend.length > 0 && (
               <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
                 <h3 className="text-ds-light-text font-bold text-lg mb-4">📈 Tendência do Score (12 semanas)</h3>
+                <ChartInfoLamp info="Evolução semanal do Score e throughput do time nas últimas 12 semanas. Mostra se o time está melhorando ou piorando." />
                 <ResponsiveContainer width="100%" height={220}>
                   <LineChart data={scoreTrend}>
                     <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
@@ -507,6 +511,7 @@ const TeamInsightsDashboard: React.FC<TeamInsightsDashboardProps> = ({ data }) =
           {/* Insights */}
           <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
             <h3 className="text-ds-light-text font-bold text-lg mb-3">💡 Insights e Recomendações</h3>
+            <ChartInfoLamp info="Insights automáticos: pontos fortes, oportunidades de melhoria e alertas baseados nas métricas do time selecionado." />
             <div className="space-y-2">
               {insights.length > 0 ? insights.map((insight, i) => (
                 <div key={i} className={`p-3 rounded-lg text-sm ${insight.type === 'strength' ? 'bg-green-900/20 text-green-300' : insight.type === 'improvement' ? 'bg-yellow-900/20 text-yellow-300' : 'bg-red-900/20 text-red-300'}`}>
@@ -521,6 +526,7 @@ const TeamInsightsDashboard: React.FC<TeamInsightsDashboardProps> = ({ data }) =
           {/* Executive Summary */}
           <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
             <h3 className="text-ds-light-text font-bold text-lg mb-3">📝 Resumo Executivo</h3>
+            <ChartInfoLamp info="Texto resumido com as principais métricas do time selecionado e comparações com a média global. Útil para relatórios." />
             <p className="text-ds-text text-sm leading-relaxed">
               O time <strong className="text-ds-green">{selectedTeam}</strong> entregou <strong>{selectedStats.completed}</strong> itens
               de um total de <strong>{selectedStats.total}</strong> no período, com uma taxa de conclusão de <strong>{selectedStats.completionRate}%</strong>.

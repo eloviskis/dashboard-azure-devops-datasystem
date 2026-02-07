@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { WorkItem } from '../types';
 import { COMPLETED_STATES } from '../utils/metrics';
+import ChartInfoLamp from './ChartInfoLamp';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, Legend, Cell, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, CartesianGrid } from 'recharts';
 
 interface Props {
@@ -306,6 +307,7 @@ const BacklogAnalysisDashboard: React.FC<Props> = ({ data }) => {
         {/* Vazão por Time */}
         <div className="bg-ds-navy p-6 rounded-lg border border-ds-border">
           <h3 className="text-xl font-bold text-white mb-4">📊 Vazão por Time</h3>
+          <ChartInfoLamp info="Throughput de cada time no período selecionado. Clique nas barras para ver a lista de itens concluídos pelo time." />
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={teamMetrics} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
@@ -338,6 +340,7 @@ const BacklogAnalysisDashboard: React.FC<Props> = ({ data }) => {
         {/* Cycle Time vs Lead Time por Time */}
         <div className="bg-ds-navy p-6 rounded-lg border border-ds-border">
           <h3 className="text-xl font-bold text-white mb-4">⏱️ Cycle Time vs Lead Time</h3>
+          <ChartInfoLamp info="Comparativo de Cycle Time e Lead Time por time. Clique nos pontos para ver os itens. Diferença grande indica tempo de espera no backlog." />
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={teamMetrics} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
@@ -386,6 +389,7 @@ const BacklogAnalysisDashboard: React.FC<Props> = ({ data }) => {
         {/* Performance por Tipo de Work Item */}
         <div className="bg-ds-navy p-6 rounded-lg border border-ds-border">
           <h3 className="text-xl font-bold text-white mb-4">🏷️ Itens Concluídos por Tipo</h3>
+          <ChartInfoLamp info="Total de itens concluídos agrupados por tipo de work item. Clique para ver os itens de cada tipo." />
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={typeMetrics} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
@@ -418,6 +422,7 @@ const BacklogAnalysisDashboard: React.FC<Props> = ({ data }) => {
         {/* Radar de Performance dos Times */}
         <div className="bg-ds-navy p-6 rounded-lg border border-ds-border">
           <h3 className="text-xl font-bold text-white mb-4">🎯 Comparativo de Performance</h3>
+          <ChartInfoLamp info="Radar comparativo da vazão dos times, permitindo uma visão rápida de diferenças de performance entre as equipes." />
           <ResponsiveContainer width="100%" height={300}>
             <RadarChart data={radarData}>
               <PolarGrid stroke="#334155" />
@@ -439,6 +444,7 @@ const BacklogAnalysisDashboard: React.FC<Props> = ({ data }) => {
           <div className="text-4xl">📋</div>
           <div>
             <h3 className="text-2xl font-bold text-white">Recomendação de Backlog</h3>
+            <ChartInfoLamp info="Recomendação de quantos itens refinar por tipo, baseada no throughput histórico (× 1.5 para buffer de segurança)." />
             <p className="text-ds-text text-sm">Baseado no histórico de vazão (throughput × 1.5 para buffer saudável)</p>
           </div>
         </div>
@@ -507,6 +513,7 @@ const BacklogAnalysisDashboard: React.FC<Props> = ({ data }) => {
       {/* Tabela Detalhada de Métricas por Tipo */}
       <div className="bg-ds-navy p-6 rounded-lg border border-ds-border">
         <h3 className="text-xl font-bold text-white mb-4">📈 Métricas Detalhadas por Tipo</h3>
+        <ChartInfoLamp info="Tabela detalhada com contagem, cycle time médio, P85 e lead time por tipo de work item. Use para comparar performance entre tipos." />
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead>

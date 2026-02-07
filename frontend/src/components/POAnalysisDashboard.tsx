@@ -3,6 +3,7 @@ import { WorkItem } from '../types';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts';
 import { CHART_COLORS } from '../constants';
 import { COMPLETED_STATES } from '../utils/metrics';
+import ChartInfoLamp from './ChartInfoLamp';
 
 interface Props {
   data: WorkItem[];
@@ -392,6 +393,7 @@ export const POAnalysisDashboard: React.FC<Props> = ({ data }) => {
       {/* Gráfico: Top Criadores */}
       <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
         <div className="font-bold mb-2 text-white">Top 15 - Criadores de Work Items</div>
+        <ChartInfoLamp info="Ranking dos maiores criadores de work items no período. Clique nas barras para ver os itens criados por cada pessoa." />
         <div className="text-xs text-ds-text mb-3">Quantidade de itens criados no período</div>
         <ResponsiveContainer width="100%" height={400}>
           <BarChart 
@@ -428,6 +430,7 @@ export const POAnalysisDashboard: React.FC<Props> = ({ data }) => {
       {/* Gráfico: Itens por Time */}
       <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
         <div className="font-bold mb-2 text-white">Criação de Work Items por Time</div>
+        <ChartInfoLamp info="Distribuição de itens criados por equipe. Clique para ver os itens de cada time." />
         <div className="text-xs text-ds-text mb-3">Distribuição de itens criados por equipe</div>
         <ResponsiveContainer width="100%" height={300}>
           <BarChart 
@@ -461,6 +464,7 @@ export const POAnalysisDashboard: React.FC<Props> = ({ data }) => {
       {/* Gráfico: Taxa de Conclusão por Criador */}
       <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
         <div className="font-bold mb-2 text-white">Top 15 - Taxa de Conclusão por Criador</div>
+        <ChartInfoLamp info="Comparativo entre itens criados e fechados por pessoa (mín. 3 criados). Diferença grande pode indicar falta de refinamento." />
         <div className="text-xs text-ds-text mb-3">Comparação entre itens criados e fechados (mínimo 3 itens criados)</div>
         <ResponsiveContainer width="100%" height={400}>
           <BarChart 
@@ -495,6 +499,7 @@ export const POAnalysisDashboard: React.FC<Props> = ({ data }) => {
       {/* Gráfico: Criação por Tipo de Work Item por Pessoa */}
       <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
         <div className="font-bold mb-2 text-white">Top 15 - Criação por Tipo de Work Item por Pessoa</div>
+        <ChartInfoLamp info="Distribuição de tipos de work item criados por pessoa. Mostra se alguém cria mais bugs, issues ou PBIs." />
         <div className="text-xs text-ds-text mb-3">Distribuição de tipos de itens criados por cada pessoa (clique nas barras para ver detalhes)</div>
         <ResponsiveContainer width="100%" height={450}>
           <BarChart 
@@ -530,6 +535,7 @@ export const POAnalysisDashboard: React.FC<Props> = ({ data }) => {
       {/* Gráfico: DOR (Definition of Ready) por Pessoa */}
       <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
         <div className="font-bold mb-2 text-white">Top 15 - DOR (Definition of Ready) por Criador</div>
+        <ChartInfoLamp info="Análise de itens com campo 'Ready' preenchido vs. não preenchido por criador. Alta taxa de DOR indica melhor qualidade na especificação." />
         <div className="text-xs text-ds-text mb-3">
           Análise de itens com campo "Ready" preenchido vs não preenchido (mínimo 3 itens criados)
         </div>
@@ -587,6 +593,7 @@ export const POAnalysisDashboard: React.FC<Props> = ({ data }) => {
       {/* Tabela: Melhor Desempenho */}
       <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
         <div className="font-bold mb-2 text-white">🏆 Ranking - Melhor Taxa de Conclusão</div>
+        <ChartInfoLamp info="Ranking dos criadores com melhor percentual de itens fechados (mín. 5 criados). Indica efetividade da demanda criada." />
         <div className="text-xs text-ds-text mb-3">Criadores com melhor percentual de itens fechados (mínimo 5 itens criados)</div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">

@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { WorkItem } from '../types';
 import { CHART_COLORS } from '../constants';
+import ChartInfoLamp from './ChartInfoLamp';
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ReferenceLine,
   RadialBarChart, RadialBar, Legend
@@ -390,6 +391,7 @@ const MetasDashboard: React.FC<MetasDashboardProps> = ({ data, periodDays }) => 
       {projection && (
         <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
           <h3 className="text-ds-light-text font-bold text-lg mb-3">🔮 Projeção de Entregas</h3>
+          <ChartInfoLamp info="Projeção baseada no ritmo das últimas 4 semanas: indica se o time atingirá a meta de throughput no período restante." />
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="text-center p-4 bg-ds-bg rounded-lg">
               <p className="text-ds-text text-xs">Ritmo Atual</p>
@@ -441,6 +443,7 @@ const MetasDashboard: React.FC<MetasDashboardProps> = ({ data, periodDays }) => 
         return (
           <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
             <h3 className="text-ds-light-text font-bold text-lg mb-3">📊 Comparativo de Metas por Time</h3>
+            <ChartInfoLamp info="Tabela comparativa de todas as métricas vs. metas por time, com score geral. Verde = meta atingida, vermelho = abaixo da meta." />
             <div className="overflow-x-auto">
               <table className="w-full text-sm text-ds-text">
                 <thead>

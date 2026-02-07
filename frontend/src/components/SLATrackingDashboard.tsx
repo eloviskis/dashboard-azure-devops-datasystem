@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { WorkItem } from '../types';
 import { CHART_COLORS } from '../constants';
+import ChartInfoLamp from './ChartInfoLamp';
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend, Cell, PieChart, Pie
 } from 'recharts';
@@ -131,6 +132,7 @@ const SLATrackingDashboard: React.FC<Props> = ({ data }) => {
         {/* SLA Compliance by Team */}
         <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
           <h3 className="text-ds-light-text font-bold text-lg mb-4">📊 SLA Compliance por Time</h3>
+          <ChartInfoLamp info="Percentual de itens que foram concluídos dentro da meta SLA por time. Verde ≥80%, amarelo ≥60%, vermelho <60%." />
           <ResponsiveContainer width="100%" height={Math.max(250, slaByTeam.length * 40)}>
             <BarChart data={slaByTeam} layout="vertical" margin={{ left: 120 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
@@ -150,6 +152,7 @@ const SLATrackingDashboard: React.FC<Props> = ({ data }) => {
         {/* SLA Pie */}
         <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
           <h3 className="text-ds-light-text font-bold text-lg mb-4">🎯 Distribuição SLA Geral</h3>
+          <ChartInfoLamp info="Distribuição dos itens concluídos entre 'Dentro do SLA' e 'Fora do SLA', baseada na meta de cycle time definida acima." />
           <ResponsiveContainer width="100%" height={280}>
             <PieChart>
               <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100}
@@ -167,6 +170,7 @@ const SLATrackingDashboard: React.FC<Props> = ({ data }) => {
       {breachedItems.length > 0 && (
         <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
           <h3 className="text-ds-light-text font-bold text-lg mb-4">🚨 Itens Em Progresso Fora do SLA ({breachedItems.length})</h3>
+          <ChartInfoLamp info="Itens atualmente em progresso que já ultrapassaram a meta de SLA. Requerem atenção imediata para evitar atrasos maiores." />
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-left text-ds-text">
               <thead className="text-xs text-ds-light-text uppercase bg-ds-navy/50">

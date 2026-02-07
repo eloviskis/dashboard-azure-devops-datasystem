@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { WorkItem } from '../types';
 import { CHART_COLORS } from '../constants';
+import ChartInfoLamp from './ChartInfoLamp';
 import {
   ResponsiveContainer, BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
   XAxis, YAxis, Tooltip, CartesianGrid, Legend, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis
@@ -144,6 +145,7 @@ const ExecutiveHomeDashboard: React.FC<Props> = ({ data }) => {
         {/* Weekly Throughput Trend */}
         <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
           <h3 className="text-ds-light-text font-bold text-lg mb-4">📈 Throughput Semanal (últimas 8 semanas)</h3>
+          <ChartInfoLamp info="Tendência semanal de itens concluídos nas últimas 8 semanas. Permite identificar aceleração ou desaceleração das entregas." />
           <ResponsiveContainer width="100%" height={250}>
             <LineChart data={weeklyTrend}>
               <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
@@ -158,6 +160,7 @@ const ExecutiveHomeDashboard: React.FC<Props> = ({ data }) => {
         {/* Type Distribution */}
         <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
           <h3 className="text-ds-light-text font-bold text-lg mb-4">📦 Distribuição por Tipo</h3>
+          <ChartInfoLamp info="Distribuição dos work items por tipo (PBI, Bug, Issue, Task, etc.). Mostra o perfil das demandas do período." />
           <ResponsiveContainer width="100%" height={250}>
             <PieChart>
               <Pie data={typeDistribution} dataKey="count" nameKey="type" cx="50%" cy="50%" outerRadius={90}
@@ -174,6 +177,7 @@ const ExecutiveHomeDashboard: React.FC<Props> = ({ data }) => {
       {top5Teams.length > 1 && (
         <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
           <h3 className="text-ds-light-text font-bold text-lg mb-4">🎯 Radar de Saúde − Top {top5Teams.length} Times</h3>
+          <ChartInfoLamp info="Radar comparativo dos melhores times em 5 dimensões: Health Score, Throughput, Cycle Time, Bug Rate e Conclusão. Permite comparar forças e fraquezas." />
           <ResponsiveContainer width="100%" height={400}>
             <RadarChart data={radarData}>
               <PolarGrid stroke={CHART_COLORS.grid} />
@@ -192,6 +196,7 @@ const ExecutiveHomeDashboard: React.FC<Props> = ({ data }) => {
       {/* Team Health Table */}
       <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
         <h3 className="text-ds-light-text font-bold text-lg mb-4">🏥 Health Score por Time</h3>
+        <ChartInfoLamp info="Health Score é composto por 4 indicadores (25% cada): throughput, cycle time, bug rate e taxa de conclusão. Quanto maior, mais saudável o time." />
         <div className="overflow-x-auto">
           <table className="w-full text-sm text-left text-ds-text">
             <thead className="text-xs text-ds-light-text uppercase bg-ds-navy/50">

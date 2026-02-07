@@ -3,6 +3,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { WorkItem, WorkItemFilters } from '../types.ts';
 import { CHART_COLORS } from '../constants.ts';
 import { getWeek, getYear } from 'date-fns';
+import ChartInfoLamp from './ChartInfoLamp';
 import { COMPLETED_STATES } from '../utils/metrics.ts';
 
 interface MonteCarloSimulationProps {
@@ -169,6 +170,7 @@ const MonteCarloSimulation: React.FC<MonteCarloSimulationProps> = ({ data, filte
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
                         <h3 className="text-ds-light-text font-bold text-lg mb-2">Previsão: Quantos itens em {numWeeks} semanas?</h3>
+                        <ChartInfoLamp info="Simulação Monte Carlo: histograma de probabilidade mostrando quantos itens o time pode entregar em X semanas. Linhas de referência em 50%, 85% e 95% de confiança." />
                         <div className="text-ds-text space-y-1 mb-4 text-sm">
                             <p><span className="font-bold text-red-400">95% de probabilidade</span> de concluir <span className="font-bold text-white">{simulationResult.howMany.confidenceLevels.p95} ou mais</span> itens.</p>
                             <p><span className="font-bold text-ds-green">85% de probabilidade</span> de concluir <span className="font-bold text-white">{simulationResult.howMany.confidenceLevels.p85} ou mais</span> itens.</p>
@@ -190,6 +192,7 @@ const MonteCarloSimulation: React.FC<MonteCarloSimulationProps> = ({ data, filte
                     </div>
                     <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
                         <h3 className="text-ds-light-text font-bold text-lg mb-2">Previsão: Quando terminaremos {numItems} itens?</h3>
+                        <ChartInfoLamp info="Simulação Monte Carlo: histograma de probabilidade mostrando em quantas semanas X itens serão concluídos. Usar percentil 85% para compromissos de prazo." />
                          <div className="text-ds-text space-y-1 mb-4 text-sm">
                             <p><span className="font-bold text-red-400">95% de probabilidade</span> de concluir em <span className="font-bold text-white">até {simulationResult.when.confidenceLevels.p95} semanas</span>.</p>
                             <p><span className="font-bold text-ds-green">85% de probabilidade</span> de concluir em <span className="font-bold text-white">até {simulationResult.when.confidenceLevels.p85} semanas</span>.</p>

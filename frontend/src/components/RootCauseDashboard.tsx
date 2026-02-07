@@ -1,6 +1,7 @@
 import React, { useState, Component, ErrorInfo, ReactNode } from 'react';
 import './RootCauseDashboard.css';
 import { WorkItem } from '../types';
+import ChartInfoLamp from './ChartInfoLamp';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 
 interface Props {
@@ -336,6 +337,7 @@ export const RootCauseDashboard: React.FC<Props> = ({ data }) => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 bg-ds-navy p-4 rounded-lg border border-ds-border">
         <div className="font-bold mb-2">Total Issues fechadas do mês por tipo</div>
+        <ChartInfoLamp info="Distribuição de issues fechadas por tipo no mês corrente. Clique nas barras para ver a listagem completa de itens." />
         <ResponsiveContainer width="100%" height={220}>
           <BarChart
             data={[...typeChart].sort((a, b) => b.value - a.value)}
@@ -370,6 +372,7 @@ export const RootCauseDashboard: React.FC<Props> = ({ data }) => {
         </div>
         <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
           <div className="font-bold mb-2">Correções do mês por prioridade</div>
+          <ChartInfoLamp info="Issues de correção agrupadas por prioridade (P0-P4). Clique para ver os itens de cada prioridade." />
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={correcaoPriorityChart}>
               <XAxis dataKey="name" tick={{ fill: '#fff', fontSize: 12 }} />
@@ -395,6 +398,7 @@ export const RootCauseDashboard: React.FC<Props> = ({ data }) => {
       {/* Gráficos - Row 2 */}
       <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
         <div className="font-bold mb-2">P0 por Área/Causa Raiz ({issuesP0.length} total)</div>
+        <ChartInfoLamp info="Issues P0 (críticas) agrupadas por causa raiz. Identifica as áreas mais críticas que precisam de ação preventiva." />
         {p0CausaChart.length === 0 ? (
           <div className="flex items-center justify-center h-[180px] text-ds-text text-center">
             <div>
@@ -437,6 +441,7 @@ export const RootCauseDashboard: React.FC<Props> = ({ data }) => {
       {/* Gráficos - Row 3 */}
       <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
         <div className="font-bold mb-2">Issues de Correção por Pessoa (Causa Raiz)</div>
+        <ChartInfoLamp info="Comparativo de issues Sem vs. Com Causa Raiz por pessoa. Alta % sem causa raiz indica falta de preenchimento do campo." />
         <div className="text-xs text-ds-text mb-2">
           🔴 Sem Causa Raiz | 🟢 Com Causa Raiz
         </div>

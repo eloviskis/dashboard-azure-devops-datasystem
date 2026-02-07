@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { WorkItem } from '../types';
 import { CHART_COLORS } from '../constants';
 import { getPercentile } from '../utils/metrics';
+import ChartInfoLamp from './ChartInfoLamp';
 import {
   ResponsiveContainer, BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Legend, ReferenceLine, Cell
 } from 'recharts';
@@ -149,6 +150,7 @@ const DORAMetricsDashboard: React.FC<Props> = ({ data }) => {
       {/* Deployment Frequency Trend */}
       <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
         <h3 className="text-ds-light-text font-bold text-lg mb-4">📦 Deployment Frequency (Itens Entregues/Semana)</h3>
+        <ChartInfoLamp info="Frequência de entrega semanal (throughput). Adaptação da métrica DORA 'Deployment Frequency' — a original mede deploys para produção." />
         <ResponsiveContainer width="100%" height={300}>
           <BarChart data={deployFrequency}>
             <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
@@ -166,6 +168,7 @@ const DORAMetricsDashboard: React.FC<Props> = ({ data }) => {
       {/* Lead Time by Team */}
       <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
         <h3 className="text-ds-light-text font-bold text-lg mb-4">⏱️ Lead Time for Changes por Time</h3>
+        <ChartInfoLamp info="Tempo médio de entrega (cycle time de PBIs/Stories) por time, com percentis P50 e P85. Adaptação da métrica DORA 'Lead Time for Changes'." />
         <ResponsiveContainer width="100%" height={Math.max(250, leadTimeData.length * 40)}>
           <BarChart data={leadTimeData} layout="vertical" margin={{ left: 120 }}>
             <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
@@ -185,6 +188,7 @@ const DORAMetricsDashboard: React.FC<Props> = ({ data }) => {
         {/* Change Failure Rate Trend */}
         <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
           <h3 className="text-ds-light-text font-bold text-lg mb-4">🐛 Change Failure Rate (Semanal)</h3>
+          <ChartInfoLamp info="Percentual de bugs sobre o total entregue por semana. Adaptação da métrica DORA 'Change Failure Rate' — a original mede % de deploys que causam falha." />
           <ResponsiveContainer width="100%" height={280}>
             <LineChart data={failureRate}>
               <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
@@ -201,6 +205,7 @@ const DORAMetricsDashboard: React.FC<Props> = ({ data }) => {
         {/* MTTR by Team */}
         <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
           <h3 className="text-ds-light-text font-bold text-lg mb-4">🔧 MTTR por Time (dias)</h3>
+          <ChartInfoLamp info="Tempo médio de resolução de bugs por time. Adaptação da métrica DORA 'Mean Time To Restore' — a original mede tempo de indisponibilidade até restauração." />
           <ResponsiveContainer width="100%" height={280}>
             <BarChart data={mttr}>
               <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />

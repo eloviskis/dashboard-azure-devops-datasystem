@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { WorkItem } from '../types';
 import { CHART_COLORS } from '../constants';
+import ChartInfoLamp from './ChartInfoLamp';
 import {
   ResponsiveContainer, BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
   XAxis, YAxis, Tooltip, CartesianGrid, Legend, ReferenceLine, AreaChart, Area
@@ -446,6 +447,7 @@ const ScrumCTCDashboard: React.FC<ScrumCTCDashboardProps> = ({ data }) => {
       {burndownData.length > 0 && (
         <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
           <h3 className="text-ds-light-text font-bold text-lg mb-4">🔥 Sprint Burndown — {currentSprint?.name}</h3>
+          <ChartInfoLamp info="Burndown da sprint atual: itens e SP restantes vs. linha ideal. Se a curva real estiver acima da ideal, a sprint está atrasada." />
           <ResponsiveContainer width="100%" height={350}>
             <AreaChart data={burndownData}>
               <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
@@ -465,6 +467,7 @@ const ScrumCTCDashboard: React.FC<ScrumCTCDashboardProps> = ({ data }) => {
       {/* Velocity Chart */}
       <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
         <h3 className="text-ds-light-text font-bold text-lg mb-4">📊 Velocity por Sprint (Comprometido vs Entregue)</h3>
+        <ChartInfoLamp info="Histórico de velocity: comparação entre itens comprometidos e itens efetivamente entregues em cada sprint. A diferença indica a confiabilidade do planejamento." />
         <ResponsiveContainer width="100%" height={350}>
           <BarChart data={velocityTrend}>
             <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
@@ -482,6 +485,7 @@ const ScrumCTCDashboard: React.FC<ScrumCTCDashboardProps> = ({ data }) => {
       {/* Velocity Trend */}
       <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
         <h3 className="text-ds-light-text font-bold text-lg mb-4">📈 Tendência de Velocity</h3>
+        <ChartInfoLamp info="Evolução da velocity (itens e SP) ao longo das sprints, com linha de média. Ajuda a prever a capacidade futura do time." />
         <ResponsiveContainer width="100%" height={300}>
           <LineChart data={velocityTrend}>
             <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
@@ -501,6 +505,7 @@ const ScrumCTCDashboard: React.FC<ScrumCTCDashboardProps> = ({ data }) => {
         {/* Story Points by Member */}
         <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
           <h3 className="text-ds-light-text font-bold text-lg mb-4">👤 Story Points por Membro</h3>
+          <ChartInfoLamp info="Distribuição de story points por membro do time: entregues vs. total atribuído. Ajuda a identificar distribuição de carga." />
           <ResponsiveContainer width="100%" height={Math.max(300, spByMember.length * 35)}>
             <BarChart data={spByMember} layout="vertical" margin={{ left: 100 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
@@ -517,6 +522,7 @@ const ScrumCTCDashboard: React.FC<ScrumCTCDashboardProps> = ({ data }) => {
         {/* Type Distribution */}
         <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
           <h3 className="text-ds-light-text font-bold text-lg mb-4">📦 Distribuição por Tipo</h3>
+          <ChartInfoLamp info="Distribuição dos itens da sprint por tipo de work item (PBI, Bug, Task, etc.). Mostra o perfil do trabalho do time." />
           <ResponsiveContainer width="100%" height={300}>
             <PieChart>
               <Pie data={typeDistribution} dataKey="count" nameKey="type" cx="50%" cy="50%" outerRadius={100}
@@ -533,6 +539,7 @@ const ScrumCTCDashboard: React.FC<ScrumCTCDashboardProps> = ({ data }) => {
       {/* Sprint History Table */}
       <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
         <h3 className="text-ds-light-text font-bold text-lg mb-4">📋 Histórico de Sprints</h3>
+        <ChartInfoLamp info="Tabela com histórico de sprints: comprometido vs. entregue, confiabilidade, carry-over (itens não finalizados que passam para a próxima sprint) e bugs." />
         <div className="overflow-x-auto">
           <table className="w-full text-sm text-left text-ds-text">
             <thead className="text-xs text-ds-light-text uppercase bg-ds-navy/50">
@@ -574,6 +581,7 @@ const ScrumCTCDashboard: React.FC<ScrumCTCDashboardProps> = ({ data }) => {
       {/* Insights */}
       <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
         <h3 className="text-ds-light-text font-bold text-lg mb-3">💡 Insights Scrum Automáticos</h3>
+        <ChartInfoLamp info="Insights automáticos sobre saúde Scrum: alertas de confiabilidade, variabilidade, WIP, cycle time e tendência de velocity." />
         <div className="space-y-2">
           {scrumInsights.map((insight, i) => (
             <div key={i} className={`p-3 rounded-lg text-sm ${insight.type === 'good' ? 'bg-green-900/20 text-green-300' : insight.type === 'warning' ? 'bg-yellow-900/20 text-yellow-300' : 'bg-red-900/20 text-red-300'}`}>

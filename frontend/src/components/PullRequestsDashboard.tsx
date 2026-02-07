@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { PullRequest } from '../types';
 import { CHART_COLORS } from '../constants';
 import { getPullRequests, syncPullRequests } from '../services/azureDevOpsService';
+import ChartInfoLamp from './ChartInfoLamp';
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend,
   PieChart, Pie, Cell, LineChart, Line
@@ -406,6 +407,7 @@ const PullRequestsDashboard: React.FC = () => {
         {/* Status Pie */}
         <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
           <h3 className="text-ds-light-text font-semibold mb-4">Distribuição por Status</h3>
+          <ChartInfoLamp info="Distribuição dos PRs entre Ativos, Concluídos e Abandonados no período selecionado." />
           <ResponsiveContainer width="100%" height={300}>
             <PieChart>
               <Pie data={statusPieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
@@ -420,6 +422,7 @@ const PullRequestsDashboard: React.FC = () => {
         {/* Vote Distribution */}
         <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
           <h3 className="text-ds-light-text font-semibold mb-4">Distribuição de Votos</h3>
+          <ChartInfoLamp info="Distribuição dos votos nos PRs: Aprovado, Sem Voto, Aguardando Autor, Rejeitado. Votos 'Sem Voto' indicam PRs sem review ativa." />
           <ResponsiveContainer width="100%" height={300}>
             <PieChart>
               <Pie data={voteDistribution} dataKey="count" nameKey="name" cx="50%" cy="50%" outerRadius={100} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
@@ -435,6 +438,7 @@ const PullRequestsDashboard: React.FC = () => {
       {/* PRs BY REPO */}
       <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
         <h3 className="text-ds-light-text font-semibold mb-4">Pull Requests por Repositório</h3>
+        <ChartInfoLamp info="Quantidade de PRs por repositório, divididos entre Concluídos, Ativos e Abandonados. Repositórios com muitos PRs ativos podem ter gargalo de review." />
         <ResponsiveContainer width="100%" height={Math.max(300, prsByRepo.length * 35)}>
           <BarChart data={prsByRepo} layout="vertical" margin={{ left: 120 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#233554" />
@@ -454,6 +458,7 @@ const PullRequestsDashboard: React.FC = () => {
         {/* Top Authors */}
         <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
           <h3 className="text-ds-light-text font-semibold mb-4">Top Autores de PRs</h3>
+          <ChartInfoLamp info="Ranking dos desenvolvedores que mais criaram PRs no período. Ajuda a identificar os maiores contribuidores de código." />
           <ResponsiveContainer width="100%" height={Math.max(300, topAuthors.length * 30)}>
             <BarChart data={topAuthors} layout="vertical" margin={{ left: 100 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#233554" />
@@ -470,6 +475,7 @@ const PullRequestsDashboard: React.FC = () => {
         {/* Top Reviewers */}
         <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
           <h3 className="text-ds-light-text font-semibold mb-4">Top Reviewers</h3>
+          <ChartInfoLamp info="Ranking dos revisores mais ativos, com breakdown de aprovações, rejeições e sem voto. Concentração alta em poucos revisores é um risco." />
           <ResponsiveContainer width="100%" height={Math.max(300, topReviewers.length * 30)}>
             <BarChart data={topReviewers} layout="vertical" margin={{ left: 100 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#233554" />
@@ -488,6 +494,7 @@ const PullRequestsDashboard: React.FC = () => {
       {/* LIFETIME TREND */}
       <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
         <h3 className="text-ds-light-text font-semibold mb-4">Tendência de Tempo de Vida dos PRs (dias)</h3>
+        <ChartInfoLamp info="Evolução mensal do tempo médio e P85 de vida dos PRs concluídos. Tempo de vida alto pode indicar gargalo no code review." />
         <ResponsiveContainer width="100%" height={300}>
           <LineChart data={lifetimeTrend}>
             <CartesianGrid strokeDasharray="3 3" stroke="#233554" />
@@ -505,6 +512,7 @@ const PullRequestsDashboard: React.FC = () => {
       {activePRQueue.length > 0 && (
         <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
           <h3 className="text-ds-light-text font-semibold mb-4">🔴 PRs Ativos (fila de review)</h3>
+          <ChartInfoLamp info="Tabela com PRs atualmente abertos aguardando review, ordenados por idade. PRs com mais de 7 dias indicam bloqueio de review." />
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-left text-ds-text">
               <thead className="text-xs text-ds-light-text uppercase bg-ds-navy/50">
