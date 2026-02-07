@@ -3,9 +3,9 @@ import { WorkItem } from '../types';
 import { CHART_COLORS } from '../constants';
 import { getPercentile } from '../utils/metrics';
 import {
-  ResponsiveContainer, BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Legend, ReferenceLine
+  ResponsiveContainer, BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Legend, ReferenceLine, Cell
 } from 'recharts';
-import { format, subDays, eachWeekOfInterval, startOfWeek, endOfWeek, differenceInDays } from 'date-fns';
+import { format, subDays, eachWeekOfInterval, endOfWeek } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 interface Props { data: WorkItem[]; }
