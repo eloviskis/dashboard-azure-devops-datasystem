@@ -3,6 +3,8 @@ import { WorkItem } from '../types.ts';
 import { format, differenceInDays } from 'date-fns';
 import { EmptyState } from './ChartStates.tsx';
 import { STATUS_COLORS } from '../constants.ts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
+import ChartInfoLamp from './ChartInfoLamp';
 
 interface WorkItemTableProps {
   data: WorkItem[];
@@ -83,9 +85,20 @@ const WorkItemTable: React.FC<WorkItemTableProps> = ({ data }) => {
         level2[item.codeReviewLevel2] = (level2[item.codeReviewLevel2] || 0) + 1;
       }
     });
+    // Merge all people into a unified chart data
+    const allPeople = new Set([...Object.keys(level1), ...Object.keys(level2)]);
+    const chartData = Array.from(allPeople).map(name => ({
+      name: name.split(' ').slice(0, 2).join(' '),
+      fullName: name,
+      nivel1: level1[name] || 0,
+      nivel2: level2[name] || 0,
+      total: (level1[name] || 0) + (level2[name] || 0),
+    })).sort((a, b) => b.total - a.total);
+
     return {
       level1: Object.entries(level1).sort((a, b) => b[1] - a[1]),
       level2: Object.entries(level2).sort((a, b) => b[1] - a[1]),
+      chartData,
     };
   }, [data]);
 
@@ -180,34 +193,69 @@ const WorkItemTable: React.FC<WorkItemTableProps> = ({ data }) => {
           </button>
         </div>
 
-        {/* Code Review Counters */}
+        {/* Code Review Chart + Counters */}
         {(crCounters.level1.length > 0 || crCounters.level2.length > 0) && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {crCounters.level1.length > 0 && (
-              <div className="bg-ds-dark-blue p-3 rounded-lg border border-ds-border">
-                <h4 className="text-ds-light-text font-semibold text-sm mb-2">📋 Code Review Nível 1 por Pessoa</h4>
-                <div className="flex flex-wrap gap-2">
-                  {crCounters.level1.map(([name, count]) => (
-                    <span key={name} className="bg-ds-muted/20 text-ds-text text-xs px-2 py-1 rounded-md">
-                      {name}: <strong className="text-ds-green">{count}</strong>
-                    </span>
-                  ))}
-                </div>
+          <>
+            {/* Gráfico de barras CR Nível 1 vs Nível 2 */}
+            {crCounters.chartData.length > 0 && (
+              <div className="bg-ds-dark-blue p-4 rounded-lg border border-ds-border">
+                <h3 className="text-ds-light-text font-semibold text-base mb-3 flex items-center gap-2">
+                  <ChartInfoLamp info="Gráfico comparativo que mostra quantas vezes cada pessoa aparece como Code Review Nível 1 (revisor primário) e Nível 2 (revisor secundário) nos itens de trabalho filtrados." />
+                  📊 Code Review por Pessoa — Nível 1 vs Nível 2
+                </h3>
+                <ResponsiveContainer width="100%" height={Math.max(300, crCounters.chartData.length * 38)}>
+                  <BarChart data={crCounters.chartData} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                    <XAxis type="number" allowDecimals={false} tick={{ fill: '#94a3b8', fontSize: 12 }} />
+                    <YAxis dataKey="name" type="category" width={130} tick={{ fill: '#e2e8f0', fontSize: 11 }} />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}
+                      labelStyle={{ color: '#e2e8f0', fontWeight: 'bold' }}
+                      formatter={(value: number, name: string) => [
+                        value,
+                        name === 'nivel1' ? 'CR Nível 1' : 'CR Nível 2'
+                      ]}
+                      labelFormatter={(label: string) => {
+                        const item = crCounters.chartData.find(d => d.name === label);
+                        return item ? item.fullName : label;
+                      }}
+                    />
+                    <Legend formatter={(value: string) => value === 'nivel1' ? 'CR Nível 1' : 'CR Nível 2'} />
+                    <Bar dataKey="nivel1" fill="#22c55e" radius={[0, 4, 4, 0]} name="nivel1" />
+                    <Bar dataKey="nivel2" fill="#3b82f6" radius={[0, 4, 4, 0]} name="nivel2" />
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
             )}
-            {crCounters.level2.length > 0 && (
-              <div className="bg-ds-dark-blue p-3 rounded-lg border border-ds-border">
-                <h4 className="text-ds-light-text font-semibold text-sm mb-2">📋 Code Review Nível 2 por Pessoa</h4>
-                <div className="flex flex-wrap gap-2">
-                  {crCounters.level2.map(([name, count]) => (
-                    <span key={name} className="bg-ds-muted/20 text-ds-text text-xs px-2 py-1 rounded-md">
-                      {name}: <strong className="text-blue-400">{count}</strong>
-                    </span>
-                  ))}
+
+            {/* Badges textuais */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {crCounters.level1.length > 0 && (
+                <div className="bg-ds-dark-blue p-3 rounded-lg border border-ds-border">
+                  <h4 className="text-ds-light-text font-semibold text-sm mb-2">📋 Code Review Nível 1 por Pessoa</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {crCounters.level1.map(([name, count]) => (
+                      <span key={name} className="bg-ds-muted/20 text-ds-text text-xs px-2 py-1 rounded-md">
+                        {name}: <strong className="text-ds-green">{count}</strong>
+                      </span>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
+              )}
+              {crCounters.level2.length > 0 && (
+                <div className="bg-ds-dark-blue p-3 rounded-lg border border-ds-border">
+                  <h4 className="text-ds-light-text font-semibold text-sm mb-2">📋 Code Review Nível 2 por Pessoa</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {crCounters.level2.map(([name, count]) => (
+                      <span key={name} className="bg-ds-muted/20 text-ds-text text-xs px-2 py-1 rounded-md">
+                        {name}: <strong className="text-blue-400">{count}</strong>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </>
         )}
 
         {/* Table */}
