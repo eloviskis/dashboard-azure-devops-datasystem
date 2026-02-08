@@ -108,6 +108,7 @@ const App = () => {
   const [aiError, setAiError] = useState('');
   const [tabsConfig, setTabsConfig] = useState(() => loadTabsConfig(DEFAULT_TAB_CONFIG));
   const [isTabsConfigOpen, setIsTabsConfigOpen] = useState(false);
+  const [filterBarCollapsed, setFilterBarCollapsed] = useState(false);
 
   const initialWorkItemFilters: WorkItemFilters = {
     period: 180,
@@ -685,16 +686,27 @@ const App = () => {
         </div>
         
         {activeTab !== 'cycle-analytics' && activeTab !== 'team-insights' && activeTab !== 'pull-requests' && activeTab !== 'scrum-ctc' && (
-        <FilterBar 
-            activeTab={activeTab}
-            workItems={workItems}
-            filteredWorkItems={filteredWorkItems}
-            workItemFilters={workItemFilters}
-            onWorkItemFiltersChange={setWorkItemFilters}
-            onClearFilters={() => {
-                setWorkItemFilters(initialWorkItemFilters);
-            }}
-        />
+        <div className="relative">
+          <button
+            onClick={() => setFilterBarCollapsed(!filterBarCollapsed)}
+            className="w-full flex items-center justify-center gap-2 py-1.5 text-xs text-ds-muted hover:text-ds-light-text bg-ds-navy/50 hover:bg-ds-navy border-b border-ds-border transition-colors"
+            title={filterBarCollapsed ? 'Mostrar filtros' : 'Recolher filtros'}
+          >
+            <span>{filterBarCollapsed ? '▼ Mostrar Filtros' : '▲ Recolher Filtros'}</span>
+          </button>
+          {!filterBarCollapsed && (
+            <FilterBar 
+                activeTab={activeTab}
+                workItems={workItems}
+                filteredWorkItems={filteredWorkItems}
+                workItemFilters={workItemFilters}
+                onWorkItemFiltersChange={setWorkItemFilters}
+                onClearFilters={() => {
+                    setWorkItemFilters(initialWorkItemFilters);
+                }}
+            />
+          )}
+        </div>
         )}
         
         <AIInsightsModal
