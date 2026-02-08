@@ -358,8 +358,11 @@ async function syncData() {
         const activatedDate = fields['Microsoft.VSTS.Common.ActivatedDate'] || '';
 
         // Campos customizados adicionais
-        const codeReviewLevel1 = fields['Custom.CodeReviewLevel1'] || fields['Custom.CRLevel1'] || '';
-        const codeReviewLevel2 = fields['Custom.CodeReviewLevel2'] || fields['Custom.CRLevel2'] || '';
+        // Nível 1 e Nível 2 - campos identity com GUID no Azure DevOps
+        const nivel1Field = fields['Custom.ab075d4c-04f5-4f96-b294-4ad0f5987028'];
+        const nivel2Field = fields['Custom.60cee051-7e66-4753-99d6-4bc8717fae0e'];
+        const codeReviewLevel1 = nivel1Field?.displayName || (typeof nivel1Field === 'string' ? nivel1Field : '') || '';
+        const codeReviewLevel2 = nivel2Field?.displayName || (typeof nivel2Field === 'string' ? nivel2Field : '') || '';
         const customType = fields['Custom.Type'] || fields['Custom.CustomType'] || '';
         const rootCauseStatus = fields['Custom.RootCauseStatus'] || fields['Custom.StatusCausaRaiz'] || '';
         const squad = fields['Custom.Squad'] || '';
