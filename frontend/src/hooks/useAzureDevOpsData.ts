@@ -8,7 +8,7 @@ export interface SyncStatus {
 }
 
 
-export const useAzureDevOpsData = () => {
+export const useAzureDevOpsData = (isAuthenticated: boolean = true) => {
   const [workItems, setWorkItems] = useState<WorkItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<Error | null>(null);
@@ -65,10 +65,14 @@ export const useAzureDevOpsData = () => {
   }, [fetchData]);
 
   useEffect(() => {
+    if (!isAuthenticated) {
+      setLoading(false);
+      return;
+    }
     fetchData(true);
     const interval = setInterval(() => fetchData(), 5 * 60 * 1000);
     return () => clearInterval(interval);
-  }, [fetchData]);
+  }, [fetchData, isAuthenticated]);
 
   return { workItems, loading, error, lastSyncStatus, syncing, handleSync };
 };

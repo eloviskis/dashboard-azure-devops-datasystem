@@ -100,7 +100,7 @@ const App = () => {
     return urlTab && DEFAULT_TAB_CONFIG.some(t => t.id === urlTab) ? urlTab : 'executive';
   });
   const [showUserManagement, setShowUserManagement] = useState(false);
-  const { workItems, loading: loadingWIs, error: errorWIs, lastSyncStatus, syncing, handleSync } = useAzureDevOpsData();
+  const { workItems, loading: loadingWIs, error: errorWIs, lastSyncStatus, syncing, handleSync } = useAzureDevOpsData(isAuthenticated);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [aiInsight, setAiInsight] = useState('');

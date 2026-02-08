@@ -71,9 +71,6 @@ const transformApiDataToWorkItem = (apiItem: any): WorkItem => {
     }
   }
   
-  const level1 = apiItem['Custom.ab075d4c-04f5-4f96-b294-4ad0f5987028'];
-  const level2 = apiItem['Custom.60cee051-7e66-4753-99d6-4bc8717fae0e'];
-  
   return {
     ...apiItem,
     createdDate: new Date(apiItem.createdDate),
@@ -81,8 +78,8 @@ const transformApiDataToWorkItem = (apiItem: any): WorkItem => {
     closedDate: apiItem.closedDate ? new Date(apiItem.closedDate) : null,
     tags: apiItem.tags ? apiItem.tags.split(',').map((t: string) => t.trim()) : [],
     timeInStatusDays,
-    codeReviewLevel1: level1?.displayName || null,
-    codeReviewLevel2: level2?.displayName || null,
+    codeReviewLevel1: apiItem.codeReviewLevel1 || null,
+    codeReviewLevel2: apiItem.codeReviewLevel2 || null,
   };
 };
 
