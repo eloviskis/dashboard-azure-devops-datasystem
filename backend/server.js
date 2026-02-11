@@ -54,9 +54,12 @@ if (DATABASE_URL) {
 
   // Tagged template literal function compatible with Neon's sql`...` API
   // Usage: await sql`SELECT * FROM users WHERE id = ${id}`
-  sql = (strings, ...values) => {
-    const text = strings.reduce((prev, curr, i) => prev + '$' + i + curr);
-    return pool.query(text, values).then(res => res.rows);
+  sql = async (strings, ...values) => {
+    const text = strings.reduce((prev, curr, i) => {
+      return i === 0 ? curr : prev + '$' + i + curr;
+    });
+    const result = await pool.query(text, values);
+    return result.rows;
   };
 
   console.log('✅ Database connection pool configured');
