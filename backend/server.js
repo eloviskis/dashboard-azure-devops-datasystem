@@ -903,7 +903,17 @@ app.get('/api/items', authenticateToken, async (req, res) => {
         createdBy: row.created_by,
         po: row.po,
         readyDate: row.ready_date,
-        doneDate: row.done_date
+        doneDate: row.done_date,
+        // Novos campos Root Cause
+        rootCauseTask: row.root_cause_task,
+        rootCauseTeam: row.root_cause_team,
+        rootCauseVersion: row.root_cause_version,
+        dev: row.dev,
+        platform: row.platform,
+        application: row.application,
+        branchBase: row.branch_base,
+        deliveredVersion: row.delivered_version,
+        baseVersion: row.base_version
       };
     });
 
@@ -961,7 +971,17 @@ app.get('/api/items/period/:days', authenticateToken, async (req, res) => {
       createdBy: row.created_by,
       po: row.po,
       readyDate: row.ready_date,
-      doneDate: row.done_date
+      doneDate: row.done_date,
+      // Novos campos Root Cause
+      rootCauseTask: row.root_cause_task,
+      rootCauseTeam: row.root_cause_team,
+      rootCauseVersion: row.root_cause_version,
+      dev: row.dev,
+      platform: row.platform,
+      application: row.application,
+      branchBase: row.branch_base,
+      deliveredVersion: row.delivered_version,
+      baseVersion: row.base_version
     }));
 
     res.json(items);
