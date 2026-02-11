@@ -59,6 +59,7 @@ import ActivityHeatmap from './components/ActivityHeatmap.tsx';
 import ReworkAnalysisChart from './components/ReworkAnalysisChart.tsx';
 import StoryPointsVsCycleTimeChart from './components/StoryPointsVsCycleTimeChart.tsx';
 import MetasDashboard from './components/MetasDashboard.tsx';
+import DocumentationDashboard from './components/DocumentationDashboard.tsx';
 
 // Import Types
 import { WorkItem, WorkItemFilters } from './types.ts';
@@ -66,7 +67,7 @@ import { WorkItem, WorkItemFilters } from './types.ts';
 // Import Metrics
 import { calculatePerformanceMetrics, calculateQualityMetrics, COMPLETED_STATES } from './utils/metrics.ts';
 
-type Tab = 'executive' | 'team-insights' | 'cycle-analytics' | 'performance' | 'quality' | 'kanban' | 'detailed-throughput' | 'bottlenecks' | 'tags' | 'clients' | 'montecarlo' | 'item-list' | 'rootcause' | 'backlog' | 'impedimentos' | 'po-analysis' | 'pull-requests' | 'scrum-ctc' | 'dora' | 'sla' | 'metas';
+type Tab = 'executive' | 'team-insights' | 'cycle-analytics' | 'performance' | 'quality' | 'kanban' | 'detailed-throughput' | 'bottlenecks' | 'tags' | 'clients' | 'montecarlo' | 'item-list' | 'rootcause' | 'backlog' | 'impedimentos' | 'po-analysis' | 'pull-requests' | 'scrum-ctc' | 'dora' | 'sla' | 'metas' | 'documentation';
 
 const DEFAULT_TAB_CONFIG = [
   { id: 'executive', label: 'Visão Executiva', visible: true },
@@ -90,6 +91,7 @@ const DEFAULT_TAB_CONFIG = [
   { id: 'dora', label: 'Indicadores DevOps', visible: true },
   { id: 'sla', label: 'SLA Tracking', visible: true },
   { id: 'metas', label: 'Metas por Time', visible: true },
+  { id: 'documentation', label: '📖 Documentação', visible: true },
 ];
 
 const App = () => {
@@ -621,6 +623,13 @@ const App = () => {
           <>
             <SectionHeader title="Metas por Time" />
             <MetasDashboard data={filteredWorkItems} periodDays={workItemFilters.period || 180} />
+          </>
+        );
+      case 'documentation':
+        return (
+          <>
+            <SectionHeader title="Documentação" />
+            <DocumentationDashboard />
           </>
         );
       default:

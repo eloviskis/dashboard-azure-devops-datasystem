@@ -177,7 +177,16 @@ const initDatabase = async () => {
         created_by TEXT,
         po TEXT,
         ready_date TEXT,
-        done_date TEXT
+        done_date TEXT,
+        root_cause_task TEXT,
+        root_cause_team TEXT,
+        root_cause_version TEXT,
+        dev TEXT,
+        platform TEXT,
+        application TEXT,
+        branch_base TEXT,
+        delivered_version TEXT,
+        base_version TEXT
       )
     `;
     console.log('✅ work_items table ready');
@@ -379,16 +388,29 @@ async function syncData() {
         const po = fields['Custom.PO'] || fields['Custom.ProductOwner'] || '';
         const readyDate = fields['Custom.ReadyDate'] || '';
         const doneDate = fields['Custom.DoneDate'] || '';
+        // Novos campos de Root Cause
+        const rootCauseTask = fields['Custom.Rootcausetask'] || '';
+        const rootCauseTeam = fields['Custom.rootcauseteam'] || '';
+        const rootCauseVersion = fields['Custom.rootcauseversion'] || '';
+        const devField = fields['Custom.DEV'];
+        const dev = devField?.displayName || (typeof devField === 'string' ? devField : '') || '';
+        const platform = fields['Custom.Platform'] || '';
+        const application = fields['Custom.Aplication'] || fields['Custom.Application'] || '';
+        const branchBase = fields['Custom.BranchBase'] || '';
+        const deliveredVersion = fields['Custom.DeliveredVersion'] || '';
+        const baseVersion = fields['Custom.BaseVersion'] || '';
 
         await sql`
           INSERT INTO work_items (work_item_id, title, state, type, assigned_to, team, area_path, iteration_path,
             created_date, changed_date, closed_date, story_points, tags, tipo_cliente, priority, url, first_activation_date,
             code_review_level1, code_review_level2, custom_type, root_cause_status, squad, area, complexity,
-            reincidencia, performance_days, qa, causa_raiz, created_by, po, ready_date, done_date, synced_at)
+            reincidencia, performance_days, qa, causa_raiz, created_by, po, ready_date, done_date,
+            root_cause_task, root_cause_team, root_cause_version, dev, platform, application, branch_base, delivered_version, base_version, synced_at)
           VALUES (${workItemId}, ${title}, ${state}, ${type}, ${assignedTo}, ${team}, ${areaPath}, ${iterationPath},
             ${createdDate}, ${changedDate}, ${closedDate}, ${storyPoints}, ${tags}, ${tipoCliente}, ${priority}, ${url}, ${activatedDate || null},
             ${codeReviewLevel1}, ${codeReviewLevel2}, ${customType}, ${rootCauseStatus}, ${squad}, ${area}, ${complexity},
-            ${reincidencia}, ${performanceDays}, ${qa}, ${causaRaiz}, ${createdBy}, ${po}, ${readyDate}, ${doneDate}, ${new Date().toISOString()})
+            ${reincidencia}, ${performanceDays}, ${qa}, ${causaRaiz}, ${createdBy}, ${po}, ${readyDate}, ${doneDate},
+            ${rootCauseTask}, ${rootCauseTeam}, ${rootCauseVersion}, ${dev}, ${platform}, ${application}, ${branchBase}, ${deliveredVersion}, ${baseVersion}, ${new Date().toISOString()})
           ON CONFLICT (work_item_id) DO UPDATE SET
             title = EXCLUDED.title, state = EXCLUDED.state, type = EXCLUDED.type, assigned_to = EXCLUDED.assigned_to,
             team = EXCLUDED.team, area_path = EXCLUDED.area_path, iteration_path = EXCLUDED.iteration_path,
@@ -411,6 +433,15 @@ async function syncData() {
             po = EXCLUDED.po,
             ready_date = EXCLUDED.ready_date,
             done_date = EXCLUDED.done_date,
+            root_cause_task = EXCLUDED.root_cause_task,
+            root_cause_team = EXCLUDED.root_cause_team,
+            root_cause_version = EXCLUDED.root_cause_version,
+            dev = EXCLUDED.dev,
+            platform = EXCLUDED.platform,
+            application = EXCLUDED.application,
+            branch_base = EXCLUDED.branch_base,
+            delivered_version = EXCLUDED.delivered_version,
+            base_version = EXCLUDED.base_version,
             synced_at = EXCLUDED.synced_at
         `;
       }

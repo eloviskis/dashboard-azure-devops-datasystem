@@ -1,34 +1,67 @@
 #!/usr/bin/env node
 /**
- * Script de Sincronização Local
+ * Data System - Sincronizador Standalone
  * 
- * Execute este script na sua máquina (que tem acesso à rede autorizada)
- * para sincronizar dados do Azure DevOps com o banco PostgreSQL.
+ * Este executável sincroniza dados do Azure DevOps com o banco PostgreSQL.
+ * Pode rodar em modo contínuo (a cada 30 min) ou único.
  * 
  * Uso:
- *   node sync-local.js
- *   node sync-local.js --once   (executa uma vez e sai)
- * 
- * O script pode rodar em modo contínuo (a cada 30 min) ou único.
+ *   ./datasystem-sync              (Linux - modo contínuo)
+ *   datasystem-sync.exe            (Windows - modo contínuo)
+ *   ./datasystem-sync --once       (executa uma vez e sai)
+ *   ./datasystem-sync --config     (mostra configuração atual)
+ *   ./datasystem-sync --help       (ajuda)
  */
 
-require('dotenv').config();
-const axios = require('axios');
+const https = require('https');
 const { Pool } = require('pg');
+const readline = require('readline');
+const path = require('path');
+const fs = require('fs');
 
-// ============== CONFIGURAÇÃO ==============
-const AZURE_CONFIG = {
-  organization: process.env.AZURE_ORG || 'datasystemsoftwares',
-  project: process.env.AZURE_PROJECT || 'USE',
-  pat: process.env.AZURE_PAT
+// ============== CONFIGURAÇÃO PADRÃO ==============
+// Estas são as configurações padrão. Podem ser sobrescritas por variáveis de ambiente
+// ou por um arquivo config.json na mesma pasta do executável.
+
+const DEFAULT_CONFIG = {
+  AZURE_ORG: process.env.AZURE_ORG || '',
+  AZURE_PROJECT: process.env.AZURE_PROJECT || '',
+  AZURE_PAT: process.env.AZURE_PAT || '',
+  DATABASE_URL: process.env.DATABASE_URL || '',
+  SYNC_INTERVAL_MINUTES: 30
 };
 
-// Database URL - usa a VPS diretamente
-const DATABASE_URL = process.env.DATABASE_URL || 
-  'postgresql://devops_dash:6BYHS3gSL%2FzBNnoEW%2Bt9mev84%2FJwv5ke%2BJdfOzM7jXQ%3D@31.97.64.250:5433/devops_dashboard';
+// Tenta carregar config.json se existir
+function loadConfig() {
+  const config = { ...DEFAULT_CONFIG };
+  
+  // Sobrescreve com variáveis de ambiente se existirem
+  if (process.env.AZURE_ORG) config.AZURE_ORG = process.env.AZURE_ORG;
+  if (process.env.AZURE_PROJECT) config.AZURE_PROJECT = process.env.AZURE_PROJECT;
+  if (process.env.AZURE_PAT) config.AZURE_PAT = process.env.AZURE_PAT;
+  if (process.env.DATABASE_URL) config.DATABASE_URL = process.env.DATABASE_URL;
+  if (process.env.SYNC_INTERVAL_MINUTES) config.SYNC_INTERVAL_MINUTES = parseInt(process.env.SYNC_INTERVAL_MINUTES);
+  
+  // Tenta carregar config.json
+  try {
+    const configPath = path.join(process.cwd(), 'config.json');
+    if (fs.existsSync(configPath)) {
+      const fileConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+      Object.assign(config, fileConfig);
+      console.log('📄 Configuração carregada de config.json');
+    }
+  } catch (e) {
+    // Ignora erro se não encontrar
+  }
+  
+  return config;
+}
 
+const CONFIG = loadConfig();
+
+// ============== DATABASE ==============
 const pool = new Pool({
-  connectionString: DATABASE_URL,
+  connectionString: CONFIG.DATABASE_URL,
   ssl: false,
   max: 5,
   idleTimeoutMillis: 30000,
@@ -41,36 +74,57 @@ function extractTeam(areaPath) {
   return parts.length > 1 ? parts[parts.length - 1] : areaPath;
 }
 
-function calculateDaysBetween(startDate, endDate) {
-  if (!startDate || !endDate) return null;
-  const start = new Date(startDate);
-  const end = new Date(endDate);
-  return Math.round((end - start) / (1000 * 60 * 60 * 24));
+function httpsRequest(url, options = {}) {
+  return new Promise((resolve, reject) => {
+    const req = https.request(url, options, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        try {
+          resolve({ status: res.statusCode, data: JSON.parse(data) });
+        } catch {
+          resolve({ status: res.statusCode, data });
+        }
+      });
+    });
+    req.on('error', reject);
+    if (options.body) req.write(options.body);
+    req.end();
+  });
 }
 
 // ============== AZURE DEVOPS API ==============
 async function fetchWorkItems() {
-  const token = Buffer.from(`:${AZURE_CONFIG.pat}`).toString('base64');
-  const baseUrl = `https://dev.azure.com/${AZURE_CONFIG.organization}/${AZURE_CONFIG.project}`;
+  const token = Buffer.from(`:${CONFIG.AZURE_PAT}`).toString('base64');
+  const baseUrl = `https://dev.azure.com/${CONFIG.AZURE_ORG}/${CONFIG.AZURE_PROJECT}`;
   
-  // Query para buscar todos os work items (últimos 180 dias)
-  const wiqlQuery = {
-    query: `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = '${AZURE_CONFIG.project}' AND [System.ChangedDate] >= @Today - 180 ORDER BY [System.ChangedDate] DESC`
-  };
-
   console.log('📡 Buscando work items do Azure DevOps...');
   
-  const wiqlResponse = await axios.post(
-    `${baseUrl}/_apis/wit/wiql?api-version=7.1`,
-    wiqlQuery,
-    { headers: { Authorization: `Basic ${token}`, 'Content-Type': 'application/json' } }
-  );
-
+  // Query WIQL
+  const wiqlQuery = JSON.stringify({
+    query: `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = '${CONFIG.AZURE_PROJECT}' AND [System.ChangedDate] >= @Today - 180 ORDER BY [System.ChangedDate] DESC`
+  });
+  
+  const wiqlUrl = new URL(`${baseUrl}/_apis/wit/wiql?api-version=7.1`);
+  const wiqlResponse = await httpsRequest(wiqlUrl, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Basic ${token}`,
+      'Content-Type': 'application/json',
+      'Content-Length': Buffer.byteLength(wiqlQuery)
+    },
+    body: wiqlQuery
+  });
+  
+  if (wiqlResponse.status !== 200) {
+    throw new Error(`WIQL failed: ${wiqlResponse.status} - ${JSON.stringify(wiqlResponse.data)}`);
+  }
+  
   const workItemIds = wiqlResponse.data.workItems?.map(wi => wi.id) || [];
   console.log(`   Encontrados ${workItemIds.length} work items`);
-
+  
   if (workItemIds.length === 0) return [];
-
+  
   // Buscar detalhes em batches de 200
   const allItems = [];
   const batchSize = 200;
@@ -78,12 +132,18 @@ async function fetchWorkItems() {
   for (let i = 0; i < workItemIds.length; i += batchSize) {
     const batchIds = workItemIds.slice(i, i + batchSize);
     const idsParam = batchIds.join(',');
-
-    const detailsResponse = await axios.get(
-      `${baseUrl}/_apis/wit/workitems?ids=${idsParam}&$expand=all&api-version=7.0`,
-      { headers: { Authorization: `Basic ${token}` } }
-    );
-
+    
+    const detailsUrl = new URL(`${baseUrl}/_apis/wit/workitems?ids=${idsParam}&$expand=all&api-version=7.0`);
+    const detailsResponse = await httpsRequest(detailsUrl, {
+      method: 'GET',
+      headers: { 'Authorization': `Basic ${token}` }
+    });
+    
+    if (detailsResponse.status !== 200) {
+      console.error(`   ⚠️ Batch ${i}-${i+batchSize} falhou: ${detailsResponse.status}`);
+      continue;
+    }
+    
     allItems.push(...(detailsResponse.data.value || []));
     process.stdout.write(`\r   Carregados ${allItems.length}/${workItemIds.length} items...`);
   }
@@ -93,27 +153,36 @@ async function fetchWorkItems() {
 }
 
 async function fetchPullRequests() {
-  const token = Buffer.from(`:${AZURE_CONFIG.pat}`).toString('base64');
-  const baseUrl = `https://dev.azure.com/${AZURE_CONFIG.organization}/${AZURE_CONFIG.project}`;
+  const token = Buffer.from(`:${CONFIG.AZURE_PAT}`).toString('base64');
+  const baseUrl = `https://dev.azure.com/${CONFIG.AZURE_ORG}/${CONFIG.AZURE_PROJECT}`;
   
   console.log('📡 Buscando Pull Requests...');
   
   try {
     // Listar repositórios
-    const reposResponse = await axios.get(
-      `${baseUrl}/_apis/git/repositories?api-version=7.1`,
-      { headers: { Authorization: `Basic ${token}` } }
-    );
+    const reposUrl = new URL(`${baseUrl}/_apis/git/repositories?api-version=7.1`);
+    const reposResponse = await httpsRequest(reposUrl, {
+      method: 'GET',
+      headers: { 'Authorization': `Basic ${token}` }
+    });
+    
+    if (reposResponse.status !== 200) {
+      throw new Error(`Repos failed: ${reposResponse.status}`);
+    }
     
     const repos = reposResponse.data.value || [];
     const allPRs = [];
     
     for (const repo of repos) {
-      const prsResponse = await axios.get(
-        `${baseUrl}/_apis/git/repositories/${repo.id}/pullrequests?searchCriteria.status=all&$top=500&api-version=7.1`,
-        { headers: { Authorization: `Basic ${token}` } }
-      );
-      allPRs.push(...(prsResponse.data.value || []).map(pr => ({ ...pr, repositoryName: repo.name })));
+      const prsUrl = new URL(`${baseUrl}/_apis/git/repositories/${repo.id}/pullrequests?searchCriteria.status=all&$top=500&api-version=7.1`);
+      const prsResponse = await httpsRequest(prsUrl, {
+        method: 'GET',
+        headers: { 'Authorization': `Basic ${token}` }
+      });
+      
+      if (prsResponse.status === 200) {
+        allPRs.push(...(prsResponse.data.value || []).map(pr => ({ ...pr, repositoryName: repo.name })));
+      }
     }
     
     console.log(`   ✅ ${allPRs.length} PRs encontrados`);
@@ -178,7 +247,7 @@ async function saveWorkItems(items) {
       const branchBase = f['Custom.BranchBase'] || '';
       const deliveredVersion = f['Custom.DeliveredVersion'] || '';
       const baseVersion = f['Custom.BaseVersion'] || '';
-      const url = `https://dev.azure.com/${AZURE_CONFIG.organization}/${AZURE_CONFIG.project}/_workitems/edit/${workItemId}`;
+      const url = `https://dev.azure.com/${CONFIG.AZURE_ORG}/${CONFIG.AZURE_PROJECT}/_workitems/edit/${workItemId}`;
 
       await client.query(`
         INSERT INTO work_items (
@@ -331,17 +400,76 @@ async function runSync() {
 }
 
 // ============== CLI ==============
+function showHelp() {
+  console.log(`
+╔══════════════════════════════════════════════════════════════╗
+║           DATA SYSTEM - Sincronizador Azure DevOps           ║
+╠══════════════════════════════════════════════════════════════╣
+║                                                              ║
+║  COMANDOS:                                                   ║
+║    --once      Executa sincronização uma vez e sai           ║
+║    --config    Mostra configuração atual                     ║
+║    --help      Mostra esta ajuda                             ║
+║    (nenhum)    Modo contínuo (sync a cada 30 min)           ║
+║                                                              ║
+║  CONFIGURAÇÃO:                                               ║
+║    Crie um arquivo 'config.json' na mesma pasta:             ║
+║    {                                                         ║
+║      "AZURE_PAT": "seu-token-aqui",                         ║
+║      "DATABASE_URL": "postgresql://...",                     ║
+║      "SYNC_INTERVAL_MINUTES": 30                             ║
+║    }                                                         ║
+║                                                              ║
+║    Ou use variáveis de ambiente:                             ║
+║    export AZURE_PAT=seu-token                                ║
+║    export DATABASE_URL=postgresql://...                      ║
+║                                                              ║
+╚══════════════════════════════════════════════════════════════╝
+`);
+}
+
+function showConfig() {
+  console.log(`
+╔══════════════════════════════════════════════════════════════╗
+║                   CONFIGURAÇÃO ATUAL                         ║
+╠══════════════════════════════════════════════════════════════╣
+║  Azure Org:     ${CONFIG.AZURE_ORG.padEnd(42)}║
+║  Azure Project: ${CONFIG.AZURE_PROJECT.padEnd(42)}║
+║  Azure PAT:     ${'*'.repeat(20) + CONFIG.AZURE_PAT.slice(-10).padEnd(22)}║
+║  Database:      ${CONFIG.DATABASE_URL.replace(/:[^:@]+@/, ':***@').slice(0, 42).padEnd(42)}║
+║  Intervalo:     ${(CONFIG.SYNC_INTERVAL_MINUTES + ' minutos').padEnd(42)}║
+╚══════════════════════════════════════════════════════════════╝
+`);
+}
+
 async function main() {
   const args = process.argv.slice(2);
-  const onceMode = args.includes('--once');
   
-  console.log('\n🚀 Data System - Sync Local');
-  console.log('   Azure Org:', AZURE_CONFIG.organization);
-  console.log('   Project:', AZURE_CONFIG.project);
-  console.log('   Database:', DATABASE_URL.replace(/:[^:@]+@/, ':***@'));
+  console.log(`
+╔══════════════════════════════════════════════════════════════╗
+║           🚀 DATA SYSTEM - Sincronizador v1.0                ║
+╚══════════════════════════════════════════════════════════════╝
+`);
   
-  if (!AZURE_CONFIG.pat) {
-    console.error('\n❌ AZURE_PAT não configurado! Configure no .env ou variável de ambiente.');
+  if (args.includes('--help') || args.includes('-h')) {
+    showHelp();
+    process.exit(0);
+  }
+  
+  if (args.includes('--config') || args.includes('-c')) {
+    showConfig();
+    process.exit(0);
+  }
+  
+  const onceMode = args.includes('--once') || args.includes('-1');
+  
+  console.log(`   Azure Org:     ${CONFIG.AZURE_ORG}`);
+  console.log(`   Project:       ${CONFIG.AZURE_PROJECT}`);
+  console.log(`   Database:      ${CONFIG.DATABASE_URL.replace(/:[^:@]+@/, ':***@').slice(0, 50)}...`);
+  
+  if (!CONFIG.AZURE_PAT) {
+    console.error('\n❌ AZURE_PAT não configurado!');
+    console.error('   Configure no config.json ou variável de ambiente.');
     process.exit(1);
   }
   
@@ -349,19 +477,29 @@ async function main() {
   await runSync();
   
   if (onceMode) {
-    console.log('Modo único - encerrando.');
+    console.log('📌 Modo único - encerrando.');
     await pool.end();
     process.exit(0);
   }
   
-  // Modo contínuo - sync a cada 30 minutos
-  console.log('⏰ Modo contínuo ativado - próximo sync em 30 minutos');
+  // Modo contínuo
+  console.log(`⏰ Modo contínuo ativado - sincroniza a cada ${CONFIG.SYNC_INTERVAL_MINUTES} minutos`);
   console.log('   Pressione Ctrl+C para sair\n');
   
   setInterval(async () => {
     await runSync();
-    console.log('⏰ Próximo sync em 30 minutos\n');
-  }, 30 * 60 * 1000);
+    console.log(`⏰ Próximo sync em ${CONFIG.SYNC_INTERVAL_MINUTES} minutos\n`);
+  }, CONFIG.SYNC_INTERVAL_MINUTES * 60 * 1000);
+  
+  // Manter processo rodando
+  process.on('SIGINT', async () => {
+    console.log('\n\n👋 Encerrando sincronizador...');
+    await pool.end();
+    process.exit(0);
+  });
 }
 
-main().catch(console.error);
+main().catch(err => {
+  console.error('Erro fatal:', err);
+  process.exit(1);
+});

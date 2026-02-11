@@ -55,6 +55,16 @@ export interface WorkItem {
   po?: string | null;
   readyDate?: string | Date | null;
   doneDate?: string | Date | null;
+  // Novos campos de Root Cause Analysis
+  rootCauseTask?: string | null;    // ID da tarefa que causou o bug
+  rootCauseTeam?: string | null;    // Time que causou o bug
+  rootCauseVersion?: string | null; // Versão onde o bug foi introduzido
+  dev?: string | null;              // Desenvolvedor responsável
+  platform?: string | null;         // Plataforma (WPF, Web, etc)
+  application?: string | null;      // Aplicação
+  branchBase?: string | null;       // Branch base
+  deliveredVersion?: string | null; // Versão entregue
+  baseVersion?: string | null;      // Versão base
   [key: string]: any;
 }
 

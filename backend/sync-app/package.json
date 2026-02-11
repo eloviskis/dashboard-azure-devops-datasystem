@@ -1,0 +1,29 @@
+{
+  "name": "datasystem-sync",
+  "version": "1.0.0",
+  "description": "Sincronizador Azure DevOps -> PostgreSQL para Data System Dashboard",
+  "main": "sync-standalone.js",
+  "bin": {
+    "datasystem-sync": "sync-standalone.js"
+  },
+  "pkg": {
+    "scripts": "sync-standalone.js",
+    "targets": [
+      "node18-linux-x64",
+      "node18-win-x64"
+    ],
+    "outputPath": "dist"
+  },
+  "scripts": {
+    "build": "pkg . --out-path dist",
+    "build:linux": "pkg . -t node18-linux-x64 -o dist/datasystem-sync-linux",
+    "build:windows": "pkg . -t node18-win-x64 -o dist/datasystem-sync.exe",
+    "build:all": "npm run build:linux && npm run build:windows"
+  },
+  "dependencies": {
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "pkg": "^5.8.1"
+  }
+}

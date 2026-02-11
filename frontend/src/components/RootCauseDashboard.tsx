@@ -233,6 +233,73 @@ export const RootCauseDashboard: React.FC<Props> = ({ data }) => {
     }))
     .sort((a, b) => b['Sem Causa Raiz'] - a['Sem Causa Raiz']); // Ordena por quem tem mais sem causa raiz
 
+  // === NOVOS AGRUPAMENTOS ===
+  
+  // Issues por Time Causa Raiz (time que introduziu o bug)
+  const rootCauseTeamCounts = issuesCorrecao.reduce((acc, item) => {
+    const team = item.rootCauseTeam || '(não informado)';
+    acc[team] = (acc[team] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+  const rootCauseTeamChart = Object.entries(rootCauseTeamCounts)
+    .map(([name, value]) => ({ name, value }))
+    .sort((a, b) => b.value - a.value);
+
+  // Issues por Complexidade
+  const complexityCounts = issuesCorrecao.reduce((acc, item) => {
+    const comp = item.complexity || '(não informado)';
+    acc[comp] = (acc[comp] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+  const complexityChart = Object.entries(complexityCounts)
+    .map(([name, value]) => ({ name, value }))
+    .sort((a, b) => b.value - a.value);
+
+  // Issues por Squad
+  const squadCounts = issuesCorrecao.reduce((acc, item) => {
+    const squad = item.squad || '(não informado)';
+    acc[squad] = (acc[squad] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+  const squadChart = Object.entries(squadCounts)
+    .map(([name, value]) => ({ name, value }))
+    .sort((a, b) => b.value - a.value);
+
+  // Issues por Plataforma
+  const platformCounts = issuesCorrecao.reduce((acc, item) => {
+    const plat = item.platform || '(não informado)';
+    acc[plat] = (acc[plat] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+  const platformChart = Object.entries(platformCounts)
+    .map(([name, value]) => ({ name, value }))
+    .sort((a, b) => b.value - a.value);
+
+  // Issues por Desenvolvedor Responsável
+  const devCounts = issuesCorrecao.reduce((acc, item) => {
+    const dev = item.dev || '(não informado)';
+    acc[dev] = (acc[dev] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+  const devChart = Object.entries(devCounts)
+    .map(([name, value]) => ({ name, value }))
+    .sort((a, b) => b.value - a.value);
+
+  // Issues por Reincidência
+  const reincidenciaCounts = issuesCorrecao.reduce((acc, item) => {
+    const reinc = item.reincidencia ? `${item.reincidencia}x` : '(não informado)';
+    acc[reinc] = (acc[reinc] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+  const reincidenciaChart = Object.entries(reincidenciaCounts)
+    .map(([name, value]) => ({ name, value }))
+    .sort((a, b) => {
+      // Ordena por número de reincidências
+      const numA = parseInt(a.name) || 0;
+      const numB = parseInt(b.name) || 0;
+      return numB - numA;
+    });
+
   // Handlers de clique nos gráficos
   const handleTypeClick = (chartData: any, index: number) => {
     const typeName = chartData.name;
@@ -291,6 +358,71 @@ export const RootCauseDashboard: React.FC<Props> = ({ data }) => {
       title: `Correções COM Causa Raiz - ${pessoaName}`,
       items,
       color: '#43A047' // Verde para com causa raiz
+    });
+  };
+
+  // === NOVOS HANDLERS ===
+  
+  const handleRootCauseTeamClick = (chartData: any, index: number) => {
+    const teamName = chartData.name;
+    const items = issuesCorrecao.filter(w => (w.rootCauseTeam || '(não informado)') === teamName);
+    setModalData({
+      title: `Correções - Time Causa Raiz: ${teamName}`,
+      items,
+      color: COLORS[index % COLORS.length]
+    });
+  };
+
+  const handleComplexityClick = (chartData: any, index: number) => {
+    const compName = chartData.name;
+    const items = issuesCorrecao.filter(w => (w.complexity || '(não informado)') === compName);
+    setModalData({
+      title: `Correções - Complexidade: ${compName}`,
+      items,
+      color: COLORS[index % COLORS.length]
+    });
+  };
+
+  const handleSquadClick = (chartData: any, index: number) => {
+    const squadName = chartData.name;
+    const items = issuesCorrecao.filter(w => (w.squad || '(não informado)') === squadName);
+    setModalData({
+      title: `Correções - Squad: ${squadName}`,
+      items,
+      color: COLORS[index % COLORS.length]
+    });
+  };
+
+  const handlePlatformClick = (chartData: any, index: number) => {
+    const platName = chartData.name;
+    const items = issuesCorrecao.filter(w => (w.platform || '(não informado)') === platName);
+    setModalData({
+      title: `Correções - Plataforma: ${platName}`,
+      items,
+      color: COLORS[index % COLORS.length]
+    });
+  };
+
+  const handleDevClick = (chartData: any, index: number) => {
+    const devName = chartData.name;
+    const items = issuesCorrecao.filter(w => (w.dev || '(não informado)') === devName);
+    setModalData({
+      title: `Correções - Dev Responsável: ${devName}`,
+      items,
+      color: COLORS[index % COLORS.length]
+    });
+  };
+
+  const handleReincidenciaClick = (chartData: any, index: number) => {
+    const reincName = chartData.name;
+    const items = issuesCorrecao.filter(w => {
+      const reinc = w.reincidencia ? `${w.reincidencia}x` : '(não informado)';
+      return reinc === reincName;
+    });
+    setModalData({
+      title: `Correções - Reincidência: ${reincName}`,
+      items,
+      color: COLORS[index % COLORS.length]
     });
   };
 
@@ -490,6 +622,191 @@ export const RootCauseDashboard: React.FC<Props> = ({ data }) => {
             />
           </BarChart>
         </ResponsiveContainer>
+      </div>
+
+      {/* Gráficos - Row 4: Novos Gráficos de Root Cause Analysis */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Time Causa Raiz */}
+        <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
+          <div className="font-bold mb-2">Correções por Time Causa Raiz</div>
+          <ChartInfoLamp info="Qual time introduziu o bug originalmente. Ajuda a identificar padrões de qualidade por equipe." />
+          {rootCauseTeamChart.length === 0 || (rootCauseTeamChart.length === 1 && rootCauseTeamChart[0].name === '(não informado)') ? (
+            <div className="flex items-center justify-center h-[200px] text-ds-text text-center">
+              <div>
+                <div className="text-4xl mb-2">📊</div>
+                <div className="text-sm">Sem dados de Time Causa Raiz</div>
+              </div>
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={250}>
+              <BarChart data={rootCauseTeamChart.slice(0, 10)} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                <XAxis type="number" tick={{ fill: '#FFD600', fontSize: 12 }} axisLine={false} />
+                <YAxis type="category" dataKey="name" tick={{ fill: '#fff', fontSize: 11 }} width={120} axisLine={false} />
+                <Tooltip formatter={(value: number) => [`${value} issues (clique)`, 'Qtd']} />
+                <Bar dataKey="value" radius={[0, 8, 8, 0]} cursor="pointer" onClick={(data, index) => handleRootCauseTeamClick(data, index)}>
+                  {rootCauseTeamChart.slice(0, 10).map((entry, idx) => (
+                    <Cell key={`cell-${entry.name}`} fill={COLORS[idx % COLORS.length]} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+
+        {/* Complexidade */}
+        <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
+          <div className="font-bold mb-2">Correções por Complexidade</div>
+          <ChartInfoLamp info="Distribuição de bugs por nível de complexidade (Baixa, Média, Alta)." />
+          {complexityChart.length === 0 || (complexityChart.length === 1 && complexityChart[0].name === '(não informado)') ? (
+            <div className="flex items-center justify-center h-[200px] text-ds-text text-center">
+              <div>
+                <div className="text-4xl mb-2">📊</div>
+                <div className="text-sm">Sem dados de Complexidade</div>
+              </div>
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={250}>
+              <PieChart>
+                <Pie
+                  data={complexityChart}
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={80}
+                  label={({ name, value }) => `${name}: ${value}`}
+                  dataKey="value"
+                  cursor="pointer"
+                  onClick={(entry, index) => handleComplexityClick(entry, index)}
+                >
+                  {complexityChart.map((entry, idx) => (
+                    <Cell key={`cell-${entry.name}`} fill={COLORS[idx % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(value: number) => [`${value} issues (clique)`, 'Qtd']} />
+              </PieChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+      </div>
+
+      {/* Gráficos - Row 5 */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Squad */}
+        <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
+          <div className="font-bold mb-2">Correções por Squad</div>
+          <ChartInfoLamp info="Distribuição de bugs por squad/área de negócio." />
+          {squadChart.length === 0 || (squadChart.length === 1 && squadChart[0].name === '(não informado)') ? (
+            <div className="flex items-center justify-center h-[200px] text-ds-text text-center">
+              <div>
+                <div className="text-4xl mb-2">📊</div>
+                <div className="text-sm">Sem dados de Squad</div>
+              </div>
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={250}>
+              <BarChart data={squadChart.slice(0, 10)} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                <XAxis type="number" tick={{ fill: '#FFD600', fontSize: 12 }} axisLine={false} />
+                <YAxis type="category" dataKey="name" tick={{ fill: '#fff', fontSize: 11 }} width={120} axisLine={false} />
+                <Tooltip formatter={(value: number) => [`${value} issues (clique)`, 'Qtd']} />
+                <Bar dataKey="value" radius={[0, 8, 8, 0]} cursor="pointer" onClick={(data, index) => handleSquadClick(data, index)}>
+                  {squadChart.slice(0, 10).map((entry, idx) => (
+                    <Cell key={`cell-${entry.name}`} fill={COLORS[idx % COLORS.length]} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+
+        {/* Plataforma */}
+        <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
+          <div className="font-bold mb-2">Correções por Plataforma</div>
+          <ChartInfoLamp info="Distribuição de bugs por plataforma tecnológica (WPF, Web, Mobile, etc)." />
+          {platformChart.length === 0 || (platformChart.length === 1 && platformChart[0].name === '(não informado)') ? (
+            <div className="flex items-center justify-center h-[200px] text-ds-text text-center">
+              <div>
+                <div className="text-4xl mb-2">📊</div>
+                <div className="text-sm">Sem dados de Plataforma</div>
+              </div>
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={250}>
+              <PieChart>
+                <Pie
+                  data={platformChart}
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={80}
+                  label={({ name, value }) => `${name}: ${value}`}
+                  dataKey="value"
+                  cursor="pointer"
+                  onClick={(entry, index) => handlePlatformClick(entry, index)}
+                >
+                  {platformChart.map((entry, idx) => (
+                    <Cell key={`cell-${entry.name}`} fill={COLORS[idx % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(value: number) => [`${value} issues (clique)`, 'Qtd']} />
+              </PieChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+      </div>
+
+      {/* Gráficos - Row 6 */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Desenvolvedor Responsável */}
+        <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
+          <div className="font-bold mb-2">Correções por Desenvolvedor (DEV)</div>
+          <ChartInfoLamp info="Desenvolvedor que trabalhou na correção. Ajuda a balancear carga de trabalho e identificar especialistas." />
+          {devChart.length === 0 || (devChart.length === 1 && devChart[0].name === '(não informado)') ? (
+            <div className="flex items-center justify-center h-[200px] text-ds-text text-center">
+              <div>
+                <div className="text-4xl mb-2">📊</div>
+                <div className="text-sm">Sem dados de Desenvolvedor</div>
+              </div>
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={devChart.slice(0, 10)} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                <XAxis type="number" tick={{ fill: '#FFD600', fontSize: 12 }} axisLine={false} />
+                <YAxis type="category" dataKey="name" tick={{ fill: '#fff', fontSize: 11 }} width={150} axisLine={false} />
+                <Tooltip formatter={(value: number) => [`${value} issues (clique)`, 'Qtd']} />
+                <Bar dataKey="value" radius={[0, 8, 8, 0]} cursor="pointer" onClick={(data, index) => handleDevClick(data, index)}>
+                  {devChart.slice(0, 10).map((entry, idx) => (
+                    <Cell key={`cell-${entry.name}`} fill={COLORS[idx % COLORS.length]} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+
+        {/* Reincidência */}
+        <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
+          <div className="font-bold mb-2">Correções por Reincidência</div>
+          <ChartInfoLamp info="Quantas vezes o mesmo problema ocorreu. Alta reincidência indica necessidade de solução definitiva." />
+          {reincidenciaChart.length === 0 || (reincidenciaChart.length === 1 && reincidenciaChart[0].name === '(não informado)') ? (
+            <div className="flex items-center justify-center h-[200px] text-ds-text text-center">
+              <div>
+                <div className="text-4xl mb-2">📊</div>
+                <div className="text-sm">Sem dados de Reincidência</div>
+              </div>
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={reincidenciaChart} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                <XAxis dataKey="name" tick={{ fill: '#fff', fontSize: 12 }} />
+                <YAxis tick={{ fill: '#fff', fontSize: 12 }} />
+                <Tooltip formatter={(value: number) => [`${value} issues (clique)`, 'Qtd']} />
+                <Bar dataKey="value" radius={[4, 4, 0, 0]} cursor="pointer" onClick={(data, index) => handleReincidenciaClick(data, index)}>
+                  {reincidenciaChart.map((entry, idx) => (
+                    <Cell key={`cell-${entry.name}`} fill={entry.name === '(não informado)' ? '#666' : COLORS[idx % COLORS.length]} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
       </div>
     </div>
   );
