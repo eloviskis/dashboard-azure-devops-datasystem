@@ -140,7 +140,18 @@ const ClientItemDistributionChart: React.FC<ClientItemDistributionChartProps> = 
               <Cell key={`cell-${index}`} fill={CHART_COLORS.palette[index % CHART_COLORS.palette.length]} />
             ))}
           </Pie>
-          <Tooltip formatter={(value: number, name: string) => [value, `${name} (clique para ver)`]} />
+          <Tooltip 
+            contentStyle={{ 
+              backgroundColor: '#0a192f', 
+              border: '1px solid #64ffda', 
+              borderRadius: '8px',
+              color: '#e6f1ff',
+              padding: '10px 14px'
+            }}
+            labelStyle={{ color: '#64ffda', fontWeight: 'bold', marginBottom: '4px' }}
+            itemStyle={{ color: '#e6f1ff' }}
+            formatter={(value: number, name: string) => [value, `${name} (clique para ver)`]} 
+          />
           <Legend />
         </PieChart>
       </ResponsiveContainer>
