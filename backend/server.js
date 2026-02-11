@@ -941,8 +941,21 @@ app.get('/api/items/period/:days', authenticateToken, async (req, res) => {
 
 app.get('/api/sync/status', authenticateToken, async (req, res) => {
   try {
-    const rows = await sql`SELECT * FROM sync_log ORDER BY sync_time DESC LIMIT 1`;
-    res.json(rows[0] || { status: 'No sync yet' });
+    // Primeiro tenta buscar o último sync bem-sucedido
+    let rows = await sql`SELECT * FROM sync_log WHERE status = 'success' ORDER BY sync_time DESC LIMIT 1`;
+    
+    // Se houver sucesso e for recente (últimas 24h), usa ele
+    if (rows && rows.length > 0) {
+      const syncDate = new Date(rows[0].sync_time);
+      const hoursAgo = (Date.now() - syncDate.getTime()) / (1000 * 60 * 60);
+      if (hoursAgo <= 24) {
+        return res.json(rows[0]);
+      }
+    }
+    
+    // Se não houver sucesso recente, retorna o mais recente (qualquer status)
+    rows = await sql`SELECT * FROM sync_log ORDER BY sync_time DESC LIMIT 1`;
+    res.json(rows[0] || { status: 'No sync yet', syncTime: new Date().toISOString() });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch sync status' });
   }
