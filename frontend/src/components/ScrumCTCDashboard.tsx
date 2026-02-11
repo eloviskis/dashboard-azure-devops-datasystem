@@ -453,7 +453,7 @@ const ScrumCTCDashboard: React.FC<ScrumCTCDashboardProps> = ({ data }) => {
               <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
               <XAxis dataKey="day" stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} />
               <YAxis stroke={CHART_COLORS.text} />
-              <Tooltip contentStyle={{ backgroundColor: CHART_COLORS.tooltipBg, border: 'none', borderRadius: '8px', color: '#E2E8F0' }} />
+              <Tooltip contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }} labelStyle={{ color: '#64ffda', fontWeight: 'bold' }} itemStyle={{ color: '#e6f1ff' }} />
               <Legend />
               <Area type="monotone" dataKey="remaining" name="Itens Restantes" stroke="#F56565" fill="#F56565" fillOpacity={0.15} strokeWidth={2} />
               <Area type="monotone" dataKey="spRemaining" name="SP Restantes" stroke="#47C5FB" fill="#47C5FB" fillOpacity={0.1} strokeWidth={2} />
@@ -473,7 +473,7 @@ const ScrumCTCDashboard: React.FC<ScrumCTCDashboardProps> = ({ data }) => {
             <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
             <XAxis dataKey="sprint" stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} />
             <YAxis stroke={CHART_COLORS.text} />
-            <Tooltip contentStyle={{ backgroundColor: CHART_COLORS.tooltipBg, border: 'none', borderRadius: '8px', color: '#E2E8F0' }} />
+            <Tooltip contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }} labelStyle={{ color: '#64ffda', fontWeight: 'bold' }} itemStyle={{ color: '#e6f1ff' }} />
             <Legend />
             <Bar dataKey="committed" name="Comprometido" fill="#47C5FB" opacity={0.6} />
             <Bar dataKey="delivered" name="Entregue" fill="#64FFDA" />
@@ -491,7 +491,7 @@ const ScrumCTCDashboard: React.FC<ScrumCTCDashboardProps> = ({ data }) => {
             <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
             <XAxis dataKey="sprint" stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} />
             <YAxis stroke={CHART_COLORS.text} />
-            <Tooltip contentStyle={{ backgroundColor: CHART_COLORS.tooltipBg, border: 'none', borderRadius: '8px', color: '#E2E8F0' }} />
+            <Tooltip contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }} labelStyle={{ color: '#64ffda', fontWeight: 'bold' }} itemStyle={{ color: '#e6f1ff' }} />
             <Legend />
             <Line type="monotone" dataKey="delivered" name="Velocity (itens)" stroke="#64FFDA" strokeWidth={2} dot={{ r: 4 }} />
             <Line type="monotone" dataKey="spDelivered" name="Velocity (SP)" stroke="#47C5FB" strokeWidth={2} dot={{ r: 4 }} />
@@ -511,7 +511,7 @@ const ScrumCTCDashboard: React.FC<ScrumCTCDashboardProps> = ({ data }) => {
               <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
               <XAxis type="number" stroke={CHART_COLORS.text} />
               <YAxis type="category" dataKey="name" tick={{ fill: '#CCD6F6', fontSize: 11 }} width={100} />
-              <Tooltip contentStyle={{ backgroundColor: CHART_COLORS.tooltipBg, border: 'none', borderRadius: '8px', color: '#E2E8F0' }} />
+              <Tooltip contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }} labelStyle={{ color: '#64ffda', fontWeight: 'bold' }} itemStyle={{ color: '#e6f1ff' }} />
               <Legend />
               <Bar dataKey="delivered" name="Entregues" fill="#64FFDA" />
               <Bar dataKey="total" name="Total" fill="#47C5FB" opacity={0.4} />
@@ -529,7 +529,7 @@ const ScrumCTCDashboard: React.FC<ScrumCTCDashboardProps> = ({ data }) => {
                 label={({ type, percent }) => `${type} ${(percent * 100).toFixed(0)}%`}>
                 {typeDistribution.map((entry, i) => <Cell key={i} fill={entry.color} />)}
               </Pie>
-              <Tooltip contentStyle={{ backgroundColor: CHART_COLORS.tooltipBg, border: 'none', borderRadius: '8px', color: '#E2E8F0' }} />
+              <Tooltip contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }} labelStyle={{ color: '#64ffda', fontWeight: 'bold' }} itemStyle={{ color: '#e6f1ff' }} />
               <Legend />
             </PieChart>
           </ResponsiveContainer>

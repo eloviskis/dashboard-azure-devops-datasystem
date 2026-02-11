@@ -135,7 +135,12 @@ const BugCreationTrendChart: React.FC<BugCreationTrendChartProps> = ({ data, per
           <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
           <XAxis dataKey="date" stroke={CHART_COLORS.text} />
           <YAxis stroke={CHART_COLORS.text} />
-          <Tooltip cursor={{ stroke: CHART_COLORS.primary, strokeWidth: 1 }} />
+          <Tooltip 
+            cursor={{ stroke: CHART_COLORS.primary, strokeWidth: 1 }}
+            contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }}
+            labelStyle={{ color: '#64ffda', fontWeight: 'bold' }}
+            itemStyle={{ color: '#e6f1ff' }}
+          />
           <Legend />
           <Line type="monotone" dataKey="Bugs" stroke={CHART_COLORS.bug} strokeWidth={2} dot={{ r: 6, cursor: 'pointer', onClick: (e: any) => {
             const date = e.payload.date;

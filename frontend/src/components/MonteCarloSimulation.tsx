@@ -181,7 +181,7 @@ const MonteCarloSimulation: React.FC<MonteCarloSimulationProps> = ({ data, filte
                                 <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
                                 <XAxis dataKey="items" stroke={CHART_COLORS.text} name="Nº de Itens"/>
                                 <YAxis stroke={CHART_COLORS.text} name="Frequência" />
-                                <Tooltip contentStyle={{ backgroundColor: CHART_COLORS.tooltipBg, borderColor: CHART_COLORS.grid }}/>
+                                <Tooltip contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }} labelStyle={{ color: '#64ffda', fontWeight: 'bold' }} itemStyle={{ color: '#e6f1ff' }}/>
                                 <Legend wrapperStyle={{ color: CHART_COLORS.text }} />
                                 <Bar dataKey="frequency" name="Frequência" fill={CHART_COLORS.primary} fillOpacity={0.8}/>
                                 <ReferenceLine x={simulationResult.howMany.confidenceLevels.p50} stroke="#47C5FB" strokeDasharray="3 3" label={{ value: '50%', position: 'insideTop', fill: '#47C5FB' }} />
@@ -203,7 +203,7 @@ const MonteCarloSimulation: React.FC<MonteCarloSimulationProps> = ({ data, filte
                                 <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
                                 <XAxis dataKey="weeks" stroke={CHART_COLORS.text} name="Nº de Semanas"/>
                                 <YAxis stroke={CHART_COLORS.text} name="Frequência" />
-                                <Tooltip contentStyle={{ backgroundColor: CHART_COLORS.tooltipBg, borderColor: CHART_COLORS.grid }}/>
+                                <Tooltip contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }} labelStyle={{ color: '#64ffda', fontWeight: 'bold' }} itemStyle={{ color: '#e6f1ff' }}/>
                                 <Legend wrapperStyle={{ color: CHART_COLORS.text }} />
                                 <Bar dataKey="frequency" name="Frequência" fill={CHART_COLORS.secondary} fillOpacity={0.8} />
                                 <ReferenceLine x={simulationResult.when.confidenceLevels.p50} stroke="#47C5FB" strokeDasharray="3 3" label={{ value: '50%', position: 'insideTop', fill: '#47C5FB' }} />

@@ -361,7 +361,7 @@ const MetasDashboard: React.FC<MetasDashboardProps> = ({ data, periodDays }) => 
                 <XAxis dataKey="week" stroke={CHART_COLORS.text} tick={{ fontSize: 10 }} />
                 <YAxis stroke={CHART_COLORS.text} tick={{ fontSize: 10 }} />
                 <Tooltip
-                  contentStyle={{ backgroundColor: CHART_COLORS.tooltipBg, border: 'none', borderRadius: '8px', color: '#E2E8F0' }}
+                  contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }} labelStyle={{ color: '#64ffda', fontWeight: 'bold' }} itemStyle={{ color: '#e6f1ff' }}
                   formatter={(value: number) => [
                     `${value} ${m.unit}`,
                     m.label

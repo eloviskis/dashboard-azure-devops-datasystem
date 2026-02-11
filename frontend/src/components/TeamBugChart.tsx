@@ -146,6 +146,9 @@ const TeamBugChart: React.FC<TeamBugChartProps> = ({ data }) => {
           <YAxis stroke={CHART_COLORS.text} />
           <Tooltip
             cursor={{ fill: 'rgba(100, 255, 218, 0.1)' }}
+            contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }}
+            labelStyle={{ color: '#64ffda', fontWeight: 'bold' }}
+            itemStyle={{ color: '#e6f1ff' }}
             formatter={(value: number, name: string) => [value, `${name} (clique para ver)`]}
           />
           <Legend />

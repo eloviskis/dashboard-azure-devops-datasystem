@@ -74,7 +74,9 @@ const CumulativeFlowDiagram: React.FC<CumulativeFlowDiagramProps> = ({ data, per
         <XAxis dataKey="date" stroke={CHART_COLORS.text} tick={{ fontSize: 10 }} />
         <YAxis stroke={CHART_COLORS.text} allowDecimals={false} />
         <Tooltip
-          contentStyle={{ backgroundColor: CHART_COLORS.tooltipBg, borderColor: CHART_COLORS.grid, borderRadius: '8px' }}
+          contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }}
+          labelStyle={{ color: '#64ffda', fontWeight: 'bold' }}
+          itemStyle={{ color: '#e6f1ff' }}
         />
         <Legend wrapperStyle={{ color: CHART_COLORS.text }} />
         {WORKFLOW_COLUMNS.map((col) => (

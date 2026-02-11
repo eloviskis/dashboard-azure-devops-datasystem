@@ -413,7 +413,7 @@ const PullRequestsDashboard: React.FC = () => {
               <Pie data={statusPieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
                 {statusPieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
               </Pie>
-              <Tooltip contentStyle={{ backgroundColor: '#172A45', border: '1px solid #233554', color: '#CCD6F6' }} />
+              <Tooltip contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }} labelStyle={{ color: '#64ffda', fontWeight: 'bold' }} itemStyle={{ color: '#e6f1ff' }} />
               <Legend />
             </PieChart>
           </ResponsiveContainer>
@@ -428,7 +428,7 @@ const PullRequestsDashboard: React.FC = () => {
               <Pie data={voteDistribution} dataKey="count" nameKey="name" cx="50%" cy="50%" outerRadius={100} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
                 {voteDistribution.map((entry, i) => <Cell key={i} fill={entry.color} />)}
               </Pie>
-              <Tooltip contentStyle={{ backgroundColor: '#172A45', border: '1px solid #233554', color: '#CCD6F6' }} />
+              <Tooltip contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }} labelStyle={{ color: '#64ffda', fontWeight: 'bold' }} itemStyle={{ color: '#e6f1ff' }} />
               <Legend />
             </PieChart>
           </ResponsiveContainer>
@@ -444,7 +444,7 @@ const PullRequestsDashboard: React.FC = () => {
             <CartesianGrid strokeDasharray="3 3" stroke="#233554" />
             <XAxis type="number" tick={{ fill: '#8892B0', fontSize: 12 }} />
             <YAxis type="category" dataKey="repo" tick={{ fill: '#CCD6F6', fontSize: 11 }} width={120} />
-            <Tooltip contentStyle={{ backgroundColor: '#172A45', border: '1px solid #233554', color: '#CCD6F6' }} />
+            <Tooltip contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }} labelStyle={{ color: '#64ffda', fontWeight: 'bold' }} itemStyle={{ color: '#e6f1ff' }} />
             <Legend />
             <Bar dataKey="completed" name="Concluídos" stackId="a" fill="#64FFDA" />
             <Bar dataKey="active" name="Ativos" stackId="a" fill="#47C5FB" />
@@ -464,7 +464,7 @@ const PullRequestsDashboard: React.FC = () => {
               <CartesianGrid strokeDasharray="3 3" stroke="#233554" />
               <XAxis type="number" tick={{ fill: '#8892B0', fontSize: 12 }} />
               <YAxis type="category" dataKey="name" tick={{ fill: '#CCD6F6', fontSize: 11 }} width={100} />
-              <Tooltip contentStyle={{ backgroundColor: '#172A45', border: '1px solid #233554', color: '#CCD6F6' }} />
+              <Tooltip contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }} labelStyle={{ color: '#64ffda', fontWeight: 'bold' }} itemStyle={{ color: '#e6f1ff' }} />
               <Bar dataKey="count" name="PRs" fill="#64FFDA">
                 {topAuthors.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
               </Bar>
@@ -481,7 +481,7 @@ const PullRequestsDashboard: React.FC = () => {
               <CartesianGrid strokeDasharray="3 3" stroke="#233554" />
               <XAxis type="number" tick={{ fill: '#8892B0', fontSize: 12 }} />
               <YAxis type="category" dataKey="name" tick={{ fill: '#CCD6F6', fontSize: 11 }} width={100} />
-              <Tooltip contentStyle={{ backgroundColor: '#172A45', border: '1px solid #233554', color: '#CCD6F6' }} />
+              <Tooltip contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }} labelStyle={{ color: '#64ffda', fontWeight: 'bold' }} itemStyle={{ color: '#e6f1ff' }} />
               <Legend />
               <Bar dataKey="approved" name="Aprovados" stackId="a" fill="#64FFDA" />
               <Bar dataKey="noVote" name="Sem Voto" stackId="a" fill="#8892B0" />
@@ -500,7 +500,7 @@ const PullRequestsDashboard: React.FC = () => {
             <CartesianGrid strokeDasharray="3 3" stroke="#233554" />
             <XAxis dataKey="label" tick={{ fill: '#8892B0', fontSize: 12 }} />
             <YAxis tick={{ fill: '#8892B0', fontSize: 12 }} />
-            <Tooltip contentStyle={{ backgroundColor: '#172A45', border: '1px solid #233554', color: '#CCD6F6' }} />
+            <Tooltip contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }} labelStyle={{ color: '#64ffda', fontWeight: 'bold' }} itemStyle={{ color: '#e6f1ff' }} />
             <Legend />
             <Line type="monotone" dataKey="avg" name="Média (dias)" stroke="#64FFDA" strokeWidth={2} dot={{ r: 4 }} connectNulls />
             <Line type="monotone" dataKey="p85" name="P85 (dias)" stroke="#FFB86C" strokeWidth={2} dot={{ r: 4 }} connectNulls strokeDasharray="5 5" />

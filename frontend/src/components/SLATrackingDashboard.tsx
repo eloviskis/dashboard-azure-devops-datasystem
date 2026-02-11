@@ -138,7 +138,7 @@ const SLATrackingDashboard: React.FC<Props> = ({ data }) => {
               <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
               <XAxis type="number" domain={[0, 100]} unit="%" stroke={CHART_COLORS.text} />
               <YAxis type="category" dataKey="team" tick={{ fill: '#CCD6F6', fontSize: 11 }} width={120} />
-              <Tooltip contentStyle={{ backgroundColor: CHART_COLORS.tooltipBg, border: 'none', borderRadius: '8px', color: '#E2E8F0' }}
+              <Tooltip contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }} labelStyle={{ color: '#64ffda', fontWeight: 'bold' }} itemStyle={{ color: '#e6f1ff' }}
                 formatter={(value: number) => [`${value}%`]} />
               <Bar dataKey="pctSLA" name="% dentro SLA">
                 {slaByTeam.map((entry, i) => (
@@ -159,7 +159,7 @@ const SLATrackingDashboard: React.FC<Props> = ({ data }) => {
                 label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
                 {pieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
               </Pie>
-              <Tooltip contentStyle={{ backgroundColor: CHART_COLORS.tooltipBg, border: 'none', borderRadius: '8px', color: '#E2E8F0' }} />
+              <Tooltip contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }} labelStyle={{ color: '#64ffda', fontWeight: 'bold' }} itemStyle={{ color: '#e6f1ff' }} />
               <Legend />
             </PieChart>
           </ResponsiveContainer>

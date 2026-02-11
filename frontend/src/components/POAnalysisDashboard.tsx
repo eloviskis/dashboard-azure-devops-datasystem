@@ -410,7 +410,7 @@ export const POAnalysisDashboard: React.FC<Props> = ({ data }) => {
             <YAxis tick={{ fill: '#fff', fontSize: 12 }} />
             <Tooltip 
               formatter={(value: number) => [`${value} itens (clique para ver)`, 'Criados']}
-              contentStyle={{ backgroundColor: CHART_COLORS.tooltipBg, borderColor: CHART_COLORS.grid }}
+              contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }} labelStyle={{ color: '#64ffda', fontWeight: 'bold' }} itemStyle={{ color: '#e6f1ff' }}
             />
             <Bar 
               dataKey="value" 
@@ -447,7 +447,7 @@ export const POAnalysisDashboard: React.FC<Props> = ({ data }) => {
             <YAxis tick={{ fill: '#fff', fontSize: 12 }} />
             <Tooltip 
               formatter={(value: number) => [`${value} itens (clique para ver)`, 'Criados']}
-              contentStyle={{ backgroundColor: CHART_COLORS.tooltipBg, borderColor: CHART_COLORS.grid }}
+              contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }} labelStyle={{ color: '#64ffda', fontWeight: 'bold' }} itemStyle={{ color: '#e6f1ff' }}
             />
             <Bar 
               dataKey="value" 
@@ -480,7 +480,7 @@ export const POAnalysisDashboard: React.FC<Props> = ({ data }) => {
             />
             <YAxis tick={{ fill: '#fff', fontSize: 12 }} />
             <Tooltip 
-              contentStyle={{ backgroundColor: CHART_COLORS.tooltipBg, borderColor: CHART_COLORS.grid }}
+              contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }} labelStyle={{ color: '#64ffda', fontWeight: 'bold' }} itemStyle={{ color: '#e6f1ff' }}
             />
             <Legend />
             <Bar dataKey="criados" name="Criados" fill="#64B5F6" radius={[4, 4, 0, 0]} />
@@ -515,7 +515,7 @@ export const POAnalysisDashboard: React.FC<Props> = ({ data }) => {
             />
             <YAxis tick={{ fill: '#fff', fontSize: 12 }} />
             <Tooltip 
-              contentStyle={{ backgroundColor: CHART_COLORS.tooltipBg, borderColor: CHART_COLORS.grid }}
+              contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }} labelStyle={{ color: '#64ffda', fontWeight: 'bold' }} itemStyle={{ color: '#e6f1ff' }}
             />
             <Legend wrapperStyle={{ paddingTop: '20px' }} />
             {criacaoPorTipoPorPessoa.tipos.map((tipo, idx) => (
@@ -553,7 +553,7 @@ export const POAnalysisDashboard: React.FC<Props> = ({ data }) => {
             />
             <YAxis tick={{ fill: '#fff', fontSize: 12 }} />
             <Tooltip 
-              contentStyle={{ backgroundColor: CHART_COLORS.tooltipBg, borderColor: CHART_COLORS.grid }}
+              contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }} labelStyle={{ color: '#64ffda', fontWeight: 'bold' }} itemStyle={{ color: '#e6f1ff' }}
               formatter={(value: number, name: string) => [
                 `${value} itens`,
                 name === 'Com DOR' ? '✅ Com DOR (clique)' : '❌ Sem DOR (clique)'

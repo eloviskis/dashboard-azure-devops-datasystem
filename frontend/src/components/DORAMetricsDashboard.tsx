@@ -156,7 +156,7 @@ const DORAMetricsDashboard: React.FC<Props> = ({ data }) => {
             <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
             <XAxis dataKey="week" stroke={CHART_COLORS.text} tick={{ fontSize: 10 }} />
             <YAxis stroke={CHART_COLORS.text} />
-            <Tooltip contentStyle={{ backgroundColor: CHART_COLORS.tooltipBg, border: 'none', borderRadius: '8px', color: '#E2E8F0' }} />
+            <Tooltip contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }} labelStyle={{ color: '#64ffda', fontWeight: 'bold' }} itemStyle={{ color: '#e6f1ff' }} />
             <Legend />
             <Bar dataKey="pbi" name="Features/PBI" stackId="a" fill="#64FFDA" />
             <Bar dataKey="bugs" name="Bugs" stackId="a" fill="#F56565" />
@@ -174,7 +174,7 @@ const DORAMetricsDashboard: React.FC<Props> = ({ data }) => {
             <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
             <XAxis type="number" stroke={CHART_COLORS.text} />
             <YAxis type="category" dataKey="team" tick={{ fill: '#CCD6F6', fontSize: 11 }} width={120} />
-            <Tooltip contentStyle={{ backgroundColor: CHART_COLORS.tooltipBg, border: 'none', borderRadius: '8px', color: '#E2E8F0' }}
+            <Tooltip contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }} labelStyle={{ color: '#64ffda', fontWeight: 'bold' }} itemStyle={{ color: '#e6f1ff' }}
               formatter={(value: number, name: string) => [`${value} dias`, name]} />
             <Legend />
             <Bar dataKey="avg" name="Média" fill="#47C5FB" />
@@ -194,7 +194,7 @@ const DORAMetricsDashboard: React.FC<Props> = ({ data }) => {
               <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
               <XAxis dataKey="week" stroke={CHART_COLORS.text} tick={{ fontSize: 10 }} />
               <YAxis stroke={CHART_COLORS.text} unit="%" />
-              <Tooltip contentStyle={{ backgroundColor: CHART_COLORS.tooltipBg, border: 'none', borderRadius: '8px', color: '#E2E8F0' }}
+              <Tooltip contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }} labelStyle={{ color: '#64ffda', fontWeight: 'bold' }} itemStyle={{ color: '#e6f1ff' }}
                 formatter={(value: number) => [`${value}%`]} />
               <Line type="monotone" dataKey="rate" name="Failure Rate %" stroke="#F56565" strokeWidth={2} dot={{ r: 3 }} />
               <ReferenceLine y={15} stroke="#FFB86C" strokeDasharray="5 5" label={{ value: '15% (Alta)', fill: '#FFB86C', fontSize: 10 }} />
@@ -211,7 +211,7 @@ const DORAMetricsDashboard: React.FC<Props> = ({ data }) => {
               <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
               <XAxis dataKey="team" stroke={CHART_COLORS.text} tick={{ fontSize: 10 }} angle={-20} textAnchor="end" height={60} />
               <YAxis stroke={CHART_COLORS.text} />
-              <Tooltip contentStyle={{ backgroundColor: CHART_COLORS.tooltipBg, border: 'none', borderRadius: '8px', color: '#E2E8F0' }}
+              <Tooltip contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }} labelStyle={{ color: '#64ffda', fontWeight: 'bold' }} itemStyle={{ color: '#e6f1ff' }}
                 formatter={(value: number) => [`${value} dias`]} />
               <Bar dataKey="mttr" name="MTTR (dias)" fill="#F6E05E">
                 {mttr.map((entry, i) => (

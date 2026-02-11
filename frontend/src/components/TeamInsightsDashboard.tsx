@@ -441,7 +441,7 @@ const TeamInsightsDashboard: React.FC<TeamInsightsDashboardProps> = ({ data }) =
                 <Radar name={selectedTeam} dataKey="team" stroke={CHART_COLORS.primary} fill={CHART_COLORS.primary} fillOpacity={0.3} />
                 <Radar name="Média Global" dataKey="global" stroke="#60A5FA" fill="#60A5FA" fillOpacity={0.1} />
                 <Legend />
-                <Tooltip contentStyle={{ backgroundColor: CHART_COLORS.tooltipBg, border: 'none', borderRadius: '8px', color: '#E2E8F0' }} />
+                <Tooltip contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }} labelStyle={{ color: '#64ffda', fontWeight: 'bold' }} itemStyle={{ color: '#e6f1ff' }} />
               </RadarChart>
             </ResponsiveContainer>
           </div>
@@ -497,7 +497,7 @@ const TeamInsightsDashboard: React.FC<TeamInsightsDashboardProps> = ({ data }) =
                     <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
                     <XAxis dataKey="week" stroke={CHART_COLORS.text} tick={{ fontSize: 10 }} />
                     <YAxis stroke={CHART_COLORS.text} domain={[0, 100]} />
-                    <Tooltip contentStyle={{ backgroundColor: CHART_COLORS.tooltipBg, border: 'none', borderRadius: '8px', color: '#E2E8F0' }}
+                    <Tooltip contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }} labelStyle={{ color: '#64ffda', fontWeight: 'bold' }} itemStyle={{ color: '#e6f1ff' }}
                       formatter={(value: number, name: string) => [name === 'score' ? `${value} pts` : name === 'throughput' ? `${value} itens` : `${value}d`, name === 'score' ? 'Score' : name === 'throughput' ? 'Throughput' : 'CT Médio']} />
                     <Legend />
                     <Line type="monotone" dataKey="score" name="Score" stroke="#64FFDA" strokeWidth={2} dot={{ r: 3 }} />

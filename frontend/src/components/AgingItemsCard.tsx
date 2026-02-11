@@ -140,8 +140,9 @@ const AgingItemsCard: React.FC<AgingItemsCardProps> = ({ workItems }) => {
             />
             <YAxis hide />
             <Tooltip 
-              contentStyle={{ backgroundColor: '#1A2234', border: '1px solid #3B4A6B', borderRadius: '8px', fontSize: '12px' }}
-              labelStyle={{ color: '#E5E7EB' }}
+              contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }}
+              labelStyle={{ color: '#64ffda', fontWeight: 'bold' }}
+              itemStyle={{ color: '#e6f1ff' }}
             />
             <Line 
               type="monotone" 

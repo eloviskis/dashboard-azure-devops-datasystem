@@ -509,7 +509,7 @@ const CycleTimeAnalyticsDashboard: React.FC<CycleTimeAnalyticsDashboardProps> = 
               <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
               <XAxis dataKey="label" stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} />
               <YAxis stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} />
-              <Tooltip contentStyle={{ backgroundColor: CHART_COLORS.tooltipBg, border: 'none', borderRadius: '8px', color: '#E2E8F0' }} />
+              <Tooltip contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }} labelStyle={{ color: '#64ffda', fontWeight: 'bold' }} itemStyle={{ color: '#e6f1ff' }} />
               <Legend />
               <Line type="monotone" dataKey="cycleTime" name="Cycle Time (dias)" stroke={CHART_COLORS.primary} strokeWidth={2} dot={{ r: 4 }} />
               <Line type="monotone" dataKey="leadTime" name="Lead Time (dias)" stroke="#60A5FA" strokeWidth={2} dot={{ r: 4 }} />
@@ -530,7 +530,7 @@ const CycleTimeAnalyticsDashboard: React.FC<CycleTimeAnalyticsDashboardProps> = 
               <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
               <XAxis dataKey="label" stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} angle={-45} textAnchor="end" height={80} />
               <YAxis stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} label={{ value: 'Dias', angle: -90, position: 'insideLeft', style: { fill: CHART_COLORS.text } }} />
-              <Tooltip contentStyle={{ backgroundColor: CHART_COLORS.tooltipBg, border: 'none', borderRadius: '8px', color: '#E2E8F0' }} />
+              <Tooltip contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }} labelStyle={{ color: '#64ffda', fontWeight: 'bold' }} itemStyle={{ color: '#e6f1ff' }} />
               <Legend />
               <Bar dataKey="cycleTime" name="Cycle Time (dias)" fill={CHART_COLORS.primary} radius={[4, 4, 0, 0]} />
               <Bar dataKey="leadTime" name="Lead Time (dias)" fill="#60A5FA" radius={[4, 4, 0, 0]} />
@@ -599,7 +599,7 @@ const CycleTimeAnalyticsDashboard: React.FC<CycleTimeAnalyticsDashboardProps> = 
             <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
             <XAxis dataKey="index" name="Item" stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} />
             <YAxis dataKey="cycleTime" name="Cycle Time" stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} />
-            <Tooltip contentStyle={{ backgroundColor: CHART_COLORS.tooltipBg, border: 'none', borderRadius: '8px', color: '#E2E8F0' }}
+            <Tooltip contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }} labelStyle={{ color: '#64ffda', fontWeight: 'bold' }} itemStyle={{ color: '#e6f1ff' }}
               formatter={(value: any, name: string) => [name === 'cycleTime' ? `${value} dias` : value, name === 'cycleTime' ? 'Cycle Time' : name]} />
             <Scatter name="Itens" data={filteredItems.map((item, idx) => ({ index: idx + 1, cycleTime: item.cycleTime, title: item.title }))} fill="#64FFDA" />
             <ReferenceLine y={metrics.p50} stroke="#47C5FB" strokeDasharray="5 5" label={{ value: `P50: ${metrics.p50}d`, position: 'insideRight', fill: '#47C5FB', fontSize: 10 }} />
@@ -634,7 +634,7 @@ const CycleTimeAnalyticsDashboard: React.FC<CycleTimeAnalyticsDashboardProps> = 
                   <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
                   <XAxis type="number" stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} />
                   <YAxis type="category" dataKey="type" stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} width={110} />
-                  <Tooltip contentStyle={{ backgroundColor: CHART_COLORS.tooltipBg, border: 'none', borderRadius: '8px', color: '#E2E8F0' }} formatter={(v: any) => [`${v} dias`]} />
+                  <Tooltip contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }} labelStyle={{ color: '#64ffda', fontWeight: 'bold' }} itemStyle={{ color: '#e6f1ff' }} formatter={(v: any) => [`${v} dias`]} />
                   <Legend />
                   <Bar dataKey="avg" name="CT Médio (dias)" fill="#64FFDA" radius={[0, 4, 4, 0]}>
                     {typeData.map((entry) => (

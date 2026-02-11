@@ -133,7 +133,11 @@ const RootCauseChart: React.FC<RootCauseChartProps> = ({ data }) => {
               <Cell key={`cell-${entry.name}`} fill={COLORS[idx % COLORS.length]} />
             ))}
           </Pie>
-          <Tooltip />
+          <Tooltip 
+            contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }}
+            labelStyle={{ color: '#64ffda', fontWeight: 'bold' }}
+            itemStyle={{ color: '#e6f1ff' }}
+          />
         </PieChart>
       </ResponsiveContainer>
       <ItemListModal data={modalData} onClose={() => setModalData(null)} />

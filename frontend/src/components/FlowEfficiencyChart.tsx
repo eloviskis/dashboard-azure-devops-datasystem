@@ -114,7 +114,7 @@ const FlowEfficiencyChart: React.FC<FlowEfficiencyChartProps> = ({ data }) => {
             <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
             <XAxis type="number" stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} domain={[0, 'auto']} unit=" dias" />
             <YAxis type="category" dataKey="team" stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} width={110} />
-            <Tooltip contentStyle={{ backgroundColor: CHART_COLORS.tooltipBg, border: 'none', borderRadius: '8px', color: '#E2E8F0' }} />
+            <Tooltip contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }} labelStyle={{ color: '#64ffda', fontWeight: 'bold' }} itemStyle={{ color: '#e6f1ff' }} />
             <Legend />
             <Bar dataKey="activeTime" name="Tempo Ativo (dias)" stackId="a" fill="#64FFDA" radius={[0, 0, 0, 0]} />
             <Bar dataKey="waitTime" name="Tempo em Espera (dias)" stackId="a" fill="#F56565" fillOpacity={0.6} radius={[0, 4, 4, 0]} />

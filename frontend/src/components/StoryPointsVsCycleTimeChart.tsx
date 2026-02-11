@@ -94,7 +94,7 @@ const StoryPointsVsCycleTimeChart: React.FC<StoryPointsVsCycleTimeProps> = ({ da
               <XAxis dataKey="sp" name="Story Points" stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} label={{ value: 'Story Points', position: 'insideBottom', offset: -5, style: { fill: CHART_COLORS.text, fontSize: 11 } }} />
               <YAxis dataKey="ct" name="Cycle Time" stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} label={{ value: 'Cycle Time (dias)', angle: -90, position: 'insideLeft', style: { fill: CHART_COLORS.text, fontSize: 11 } }} />
               <Tooltip
-                contentStyle={{ backgroundColor: CHART_COLORS.tooltipBg, border: 'none', borderRadius: '8px', color: '#E2E8F0' }}
+                contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }} labelStyle={{ color: '#64ffda', fontWeight: 'bold' }} itemStyle={{ color: '#e6f1ff' }}
                 formatter={(value: any, name: string) => {
                   if (name === 'sp') return [`${value} SP`, 'Story Points'];
                   if (name === 'ct') return [`${value} dias`, 'Cycle Time'];
