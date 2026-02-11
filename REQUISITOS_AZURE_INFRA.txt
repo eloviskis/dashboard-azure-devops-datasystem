@@ -1,0 +1,102 @@
+========================================================================
+  REQUISITOS PARA DEPLOY NA AZURE - DASHBOARD DEVOPS DATA SYSTEM
+========================================================================
+
+O QUE É:
+  Dashboard web que lê dados do Azure DevOps (work items, PRs) e exibe
+  métricas em tempo real para a equipe.
+
+------------------------------------------------------------------------
+O QUE PRECISA CRIAR NA AZURE:
+------------------------------------------------------------------------
+
+1) AZURE APP SERVICE (Backend da aplicação)
+   - Plano: B1 Linux (~$13/mês)
+   - Runtime: Node.js 20
+   - Região: Brazil South (de preferência)
+   - Sistema: Express.js (JavaScript)
+
+2) AZURE DATABASE FOR POSTGRESQL (Banco de dados)
+   - Tipo: Flexible Server
+   - Plano: B1ms (~$12/mês)
+   - Versão: PostgreSQL 16
+   - Specs: 1 vCore, 2GB RAM, 32GB storage
+   - Região: Mesma do App Service (Brazil South)
+   - Criar banco de dados: devops_dashboard
+   - Criar usuário: devops_dash (com permissão total no banco)
+
+------------------------------------------------------------------------
+VARIÁVEIS DE AMBIENTE NO APP SERVICE:
+------------------------------------------------------------------------
+
+  DATABASE_URL           = Connection string do PostgreSQL criado acima
+                           Formato: postgresql://devops_dash:SENHA@SERVIDOR:5432/devops_dashboard
+  AZURE_ORG              = Nome da organização do Azure DevOps (já temos)
+  AZURE_PROJECT          = Nome do projeto no Azure DevOps (já temos)
+  AZURE_PAT              = Personal Access Token do Azure DevOps (já temos)
+  JWT_SECRET             = Chave secreta para autenticação JWT (já temos)
+  ADMIN_DEFAULT_PASSWORD = Senha do admin do dashboard (já temos)
+  PORT                   = 8080 (padrão do App Service)
+
+  * Os valores das variáveis já existem, só precisam ser configurados
+    no App Service. Fornecemos na hora do setup.
+
+------------------------------------------------------------------------
+DEPLOY DO CÓDIGO:
+------------------------------------------------------------------------
+
+  - Repositório GitHub: eloviskis/dashboard-azure-devops-datasystem
+  - Pasta do backend: /backend
+  - Pode ser feito via:
+    a) GitHub Actions (CI/CD automático) - recomendado
+    b) ZIP deploy direto pelo portal Azure
+    c) Azure CLI (az webapp deploy)
+
+------------------------------------------------------------------------
+REQUISITOS DE REDE / FIREWALL:
+------------------------------------------------------------------------
+
+  O App Service precisa de acesso a:
+  - dev.azure.com porta 443 (HTTPS) → API do Azure DevOps
+  - O servidor PostgreSQL na porta 5432 (interna Azure)
+
+  O frontend (hospedado na Vercel, externo) precisa acessar:
+  - O App Service na porta 443 (HTTPS) via CORS
+
+------------------------------------------------------------------------
+POR QUE TEM QUE SER NA AZURE:
+------------------------------------------------------------------------
+
+  O Azure AD (Entra ID) da empresa tem Conditional Access Policy que
+  bloqueia IPs de fora da rede Microsoft. Quando o backend roda em
+  outro provedor (ex: Vercel, AWS, VPS), a API do Azure DevOps retorna
+  erro 403 (VS403463: conditional access policy failed).
+
+  Rodando na Azure, o backend fica dentro da rede confiável da Microsoft
+  e o PAT funciona normalmente.
+
+------------------------------------------------------------------------
+O QUE NÃO PRECISA:
+------------------------------------------------------------------------
+
+  - NÃO precisa de VM / VPS
+  - NÃO precisa de Docker / Kubernetes
+  - NÃO precisa de VPN
+  - NÃO precisa instalar nada manualmente no servidor
+  - NÃO precisa de domínio customizado (Azure dá um .azurewebsites.net)
+
+------------------------------------------------------------------------
+CUSTO ESTIMADO:
+------------------------------------------------------------------------
+
+  App Service B1 Linux:        ~$13/mês  (~R$ 75)
+  PostgreSQL Flexible B1ms:    ~$12/mês  (~R$ 70)
+  ------------------------------------------------
+  TOTAL:                       ~$25/mês  (~R$ 145)
+
+  * Valores fixos mensais, sem cobrança por request ou egress.
+  * Cotação base: USD 1 = BRL 5,80 (fev/2026)
+
+========================================================================
+  Dúvidas: falar com Eloi (Desenvolvimento)
+========================================================================

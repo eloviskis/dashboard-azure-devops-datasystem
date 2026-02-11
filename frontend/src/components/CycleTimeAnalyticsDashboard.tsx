@@ -14,7 +14,7 @@ interface CycleTimeAnalyticsDashboardProps {
   data: WorkItem[];
 }
 
-type PeriodType = 'weekly' | 'biweekly' | 'monthly' | 'specific-month' | 'custom';
+type PeriodType = 'weekly' | 'biweekly' | 'monthly' | 'quarterly' | 'semiannual' | 'annual' | 'specific-month' | 'custom';
 
 const COMPLETED_STATES = ['Done', 'Concluído', 'Closed', 'Fechado', 'Finished', 'Resolved', 'Pronto'];
 
@@ -66,6 +66,9 @@ const CycleTimeAnalyticsDashboard: React.FC<CycleTimeAnalyticsDashboardProps> = 
     }
     if (periodType === 'weekly') return { start: subWeeks(now, 12), end: now };
     if (periodType === 'biweekly') return { start: subMonths(now, 6), end: now };
+    if (periodType === 'quarterly') return { start: subMonths(now, 9), end: now };
+    if (periodType === 'semiannual') return { start: subMonths(now, 18), end: now };
+    if (periodType === 'annual') return { start: subMonths(now, 24), end: now };
     return { start: subMonths(now, 12), end: now };
   }, [periodType, selectedMonth, customStart, customEnd]);
 
@@ -182,8 +185,104 @@ const CycleTimeAnalyticsDashboard: React.FC<CycleTimeAnalyticsDashboardProps> = 
       } catch { return []; }
     };
 
+    const getQuarterly = () => {
+      try {
+        const quarters: { start: Date; end: Date; label: string }[] = [];
+        let cursor = new Date(dateRange.start);
+        while (cursor < dateRange.end) {
+          const quarterEnd = addDays(cursor, 89);
+          const end = quarterEnd > dateRange.end ? dateRange.end : quarterEnd;
+          quarters.push({
+            start: new Date(cursor),
+            end,
+            label: `${format(cursor, 'MMM/yy', { locale: ptBR })} - ${format(end, 'MMM/yy', { locale: ptBR })}`
+          });
+          cursor = addDays(cursor, 90);
+        }
+        return quarters.map(({ start, end, label }) => {
+          const itemsInPeriod = filteredItems.filter(i => {
+            const d = new Date(i.closedDate!);
+            return isWithinInterval(d, { start, end });
+          });
+          const cycleTimes = itemsInPeriod.filter(i => i.cycleTime != null).map(i => i.cycleTime as number);
+          const leadTimes = itemsInPeriod.filter(i => i.leadTime != null).map(i => i.leadTime as number);
+          return {
+            label,
+            cycleTime: cycleTimes.length > 0 ? Math.round((cycleTimes.reduce((a, b) => a + b, 0) / cycleTimes.length) * 10) / 10 : null,
+            leadTime: leadTimes.length > 0 ? Math.round((leadTimes.reduce((a, b) => a + b, 0) / leadTimes.length) * 10) / 10 : null,
+            count: itemsInPeriod.length,
+          };
+        });
+      } catch { return []; }
+    };
+
+    const getSemiannual = () => {
+      try {
+        const periods: { start: Date; end: Date; label: string }[] = [];
+        let cursor = new Date(dateRange.start);
+        while (cursor < dateRange.end) {
+          const periodEnd = addDays(cursor, 179);
+          const end = periodEnd > dateRange.end ? dateRange.end : periodEnd;
+          periods.push({
+            start: new Date(cursor),
+            end,
+            label: `${format(cursor, 'MMM/yy', { locale: ptBR })} - ${format(end, 'MMM/yy', { locale: ptBR })}`
+          });
+          cursor = addDays(cursor, 180);
+        }
+        return periods.map(({ start, end, label }) => {
+          const itemsInPeriod = filteredItems.filter(i => {
+            const d = new Date(i.closedDate!);
+            return isWithinInterval(d, { start, end });
+          });
+          const cycleTimes = itemsInPeriod.filter(i => i.cycleTime != null).map(i => i.cycleTime as number);
+          const leadTimes = itemsInPeriod.filter(i => i.leadTime != null).map(i => i.leadTime as number);
+          return {
+            label,
+            cycleTime: cycleTimes.length > 0 ? Math.round((cycleTimes.reduce((a, b) => a + b, 0) / cycleTimes.length) * 10) / 10 : null,
+            leadTime: leadTimes.length > 0 ? Math.round((leadTimes.reduce((a, b) => a + b, 0) / leadTimes.length) * 10) / 10 : null,
+            count: itemsInPeriod.length,
+          };
+        });
+      } catch { return []; }
+    };
+
+    const getAnnual = () => {
+      try {
+        const years: { start: Date; end: Date; label: string }[] = [];
+        let cursor = new Date(dateRange.start);
+        while (cursor < dateRange.end) {
+          const yearEnd = addDays(cursor, 364);
+          const end = yearEnd > dateRange.end ? dateRange.end : yearEnd;
+          years.push({
+            start: new Date(cursor),
+            end,
+            label: format(cursor, 'yyyy', { locale: ptBR })
+          });
+          cursor = addDays(cursor, 365);
+        }
+        return years.map(({ start, end, label }) => {
+          const itemsInPeriod = filteredItems.filter(i => {
+            const d = new Date(i.closedDate!);
+            return isWithinInterval(d, { start, end });
+          });
+          const cycleTimes = itemsInPeriod.filter(i => i.cycleTime != null).map(i => i.cycleTime as number);
+          const leadTimes = itemsInPeriod.filter(i => i.leadTime != null).map(i => i.leadTime as number);
+          return {
+            label,
+            cycleTime: cycleTimes.length > 0 ? Math.round((cycleTimes.reduce((a, b) => a + b, 0) / cycleTimes.length) * 10) / 10 : null,
+            leadTime: leadTimes.length > 0 ? Math.round((leadTimes.reduce((a, b) => a + b, 0) / leadTimes.length) * 10) / 10 : null,
+            count: itemsInPeriod.length,
+          };
+        });
+      } catch { return []; }
+    };
+
     if (periodType === 'monthly') return getMonths();
     if (periodType === 'biweekly') return getBiweekly();
+    if (periodType === 'quarterly') return getQuarterly();
+    if (periodType === 'semiannual') return getSemiannual();
+    if (periodType === 'annual') return getAnnual();
     return getWeeks();
   }, [filteredItems, dateRange, periodType]);
 
@@ -260,11 +359,14 @@ const CycleTimeAnalyticsDashboard: React.FC<CycleTimeAnalyticsDashboardProps> = 
         <div className="flex flex-wrap items-center gap-4">
           <div>
             <label className="text-ds-text text-sm mb-1 block">Período:</label>
-            <div className="flex gap-1">
+            <div className="flex gap-1 flex-wrap">
               {[
                 { value: 'weekly', label: 'Últ. 12 Semanas' },
                 { value: 'biweekly', label: 'Últ. 12 Quinzenas' },
                 { value: 'monthly', label: 'Últ. 12 Meses' },
+                { value: 'quarterly', label: 'Últ. 3 Trimestres' },
+                { value: 'semiannual', label: 'Últ. 3 Semestres' },
+                { value: 'annual', label: 'Últ. 2 Anos' },
                 { value: 'specific-month', label: 'Mês Específico' },
                 { value: 'custom', label: 'Personalizado' },
               ].map(opt => (
@@ -415,6 +517,36 @@ const CycleTimeAnalyticsDashboard: React.FC<CycleTimeAnalyticsDashboardProps> = 
               <ReferenceLine y={metrics.p95} stroke="#F56565" strokeDasharray="5 5" label={{ value: `P95: ${metrics.p95}d`, position: 'insideBottomRight', fill: '#F56565', fontSize: 11 }} />
             </LineChart>
           </ResponsiveContainer>
+        </div>
+
+        {/* Histórico Comparativo: Cycle vs Lead Time */}
+        <div className="lg:col-span-2 bg-ds-navy p-4 rounded-lg border border-ds-border">
+          <h3 className="text-ds-light-text font-bold text-lg mb-4">
+            📊 Histórico Comparativo: Cycle Time vs Lead Time
+          </h3>
+          <ChartInfoLamp info="Comparação visual entre Cycle Time e Lead Time por período. Barras agrupadas facilitam a identificação de padrões e comparação direta entre as métricas ao longo do tempo." />
+          <ResponsiveContainer width="100%" height={350}>
+            <BarChart data={trendData}>
+              <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
+              <XAxis dataKey="label" stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} angle={-45} textAnchor="end" height={80} />
+              <YAxis stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} label={{ value: 'Dias', angle: -90, position: 'insideLeft', style: { fill: CHART_COLORS.text } }} />
+              <Tooltip contentStyle={{ backgroundColor: CHART_COLORS.tooltipBg, border: 'none', borderRadius: '8px', color: '#E2E8F0' }} />
+              <Legend />
+              <Bar dataKey="cycleTime" name="Cycle Time (dias)" fill={CHART_COLORS.primary} radius={[4, 4, 0, 0]} />
+              <Bar dataKey="leadTime" name="Lead Time (dias)" fill="#60A5FA" radius={[4, 4, 0, 0]} />
+              <ReferenceLine y={metrics.avg} stroke="#FFB86C" strokeDasharray="3 3" label={{ value: `Média CT: ${metrics.avg}d`, position: 'right', fill: '#FFB86C', fontSize: 10 }} />
+            </BarChart>
+          </ResponsiveContainer>
+          <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+            {trendData.slice(0, 8).map((item, idx) => (
+              <div key={idx} className="bg-ds-bg/50 p-2 rounded">
+                <p className="text-ds-text font-semibold">{item.label}</p>
+                <p className="text-ds-green">CT: {item.cycleTime !== null ? `${item.cycleTime}d` : 'N/A'}</p>
+                <p className="text-blue-400">LT: {item.leadTime !== null ? `${item.leadTime}d` : 'N/A'}</p>
+                <p className="text-ds-text">Items: {item.count}</p>
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* Team Ranking */}
