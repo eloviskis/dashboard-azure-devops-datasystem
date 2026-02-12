@@ -383,7 +383,7 @@ async function syncData() {
         const reincidencia = fields['Custom.REINCIDENCIA'] || fields['Custom.Reincidencia'] || fields['Custom.Reincidência'] || '';
         const performanceDays = fields['Custom.PerformanceDays'] || fields['Custom.DiasPerformance'] || '';
         const qa = fields['Custom.QA'] || '';
-        const causaRaiz = fields['Custom.CausaRaiz'] || fields['Custom.RootCause'] || '';
+        const causaRaiz = fields['Custom.Raizdoproblema'] || fields['Custom.CausaRaiz'] || fields['Custom.RootCause'] || '';
         const createdBy = fields['System.CreatedBy']?.displayName || '';
         const po = fields['Custom.PO'] || fields['Custom.ProductOwner'] || '';
         const readyDate = fields['Custom.ReadyDate'] || '';
