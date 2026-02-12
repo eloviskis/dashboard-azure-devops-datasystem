@@ -231,7 +231,7 @@ async function saveWorkItems(items) {
       const qaField = f['Custom.QA'];
       const qa = qaField?.displayName || (typeof qaField === 'string' ? qaField : '') || '';
       const complexity = f['Custom.Complexity'] || f['Custom.Complexidade'] || '';
-      const causaRaiz = f['Custom.CausaRaiz'] || '';
+      const causaRaiz = f['Custom.Raizdoproblema'] || f['Custom.CausaRaiz'] || '';
       const createdBy = f['System.CreatedBy']?.displayName || '';
       const po = f['Custom.PO'] || '';
       const readyDate = f['Custom.ReadyDate'] || null;

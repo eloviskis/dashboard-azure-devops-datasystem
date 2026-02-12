@@ -230,7 +230,7 @@ async function saveWorkItems(items) {
       const performanceDays = f['Custom.PerformanceDays'] || '';
       const qa = f['Custom.QA'] || '';
       const complexity = f['Custom.Complexidade'] || '';
-      const causaRaiz = f['Custom.CausaRaiz'] || '';
+      const causaRaiz = f['Custom.Raizdoproblema'] || f['Custom.CausaRaiz'] || '';
       const createdBy = f['System.CreatedBy']?.displayName || '';
       const po = f['Custom.PO'] || '';
       const readyDate = f['Custom.ReadyDate'] || null;
