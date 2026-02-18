@@ -21,6 +21,27 @@ const getWorkItemUrl = (workItemId: number | string): string => {
   return `${AZURE_DEVOPS_BASE_URL}/${workItemId}`;
 };
 
+// Custom Tooltip para evitar renderização de objetos
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div style={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }}>
+        <p style={{ color: '#64ffda', fontWeight: 'bold', marginBottom: '5px' }}>{String(label)}</p>
+        {payload.map((entry: any, index: number) => {
+          // Garantir que só valores primitivos sejam renderizados
+          const value = typeof entry.value === 'object' ? JSON.stringify(entry.value) : String(entry.value);
+          return (
+            <p key={index} style={{ color: entry.color, margin: '2px 0' }}>
+              {String(entry.name)}: {value}
+            </p>
+          );
+        })}
+      </div>
+    );
+  }
+  return null;
+};
+
 // Componente do Modal
 const ItemListModal: React.FC<{ data: ModalData | null; onClose: () => void }> = ({ data, onClose }) => {
   if (!data) return null;
@@ -252,7 +273,7 @@ const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data }) => {
     });
   };
 
-  const handleBarClick = (data: any, category: string) => {
+  const handleBarClick = (category: string) => {
     if (category === 'Bugs\n(Dev)') {
       handleShowBugs();
     } else if (category === 'Issues\n(Produção)') {
@@ -324,11 +345,7 @@ const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data }) => {
             <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
             <XAxis dataKey="category" stroke={CHART_COLORS.text} tick={{ fontSize: 12 }} />
             <YAxis stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} />
-            <Tooltip 
-              contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }} 
-              labelStyle={{ color: '#64ffda', fontWeight: 'bold' }} 
-              itemStyle={{ color: '#e6f1ff' }}
-            />
+            <Tooltip content={<CustomTooltip />} />
             <Legend />
             <Bar 
               dataKey="total" 
@@ -336,7 +353,10 @@ const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data }) => {
               fill="#64b5f6" 
               radius={[4, 4, 0, 0]} 
               label={{ position: 'top', fill: '#e6f1ff', fontSize: 12, formatter: (value: any) => String(value) }} 
-              onClick={(data) => handleBarClick(data, data.category)}
+              onClick={(data: any) => {
+                const category = data && data.category ? String(data.category) : '';
+                handleBarClick(category);
+              }}
               cursor="pointer"
             />
             <Bar 
@@ -362,7 +382,7 @@ const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data }) => {
                 <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
                 <XAxis type="number" stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} unit="%" />
                 <YAxis type="category" dataKey="team" stroke={CHART_COLORS.text} tick={{ fontSize: 10 }} width={90} />
-                <Tooltip contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }} labelStyle={{ color: '#64ffda', fontWeight: 'bold' }} itemStyle={{ color: '#e6f1ff' }} />
+                <Tooltip content={<CustomTooltip />} />
                 <Legend />
                 <Bar dataKey="reworkRate" name="% Bugs" fill="#f56565" radius={[0, 4, 4, 0]} />
                 <Bar dataKey="reincidenceRate" name="% Reincidência" fill="#ed8936" radius={[0, 4, 4, 0]} />
