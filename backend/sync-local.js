@@ -167,7 +167,7 @@ async function saveWorkItems(items) {
       const createdBy = f['System.CreatedBy']?.displayName || '';
       const po = f['Custom.PO'] || '';
       const readyDate = f['Custom.DOR'] || null;
-      const doneDate = f['Custom.DoneDate'] || null;
+      const doneDate = f['Custom.DOD'] || null;
       // Novos campos de Root Cause
       const rootCauseTask = f['Custom.Rootcausetask'] || '';
       const rootCauseTeam = f['Custom.rootcauseteam'] || '';

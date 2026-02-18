@@ -251,7 +251,7 @@ async function saveWorkItems(items) {
       const createdBy = f['System.CreatedBy']?.displayName || '';
       const po = f['Custom.PO'] || '';
       const readyDate = f['Custom.DOR'] || null;
-      const doneDate = f['Custom.DoneDate'] || null;
+      const doneDate = f['Custom.DOD'] || null;
       // Campos de identificação e falha do processo
       const identificacao = f['Custom.7ac99842-e0ec-4f18-b91b-53bfe3e3b3f5'] || '';
       const falhaDoProcesso = f['Custom.Falhadoprocesso'] || '';

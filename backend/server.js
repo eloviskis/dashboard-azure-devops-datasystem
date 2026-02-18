@@ -396,7 +396,7 @@ async function syncData() {
         const createdBy = fields['System.CreatedBy']?.displayName || '';
         const po = fields['Custom.PO'] || fields['Custom.ProductOwner'] || '';
         const readyDate = fields['Custom.DOR'] || '';
-        const doneDate = fields['Custom.DoneDate'] || '';
+        const doneDate = fields['Custom.DOD'] || '';
         // Novos campos de Root Cause
         const rootCauseTask = fields['Custom.Rootcausetask'] || '';
         const rootCauseTeam = fields['Custom.rootcauseteam'] || '';

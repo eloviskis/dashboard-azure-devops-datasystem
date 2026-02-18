@@ -251,7 +251,7 @@ async function saveWorkItems(items) {
       const createdBy = f['System.CreatedBy']?.displayName || '';
       const po = f['Custom.PO'] || '';
       const readyDate = f['Custom.DOR'] || null;
-      const doneDate = f['Custom.DoneDate'] || null;
+      const doneDate = f['Custom.DOD'] || null;
       // Campos de estimativa de tempo (Tasks)
       const originalEstimate = f['Microsoft.VSTS.Scheduling.OriginalEstimate'] || null;
       const remainingWork = f['Microsoft.VSTS.Scheduling.RemainingWork'] || null;
