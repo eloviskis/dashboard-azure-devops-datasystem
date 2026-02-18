@@ -11,12 +11,34 @@ const COMPLETED_STATES = ['Done', 'Concluído', 'Closed', 'Fechado', 'Finished',
 
 const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data }) => {
   const analysis = useMemo(() => {
-    // Itens com reincidência
-    const reincidentItems = data.filter(i => i.reincidencia && Number(i.reincidencia) > 0);
-    
-    // Bugs (retrabalho por definição)
+    // Bugs (erros em desenvolvimento) vs Issues (erros em produção)
     const bugs = data.filter(i => i.type === 'Bug');
+    const issues = data.filter(i => i.type === 'Issue');
     const completedBugs = bugs.filter(i => COMPLETED_STATES.includes(i.state));
+    
+    // Reincidências (apenas em Issues - erros que voltaram em produção)
+    const issuesWithReincidencia = issues.filter(i => i.reincidencia && Number(i.reincidencia) > 0);
+    const totalReincidenciaValue = issuesWithReincidencia.reduce((sum, i) => sum + Number(i.reincidencia || 0), 0);
+    
+    // Taxa de detecção em desenvolvimento (quanto maior, melhor o QA)
+    const totalDefects = bugs.length + issues.length;
+    const detectionRate = totalDefects > 0 ? Math.round((bugs.length / totalDefects) * 1000) / 10 : 0;
+    
+    // Comparação Bugs vs Issues
+    const bugVsIssueComparison = [
+      {
+        category: 'Bugs\n(Dev)',
+        total: bugs.length,
+        comReincidencia: 0, // Bugs não têm reincidência
+        escapeRate: 0
+      },
+      {
+        category: 'Issues\n(Produção)',
+        total: issues.length,
+        comReincidencia: issuesWithReincidencia.length,
+        escapeRate: totalDefects > 0 ? Math.round((issues.length / totalDefects) * 1000) / 10 : 0
+      }
+    ];
     
     // Por time
     const teamRework: Record<string, { bugs: number; reincidences: number; total: number; avgBugCT: number }> = {};
@@ -81,44 +103,83 @@ const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data }) => {
 
     return {
       totalBugs: bugs.length,
-      totalReincidences: reincidentItems.length,
+      totalIssues: issues.length,
+      totalReincidences: totalReincidenciaValue,
+      issuesWithReincidencia: issuesWithReincidencia.length,
+      detectionRate,
       globalReworkRate: data.length > 0 ? Math.round((bugs.length / data.length) * 1000) / 10 : 0,
-      globalReincidenceRate: bugs.length > 0 ? Math.round((reincidentItems.length / bugs.length) * 1000) / 10 : 0,
+      globalReincidenceRate: issues.length > 0 ? Math.round((issuesWithReincidencia.length / issues.length) * 1000) / 10 : 0,
       avgBugCT: completedBugs.filter(b => b.cycleTime).length > 0
         ? Math.round((completedBugs.filter(b => b.cycleTime).reduce((sum, b) => sum + (b.cycleTime || 0), 0) / completedBugs.filter(b => b.cycleTime).length) * 10) / 10
         : 0,
       teamData,
       personData,
+      bugVsIssueComparison,
     };
   }, [data]);
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
         <div className="bg-ds-navy p-4 rounded-lg border border-ds-border text-center">
-          <p className="text-ds-text text-xs">Total de Bugs</p>
-          <p className="text-2xl font-bold text-red-400">{analysis.totalBugs}</p>
+          <p className="text-ds-text text-xs">Bugs (Dev)</p>
+          <p className="text-2xl font-bold text-yellow-400">{analysis.totalBugs}</p>
+          <p className="text-xs text-ds-text mt-1">Detectados antes</p>
         </div>
         <div className="bg-ds-navy p-4 rounded-lg border border-ds-border text-center">
-          <p className="text-ds-text text-xs">Reincidências</p>
-          <p className="text-2xl font-bold text-orange-400">{analysis.totalReincidences}</p>
+          <p className="text-ds-text text-xs">Issues (Produção)</p>
+          <p className="text-2xl font-bold text-red-400">{analysis.totalIssues}</p>
+          <p className="text-xs text-ds-text mt-1">Escaparam para prod</p>
         </div>
         <div className="bg-ds-navy p-4 rounded-lg border border-ds-border text-center">
-          <p className="text-ds-text text-xs">Taxa de Retrabalho</p>
-          <p className={`text-2xl font-bold ${analysis.globalReworkRate > 20 ? 'text-red-400' : analysis.globalReworkRate > 10 ? 'text-yellow-400' : 'text-green-400'}`}>
-            {analysis.globalReworkRate}%
+          <p className="text-ds-text text-xs">Taxa de Detecção</p>
+          <p className={`text-2xl font-bold ${analysis.detectionRate > 70 ? 'text-green-400' : analysis.detectionRate > 50 ? 'text-yellow-400' : 'text-red-400'}`}>
+            {analysis.detectionRate}%
           </p>
+          <p className="text-xs text-ds-text mt-1">Pegos em Dev</p>
+        </div>
+        <div className="bg-ds-navy p-4 rounded-lg border border-ds-border text-center">
+          <p className="text-ds-text text-xs">Issues Reincidentes</p>
+          <p className="text-2xl font-bold text-orange-400">{analysis.issuesWithReincidencia}</p>
+          <p className="text-xs text-ds-text mt-1">Voltaram em prod</p>
         </div>
         <div className="bg-ds-navy p-4 rounded-lg border border-ds-border text-center">
           <p className="text-ds-text text-xs">Taxa Reincidência</p>
-          <p className={`text-2xl font-bold ${analysis.globalReincidenceRate > 15 ? 'text-red-400' : 'text-yellow-400'}`}>
+          <p className={`text-2xl font-bold ${analysis.globalReincidenceRate > 15 ? 'text-red-400' : analysis.globalReincidenceRate > 8 ? 'text-yellow-400' : 'text-green-400'}`}>
             {analysis.globalReincidenceRate}%
           </p>
+          <p className="text-xs text-ds-text mt-1">De issues em prod</p>
         </div>
         <div className="bg-ds-navy p-4 rounded-lg border border-ds-border text-center">
-          <p className="text-ds-text text-xs">CT Médio de Bugs</p>
-          <p className="text-2xl font-bold text-ds-light-text">{analysis.avgBugCT} <span className="text-sm">dias</span></p>
+          <p className="text-ds-text text-xs">CT Médio Bugs</p>
+          <p className="text-2xl font-bold text-ds-light-text">{analysis.avgBugCT}</p>
+          <p className="text-xs text-ds-text mt-1">dias</p>
         </div>
+      </div>
+
+      {/* Gráfico comparativo Bugs vs Issues */}
+      <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
+        <h3 className="text-ds-light-text font-bold text-lg mb-2">Bugs (Dev) vs Issues (Produção)</h3>
+        <p className="text-ds-text text-sm mb-4">
+          📊 <strong className="text-yellow-400">Bugs</strong> são erros detectados em desenvolvimento. 
+          <strong className="text-red-400"> Issues</strong> são erros que escaparam para produção. 
+          Quanto maior a taxa de detecção, melhor o processo de QA.
+        </p>
+        <ResponsiveContainer width="100%" height={300}>
+          <BarChart data={analysis.bugVsIssueComparison} margin={{ top: 30, right: 30, bottom: 20, left: 20 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
+            <XAxis dataKey="category" stroke={CHART_COLORS.text} tick={{ fontSize: 12 }} />
+            <YAxis stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} />
+            <Tooltip 
+              contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }} 
+              labelStyle={{ color: '#64ffda', fontWeight: 'bold' }} 
+              itemStyle={{ color: '#e6f1ff' }}
+            />
+            <Legend />
+            <Bar dataKey="total" name="Total" fill="#64b5f6" radius={[4, 4, 0, 0]} label={{ position: 'top', fill: '#e6f1ff', fontSize: 12 }} />
+            <Bar dataKey="comReincidencia" name="Com Reincidência" fill="#ed8936" radius={[4, 4, 0, 0]} label={{ position: 'top', fill: '#e6f1ff', fontSize: 12 }} />
+          </BarChart>
+        </ResponsiveContainer>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
