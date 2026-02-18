@@ -110,14 +110,14 @@ const FlowEfficiencyChart: React.FC<FlowEfficiencyChartProps> = ({ data }) => {
       <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
         <h3 className="text-ds-light-text font-bold text-lg mb-4">Flow Efficiency por Time</h3>
         <ResponsiveContainer width="100%" height={Math.max(250, analysis.teamData.length * 45)}>
-          <BarChart data={analysis.teamData} layout="vertical" margin={{ left: 120 }}>
+          <BarChart data={analysis.teamData} layout="vertical" margin={{ left: 120, right: 50 }}>
             <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
             <XAxis type="number" stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} domain={[0, 'auto']} unit=" dias" />
             <YAxis type="category" dataKey="team" stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} width={110} />
             <Tooltip contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }} labelStyle={{ color: '#64ffda', fontWeight: 'bold' }} itemStyle={{ color: '#e6f1ff' }} />
             <Legend />
-            <Bar dataKey="activeTime" name="Tempo Ativo (dias)" stackId="a" fill="#64FFDA" radius={[0, 0, 0, 0]} />
-            <Bar dataKey="waitTime" name="Tempo em Espera (dias)" stackId="a" fill="#F56565" fillOpacity={0.6} radius={[0, 4, 4, 0]} />
+            <Bar dataKey="activeTime" name="Tempo Ativo (dias)" stackId="a" fill="#64FFDA" radius={[0, 0, 0, 0]} label={{ position: 'inside', fill: '#0a192f', fontSize: 10, fontWeight: 'bold' }} />
+            <Bar dataKey="waitTime" name="Tempo em Espera (dias)" stackId="a" fill="#F56565" fillOpacity={0.6} radius={[0, 4, 4, 0]} label={{ position: 'inside', fill: '#fff', fontSize: 10, fontWeight: 'bold' }} />
           </BarChart>
         </ResponsiveContainer>
         
