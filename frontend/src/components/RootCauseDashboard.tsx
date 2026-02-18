@@ -562,7 +562,7 @@ export const RootCauseDashboard: React.FC<Props> = ({ data }) => {
           <BarChart
             data={[...typeChart].sort((a, b) => b.value - a.value)}
             layout="vertical"
-            margin={{ top: 10, right: 30, left: 40, bottom: 10 }}
+            margin={{ top: 10, right: 70, left: 40, bottom: 10 }}
           >
             <XAxis type="number" tick={{ fill: '#FFD600', fontWeight: 'bold' }} axisLine={false} />
             <YAxis type="category" dataKey="name" tick={{ fill: '#fff', fontWeight: 'bold' }} axisLine={false} width={120} />
@@ -630,7 +630,7 @@ export const RootCauseDashboard: React.FC<Props> = ({ data }) => {
           </div>
         ) : (
           <ResponsiveContainer width="100%" height={Math.max(300, p0CausaChart.length * 28)}>
-            <BarChart data={p0CausaChart} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+            <BarChart data={p0CausaChart} layout="vertical" margin={{ top: 5, right: 70, left: 20, bottom: 5 }}>
               <XAxis type="number" tick={{ fill: '#FFD600', fontSize: 12, fontWeight: 'bold' }} axisLine={false} />
               <YAxis 
                 type="category" 
