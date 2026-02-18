@@ -250,7 +250,7 @@ async function saveWorkItems(items) {
       const rootCauseLegacy = f['Microsoft.VSTS.CMMI.RootCause'] || '';
       const createdBy = f['System.CreatedBy']?.displayName || '';
       const po = f['Custom.PO'] || '';
-      const readyDate = f['Custom.ReadyDate'] || null;
+      const readyDate = f['Custom.DOR'] || null;
       const doneDate = f['Custom.DoneDate'] || null;
       // Campos de estimativa de tempo (Tasks)
       const originalEstimate = f['Microsoft.VSTS.Scheduling.OriginalEstimate'] || null;

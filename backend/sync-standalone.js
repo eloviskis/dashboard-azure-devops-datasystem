@@ -250,7 +250,7 @@ async function saveWorkItems(items) {
       const rootCauseLegacy = f['Microsoft.VSTS.CMMI.RootCause'] || '';
       const createdBy = f['System.CreatedBy']?.displayName || '';
       const po = f['Custom.PO'] || '';
-      const readyDate = f['Custom.ReadyDate'] || null;
+      const readyDate = f['Custom.DOR'] || null;
       const doneDate = f['Custom.DoneDate'] || null;
       // Campos de identificação e falha do processo
       const identificacao = f['Custom.7ac99842-e0ec-4f18-b91b-53bfe3e3b3f5'] || '';

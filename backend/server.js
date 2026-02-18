@@ -395,7 +395,7 @@ async function syncData() {
         const rootCauseLegacy = fields['Microsoft.VSTS.CMMI.RootCause'] || '';
         const createdBy = fields['System.CreatedBy']?.displayName || '';
         const po = fields['Custom.PO'] || fields['Custom.ProductOwner'] || '';
-        const readyDate = fields['Custom.ReadyDate'] || '';
+        const readyDate = fields['Custom.DOR'] || '';
         const doneDate = fields['Custom.DoneDate'] || '';
         // Novos campos de Root Cause
         const rootCauseTask = fields['Custom.Rootcausetask'] || '';
