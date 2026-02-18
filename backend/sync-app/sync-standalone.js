@@ -42,16 +42,24 @@ function loadConfig() {
   if (process.env.DATABASE_URL) config.DATABASE_URL = process.env.DATABASE_URL;
   if (process.env.SYNC_INTERVAL_MINUTES) config.SYNC_INTERVAL_MINUTES = parseInt(process.env.SYNC_INTERVAL_MINUTES);
   
-  // Tenta carregar config.json
-  try {
-    const configPath = path.join(process.cwd(), 'config.json');
-    if (fs.existsSync(configPath)) {
-      const fileConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-      Object.assign(config, fileConfig);
-      console.log('📄 Configuração carregada de config.json');
+  // Tenta carregar config.json - procura na pasta do executável e em cwd
+  const possiblePaths = [
+    path.join(process.cwd(), 'config.json'),
+    path.join(path.dirname(process.execPath), 'config.json'),
+    path.join(__dirname, 'config.json')
+  ];
+  
+  for (const configPath of possiblePaths) {
+    try {
+      if (fs.existsSync(configPath)) {
+        const fileConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+        Object.assign(config, fileConfig);
+        console.log('📄 Configuração carregada de', configPath);
+        break;
+      }
+    } catch (e) {
+      console.error('⚠️ Erro ao carregar config.json:', e.message);
     }
-  } catch (e) {
-    // Ignora erro se não encontrar
   }
   
   return config;
@@ -98,12 +106,12 @@ async function fetchWorkItems() {
   const token = Buffer.from(`:${CONFIG.AZURE_PAT}`).toString('base64');
   const baseUrl = `https://dev.azure.com/${CONFIG.AZURE_ORG}/${CONFIG.AZURE_PROJECT}`;
   
-  console.log('📡 Buscando work items do Azure DevOps...');
+  console.log('📡 Buscando work items do Azure DevOps (últimos 180 dias + alterados)...');
   
-  // Query WIQL
-  const wiqlQuery = JSON.stringify({
-    query: `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = '${CONFIG.AZURE_PROJECT}' AND [System.ChangedDate] >= @Today - 180 ORDER BY [System.ChangedDate] DESC`
-  });
+  // Buscar itens criados ou alterados nos últimos 180 dias (histórico já sincronizado)
+  const query = `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = '${CONFIG.AZURE_PROJECT}' AND [System.ChangedDate] >= @Today - 180 ORDER BY [System.ChangedDate] DESC`;
+  
+  const wiqlQuery = JSON.stringify({ query });
   
   const wiqlUrl = new URL(`${baseUrl}/_apis/wit/wiql?api-version=7.1`);
   const wiqlResponse = await httpsRequest(wiqlUrl, {
@@ -116,12 +124,17 @@ async function fetchWorkItems() {
     body: wiqlQuery
   });
   
-  if (wiqlResponse.status !== 200) {
-    throw new Error(`WIQL failed: ${wiqlResponse.status} - ${JSON.stringify(wiqlResponse.data)}`);
+  const allWorkItemIds = new Set();
+  
+  if (wiqlResponse.status === 200 && wiqlResponse.data.workItems) {
+    wiqlResponse.data.workItems.forEach(wi => allWorkItemIds.add(wi.id));
+    console.log(`   ${allWorkItemIds.size} work items alterados nos últimos 180 dias`);
+  } else {
+    console.log(`   Erro ao buscar work items`);
   }
   
-  const workItemIds = wiqlResponse.data.workItems?.map(wi => wi.id) || [];
-  console.log(`   Encontrados ${workItemIds.length} work items`);
+  const workItemIds = Array.from(allWorkItemIds);
+  console.log(`   Total: ${workItemIds.length} work items únicos`);
   
   if (workItemIds.length === 0) return [];
   
@@ -219,22 +232,31 @@ async function saveWorkItems(items) {
       const storyPoints = f['Microsoft.VSTS.Scheduling.StoryPoints'] || null;
       const tags = f['System.Tags'] || '';
       const priority = f['Microsoft.VSTS.Common.Priority']?.toString() || '';
-      const codeReviewLevel1 = f['Custom.CR1'] || '';
-      const codeReviewLevel2 = f['Custom.CR2'] || '';
-      const tipoCliente = f['Custom.TipoCliente'] || '';
-      const customType = f['Custom.TipoCustomizado'] || '';
-      const rootCauseStatus = f['Custom.StatusCausaRaiz'] || '';
+      // Code Review Nível 1 e 2 são campos Identity com GUIDs
+      const cr1Field = f['Custom.ab075d4c-04f5-4f96-b294-4ad0f5987028'];
+      const cr2Field = f['Custom.60cee051-7e66-4753-99d6-4bc8717fae0e'];
+      const codeReviewLevel1 = cr1Field?.displayName || (typeof cr1Field === 'string' ? cr1Field : '') || '';
+      const codeReviewLevel2 = cr2Field?.displayName || (typeof cr2Field === 'string' ? cr2Field : '') || '';
+      const tipoCliente = f['Custom.Tipocliente'] || '';
+      const customType = f['Custom.Type'] || '';
+      const rootCauseStatus = f['Custom.RootCauseStatus'] || '';
       const squad = f['Custom.Squad'] || '';
       const area = f['Custom.Area'] || '';
-      const reincidencia = f['Custom.Reincidencia'] || '';
+      const reincidencia = f['Custom.REINCIDENCIA']?.toString() || '';
       const performanceDays = f['Custom.PerformanceDays'] || '';
-      const qa = f['Custom.QA'] || '';
-      const complexity = f['Custom.Complexidade'] || '';
-      const causaRaiz = f['Custom.Raizdoproblema'] || f['Custom.CausaRaiz'] || '';
+      const qa = f['Custom.QA']?.displayName || '';
+      const complexity = f['Custom.Complexity'] || '';
+      const causaRaiz = f['Custom.Raizdoproblema'] || '';
+      const rootCauseLegacy = f['Microsoft.VSTS.CMMI.RootCause'] || '';
       const createdBy = f['System.CreatedBy']?.displayName || '';
       const po = f['Custom.PO'] || '';
       const readyDate = f['Custom.ReadyDate'] || null;
       const doneDate = f['Custom.DoneDate'] || null;
+      // Campos de estimativa de tempo (Tasks)
+      const originalEstimate = f['Microsoft.VSTS.Scheduling.OriginalEstimate'] || null;
+      const remainingWork = f['Microsoft.VSTS.Scheduling.RemainingWork'] || null;
+      const completedWork = f['Microsoft.VSTS.Scheduling.CompletedWork'] || null;
+      const parentId = f['System.Parent'] || null;
       const url = `https://dev.azure.com/${CONFIG.AZURE_ORG}/${CONFIG.AZURE_PROJECT}/_workitems/edit/${workItemId}`;
 
       await client.query(`
@@ -243,8 +265,9 @@ async function saveWorkItems(items) {
           created_date, changed_date, closed_date, first_activation_date, story_points, tags,
           priority, code_review_level1, code_review_level2, tipo_cliente, custom_type,
           root_cause_status, squad, area, reincidencia, performance_days, qa, complexity,
-          causa_raiz, created_by, po, ready_date, done_date, url, synced_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33)
+          causa_raiz, root_cause_legacy, created_by, po, ready_date, done_date, url, synced_at,
+          original_estimate, remaining_work, completed_work, parent_id
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38)
         ON CONFLICT (work_item_id) DO UPDATE SET
           title = EXCLUDED.title, state = EXCLUDED.state, type = EXCLUDED.type,
           assigned_to = EXCLUDED.assigned_to, team = EXCLUDED.team, area_path = EXCLUDED.area_path,
@@ -256,15 +279,18 @@ async function saveWorkItems(items) {
           custom_type = EXCLUDED.custom_type, root_cause_status = EXCLUDED.root_cause_status,
           squad = EXCLUDED.squad, area = EXCLUDED.area, reincidencia = EXCLUDED.reincidencia,
           performance_days = EXCLUDED.performance_days, qa = EXCLUDED.qa, complexity = EXCLUDED.complexity,
-          causa_raiz = EXCLUDED.causa_raiz, created_by = EXCLUDED.created_by, po = EXCLUDED.po,
+          causa_raiz = EXCLUDED.causa_raiz, root_cause_legacy = EXCLUDED.root_cause_legacy, created_by = EXCLUDED.created_by, po = EXCLUDED.po,
           ready_date = EXCLUDED.ready_date, done_date = EXCLUDED.done_date, url = EXCLUDED.url,
-          synced_at = EXCLUDED.synced_at
+          synced_at = EXCLUDED.synced_at,
+          original_estimate = EXCLUDED.original_estimate, remaining_work = EXCLUDED.remaining_work,
+          completed_work = EXCLUDED.completed_work, parent_id = EXCLUDED.parent_id
       `, [
         workItemId, title, state, type, assignedTo, team, areaPath, iterationPath,
         createdDate, changedDate, closedDate, firstActivationDate, storyPoints, tags,
         priority, codeReviewLevel1, codeReviewLevel2, tipoCliente, customType,
         rootCauseStatus, squad, area, reincidencia, performanceDays, qa, complexity,
-        causaRaiz, createdBy, po, readyDate, doneDate, url, syncedAt
+        causaRaiz, rootCauseLegacy, createdBy, po, readyDate, doneDate, url, syncedAt,
+        originalEstimate, remainingWork, completedWork, parentId
       ]);
       
       saved++;
@@ -479,7 +505,33 @@ async function main() {
   });
 }
 
-main().catch(err => {
-  console.error('Erro fatal:', err);
+// Função para esperar ENTER antes de fechar (útil no Windows)
+function waitForEnter() {
+  return new Promise((resolve) => {
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout
+    });
+    rl.question('\nPressione ENTER para fechar...', () => {
+      rl.close();
+      resolve();
+    });
+  });
+}
+
+main().catch(async (err) => {
+  console.error('\n❌ Erro fatal:', err.message || err);
+  console.error('\nDetalhes:', err.stack || 'Sem detalhes');
+  console.error('\nVerifique:');
+  console.error('  1. config.json está na mesma pasta do executável');
+  console.error('  2. DATABASE_URL está correta');
+  console.error('  3. AZURE_PAT é válido');
+  console.error('  4. Há conexão de rede com o banco e Azure');
+  
+  // No Windows, espera ENTER antes de fechar
+  if (process.platform === 'win32') {
+    await waitForEnter();
+  }
+  
   process.exit(1);
 });

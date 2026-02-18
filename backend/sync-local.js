@@ -162,7 +162,8 @@ async function saveWorkItems(items) {
       const qaField = f['Custom.QA'];
       const qa = qaField?.displayName || (typeof qaField === 'string' ? qaField : '') || '';
       const complexity = f['Custom.Complexity'] || f['Custom.Complexidade'] || '';
-      const causaRaiz = f['Custom.Raizdoproblema'] || f['Custom.CausaRaiz'] || '';
+      const causaRaiz = f['Custom.Raizdoproblema'] || '';
+      const rootCauseLegacy = f['Microsoft.VSTS.CMMI.RootCause'] || '';
       const createdBy = f['System.CreatedBy']?.displayName || '';
       const po = f['Custom.PO'] || '';
       const readyDate = f['Custom.ReadyDate'] || null;
@@ -186,10 +187,10 @@ async function saveWorkItems(items) {
           created_date, changed_date, closed_date, first_activation_date, story_points, tags,
           priority, code_review_level1, code_review_level2, tipo_cliente, custom_type,
           root_cause_status, squad, area, reincidencia, performance_days, qa, complexity,
-          causa_raiz, created_by, po, ready_date, done_date, url,
+          causa_raiz, root_cause_legacy, created_by, po, ready_date, done_date, url,
           root_cause_task, root_cause_team, root_cause_version, dev, platform, application,
           branch_base, delivered_version, base_version, synced_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43)
         ON CONFLICT (work_item_id) DO UPDATE SET
           title = EXCLUDED.title, state = EXCLUDED.state, type = EXCLUDED.type,
           assigned_to = EXCLUDED.assigned_to, team = EXCLUDED.team, area_path = EXCLUDED.area_path,
@@ -201,7 +202,7 @@ async function saveWorkItems(items) {
           custom_type = EXCLUDED.custom_type, root_cause_status = EXCLUDED.root_cause_status,
           squad = EXCLUDED.squad, area = EXCLUDED.area, reincidencia = EXCLUDED.reincidencia,
           performance_days = EXCLUDED.performance_days, qa = EXCLUDED.qa, complexity = EXCLUDED.complexity,
-          causa_raiz = EXCLUDED.causa_raiz, created_by = EXCLUDED.created_by, po = EXCLUDED.po,
+          causa_raiz = EXCLUDED.causa_raiz, root_cause_legacy = EXCLUDED.root_cause_legacy, created_by = EXCLUDED.created_by, po = EXCLUDED.po,
           ready_date = EXCLUDED.ready_date, done_date = EXCLUDED.done_date, url = EXCLUDED.url,
           root_cause_task = EXCLUDED.root_cause_task, root_cause_team = EXCLUDED.root_cause_team,
           root_cause_version = EXCLUDED.root_cause_version, dev = EXCLUDED.dev, platform = EXCLUDED.platform,
@@ -213,7 +214,7 @@ async function saveWorkItems(items) {
         createdDate, changedDate, closedDate, firstActivationDate, storyPoints, tags,
         priority, codeReviewLevel1, codeReviewLevel2, tipoCliente, customType,
         rootCauseStatus, squad, area, reincidencia, performanceDays, qa, complexity,
-        causaRaiz, createdBy, po, readyDate, doneDate, url,
+        causaRaiz, rootCauseLegacy, createdBy, po, readyDate, doneDate, url,
         rootCauseTask, rootCauseTeam, rootCauseVersion, dev, platform, application,
         branchBase, deliveredVersion, baseVersion, syncedAt
       ]);

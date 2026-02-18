@@ -44,12 +44,17 @@ let pool = null;
 let sql = null;
 
 if (DATABASE_URL) {
+  // Optimized for Vercel serverless environment
   pool = new Pool({
     connectionString: DATABASE_URL,
     // Enable SSL only for cloud providers (Neon/Supabase URLs contain 'neon' or 'supabase')
     ssl: /neon\.tech|supabase\.co/.test(DATABASE_URL) ? { rejectUnauthorized: false } : false,
-    max: 10,
-    idleTimeoutMillis: 30000,
+    // Serverless-friendly settings: smaller pool, faster timeouts
+    max: 2, // Reduced for serverless - Vercel doesn't keep connections alive
+    min: 0,
+    idleTimeoutMillis: 10000, // Close idle connections faster
+    connectionTimeoutMillis: 5000, // Faster connection timeout
+    allowExitOnIdle: true, // Allow pool to close when all connections are idle
   });
 
   // Tagged template literal function compatible with Neon's sql`...` API
@@ -62,7 +67,7 @@ if (DATABASE_URL) {
     return result.rows;
   };
 
-  console.log('✅ Database connection pool configured');
+  console.log('✅ Database connection pool configured (serverless-optimized)');
 } else {
   console.log('⚠️ No DATABASE_URL — database features disabled');
 }
@@ -174,6 +179,7 @@ const initDatabase = async () => {
         qa TEXT,
         complexity TEXT,
         causa_raiz TEXT,
+        root_cause_legacy TEXT,
         created_by TEXT,
         po TEXT,
         ready_date TEXT,
@@ -383,7 +389,8 @@ async function syncData() {
         const reincidencia = fields['Custom.REINCIDENCIA'] || fields['Custom.Reincidencia'] || fields['Custom.Reincidência'] || '';
         const performanceDays = fields['Custom.PerformanceDays'] || fields['Custom.DiasPerformance'] || '';
         const qa = fields['Custom.QA'] || '';
-        const causaRaiz = fields['Custom.Raizdoproblema'] || fields['Custom.CausaRaiz'] || fields['Custom.RootCause'] || '';
+        const causaRaiz = fields['Custom.Raizdoproblema'] || '';
+        const rootCauseLegacy = fields['Microsoft.VSTS.CMMI.RootCause'] || '';
         const createdBy = fields['System.CreatedBy']?.displayName || '';
         const po = fields['Custom.PO'] || fields['Custom.ProductOwner'] || '';
         const readyDate = fields['Custom.ReadyDate'] || '';
@@ -404,12 +411,12 @@ async function syncData() {
           INSERT INTO work_items (work_item_id, title, state, type, assigned_to, team, area_path, iteration_path,
             created_date, changed_date, closed_date, story_points, tags, tipo_cliente, priority, url, first_activation_date,
             code_review_level1, code_review_level2, custom_type, root_cause_status, squad, area, complexity,
-            reincidencia, performance_days, qa, causa_raiz, created_by, po, ready_date, done_date,
+            reincidencia, performance_days, qa, causa_raiz, root_cause_legacy, created_by, po, ready_date, done_date,
             root_cause_task, root_cause_team, root_cause_version, dev, platform, application, branch_base, delivered_version, base_version, synced_at)
           VALUES (${workItemId}, ${title}, ${state}, ${type}, ${assignedTo}, ${team}, ${areaPath}, ${iterationPath},
             ${createdDate}, ${changedDate}, ${closedDate}, ${storyPoints}, ${tags}, ${tipoCliente}, ${priority}, ${url}, ${activatedDate || null},
             ${codeReviewLevel1}, ${codeReviewLevel2}, ${customType}, ${rootCauseStatus}, ${squad}, ${area}, ${complexity},
-            ${reincidencia}, ${performanceDays}, ${qa}, ${causaRaiz}, ${createdBy}, ${po}, ${readyDate}, ${doneDate},
+            ${reincidencia}, ${performanceDays}, ${qa}, ${causaRaiz}, ${rootCauseLegacy}, ${createdBy}, ${po}, ${readyDate}, ${doneDate},
             ${rootCauseTask}, ${rootCauseTeam}, ${rootCauseVersion}, ${dev}, ${platform}, ${application}, ${branchBase}, ${deliveredVersion}, ${baseVersion}, ${new Date().toISOString()})
           ON CONFLICT (work_item_id) DO UPDATE SET
             title = EXCLUDED.title, state = EXCLUDED.state, type = EXCLUDED.type, assigned_to = EXCLUDED.assigned_to,
@@ -429,6 +436,7 @@ async function syncData() {
             performance_days = EXCLUDED.performance_days,
             qa = EXCLUDED.qa,
             causa_raiz = EXCLUDED.causa_raiz,
+            root_cause_legacy = EXCLUDED.root_cause_legacy,
             created_by = EXCLUDED.created_by,
             po = EXCLUDED.po,
             ready_date = EXCLUDED.ready_date,
@@ -900,6 +908,7 @@ app.get('/api/items', authenticateToken, async (req, res) => {
         qa: row.qa,
         complexity: row.complexity,
         causaRaiz: row.causa_raiz,
+        rootCauseLegacy: row.root_cause_legacy,
         createdBy: row.created_by,
         po: row.po,
         readyDate: row.ready_date,
@@ -913,7 +922,12 @@ app.get('/api/items', authenticateToken, async (req, res) => {
         application: row.application,
         branchBase: row.branch_base,
         deliveredVersion: row.delivered_version,
-        baseVersion: row.base_version
+        baseVersion: row.base_version,
+        // Campos de estimativa de tempo (Tasks)
+        originalEstimate: row.original_estimate,
+        remainingWork: row.remaining_work,
+        completedWork: row.completed_work,
+        parentId: row.parent_id
       };
     });
 
