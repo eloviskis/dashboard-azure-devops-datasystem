@@ -150,6 +150,12 @@ const DOCUMENTATION: DocSection[] = [
         formula: 'AVG(cycleTime) WHERE type = Bug',
         fields: ['type', 'cycleTime'],
         interpretation: 'Agilidade na correção de defeitos.'
+      },
+      {
+        name: 'Top Pessoas com Reincidência',
+        formula: 'Soma do valor do campo reincidência para bugs da pessoa / Total de bugs da pessoa',
+        fields: ['type = Bug', 'reincidencia (Custom.REINCIDENCIA)', 'assignedTo'],
+        interpretation: 'Ranking de bugs com reincidência. Ordena por soma total de reincidências. Mostra: total de reincidências (soma), número de bugs com reincidência, e taxa percentual. Considera apenas BUGS, não todos os work items.'
       }
     ]
   },
@@ -283,7 +289,7 @@ const DOCUMENTATION: DocSection[] = [
   {
     id: 'rootcause',
     title: '🔍 Root Cause (Issues)',
-    description: 'Análise de causa raiz para Issues de Correção, identificando padrões e origem dos bugs.',
+    description: 'Análise de causa raiz para Issues de Correção, identificando padrões e origem dos bugs. Utiliza campos customizados específicos para rastreamento de problemas.',
     metrics: [
       {
         name: 'Issues por Tipo (Correção/Alteração)',
@@ -294,7 +300,7 @@ const DOCUMENTATION: DocSection[] = [
       {
         name: 'P0 por Causa Raiz',
         formula: 'COUNT(P0) GROUP BY causaRaiz',
-        fields: ['priority = 0', 'causaRaiz (Custom.CausaRaiz)'],
+        fields: ['priority = 0', 'causaRaiz (Custom.Raizdoproblema)'],
         interpretation: 'Áreas que mais geram problemas críticos.'
       },
       {
@@ -329,15 +335,27 @@ const DOCUMENTATION: DocSection[] = [
       },
       {
         name: 'Reincidência',
-        formula: 'COUNT(issues) GROUP BY reincidencia',
-        fields: ['reincidencia (Custom.REINCIDENCIA)'],
-        interpretation: 'Problemas recorrentes (1x, 2x, 3x...).'
+        formula: 'SUM(reincidencia) GROUP BY valor',
+        fields: ['reincidencia (Custom.REINCIDENCIA) - valor numérico'],
+        interpretation: 'Problemas recorrentes. Campo indica quantas vezes o problema ocorreu (1x, 2x, 3x...).'
       },
       {
         name: 'Issues Sem Causa Raiz',
         formula: 'COUNT(issues WHERE causaRaiz IS NULL OR causaRaiz = "")',
-        fields: ['causaRaiz'],
+        fields: ['causaRaiz (Custom.Raizdoproblema)'],
         interpretation: 'Correções sem análise de causa raiz preenchida.'
+      },
+      {
+        name: 'Identificação da Falha',
+        formula: 'COUNT(issues) GROUP BY identificacao',
+        fields: ['identificacao (Custom.7ac99842-e0ec-4f18-b91b-53bfe3e3b3f5)'],
+        interpretation: 'Como o problema foi identificado (Cliente, QA, Desenvolvimento, etc).'
+      },
+      {
+        name: 'Falha do Processo',
+        formula: 'COUNT(issues) GROUP BY falhaDoProcesso',
+        fields: ['falhaDoProcesso (Custom.Falhadoprocesso)'],
+        interpretation: 'Em qual etapa do processo a falha ocorreu.'
       }
     ]
   },
@@ -388,7 +406,7 @@ const DOCUMENTATION: DocSection[] = [
   {
     id: 'po-analysis',
     title: '📝 Análise de Demanda',
-    description: 'Visão do fluxo de entrada de demandas e análise para Product Owners.',
+    description: 'Visão do fluxo de entrada de demandas e análise para Product Owners. Inclui tracking de DOR (Definition of Ready) e DOD (Definition of Done).',
     metrics: [
       {
         name: 'Itens Criados vs Fechados',
@@ -401,6 +419,18 @@ const DOCUMENTATION: DocSection[] = [
         formula: 'COUNT(itens criados) GROUP BY type',
         fields: ['type', 'createdDate'],
         interpretation: 'Mix de demandas entrando.'
+      },
+      {
+        name: 'Itens com/sem DOR',
+        formula: 'COUNT(itens WHERE readyDate IS NOT NULL) vs COUNT(itens WHERE readyDate IS NULL)',
+        fields: ['readyDate (Custom.DOR) - data que o item ficou pronto para desenvolvimento'],
+        interpretation: 'Itens com Definition of Ready preenchida. Indica qualidade da preparação da demanda.'
+      },
+      {
+        name: 'Itens com/sem DOD',
+        formula: 'COUNT(itens WHERE doneDate IS NOT NULL) vs COUNT(itens WHERE doneDate IS NULL)',
+        fields: ['doneDate (Custom.DOD) - data que o item foi considerado "pronto"'],
+        interpretation: 'Itens que atingiram Definition of Done. Indica conclusão completa.'
       }
     ]
   },
@@ -551,8 +581,16 @@ const AZURE_FIELDS_REFERENCE = [
   { field: 'Custom.rootcauseteam', description: 'Time que causou o bug', example: 'Legado' },
   { field: 'Custom.Rootcausetask', description: 'ID da tarefa origem', example: '71142' },
   { field: 'Custom.rootcauseversion', description: 'Versão com o bug', example: '3.51.6.6' },
-  { field: 'Custom.REINCIDENCIA', description: 'Número de reincidências', example: '2' },
-  { field: 'Custom.CausaRaiz', description: 'Descrição da causa raiz', example: 'Falta de validação' },
+  { field: 'Custom.REINCIDENCIA', description: 'Número de reincidências (valor numérico)', example: '2' },
+  { field: 'Custom.Raizdoproblema', description: 'Descrição da causa raiz', example: 'Falta de validação' },
+  { field: 'Custom.DOR', description: 'Definition of Ready - data que item ficou pronto para dev', example: '2026-01-18T10:00:00Z' },
+  { field: 'Custom.DOD', description: 'Definition of Done - data de conclusão completa', example: '2026-02-05T16:00:00Z' },
+  { field: 'Custom.7ac99842-e0ec-4f18-b91b-53bfe3e3b3f5', description: 'Identificação da falha (como foi descoberta)', example: 'Cliente, QA, Desenvolvimento' },
+  { field: 'Custom.Falhadoprocesso', description: 'Falha do processo (etapa onde ocorreu)', example: 'Desenvolvimento, Code Review, QA' },
+  { field: 'Custom.ab075d4c-04f5-4f96-b294-4ad0f5987028', description: 'Code Review - Nível 1', example: 'João Silva' },
+  { field: 'Custom.60cee051-7e66-4753-99d6-4bc8717fae0e', description: 'Code Review - Nível 2', example: 'Maria Costa' },
+  { field: 'Custom.PO', description: 'Product Owner responsável', example: 'Ana Souza' },
+  { field: 'Custom.EntryDate', description: 'Data de entrada no sistema', example: '2026-01-10T08:00:00Z' },
 ];
 
 const DocumentationDashboard: React.FC = () => {
