@@ -43,7 +43,7 @@ const ThroughputBreakdownChart: React.FC<ThroughputBreakdownChartProps> = ({ dat
           itemStyle={{ color: '#e6f1ff' }}
           formatter={(value: number) => [value, 'Itens Concluídos']}
         />
-        <Bar dataKey="value" name="Itens Concluídos" fill={groupBy === 'assignedTo' ? CHART_COLORS.primary : CHART_COLORS.secondary} label={{ position: 'top', fill: groupBy === 'assignedTo' ? CHART_COLORS.primary : CHART_COLORS.secondary, fontSize: 10, fontWeight: 'bold' }} />
+        <Bar dataKey="value" name="Itens Concluídos" fill={groupBy === 'assignedTo' ? CHART_COLORS.primary : CHART_COLORS.secondary} label={{ position: 'right', fill: groupBy === 'assignedTo' ? CHART_COLORS.primary : CHART_COLORS.secondary, fontSize: 10, fontWeight: 'bold' }} />
       </BarChart>
     </ResponsiveContainer>
   );
