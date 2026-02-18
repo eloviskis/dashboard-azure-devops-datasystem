@@ -134,6 +134,18 @@ const DOCUMENTATION: DocSection[] = [
     description: 'Indicadores de qualidade do código e processos, incluindo bugs e retrabalho.',
     metrics: [
       {
+        name: 'Bugs vs Issues (Gráfico Comparativo)',
+        formula: 'COUNT(type = Bug) vs COUNT(type = Issue)',
+        fields: ['type = Bug (erros em desenvolvimento)', 'type = Issue (erros em produção)'],
+        interpretation: '🔍 Bug = erro detectado EM DESENVOLVIMENTO (não chegou ao cliente). Issue = erro que ESCAPOU PARA PRODUÇÃO (impactou o cliente). O gráfico mostra quantos erros foram detectados antes vs depois de ir para produção.'
+      },
+      {
+        name: 'Taxa de Detecção',
+        formula: '(Bugs / (Bugs + Issues)) × 100',
+        fields: ['type = Bug', 'type = Issue'],
+        interpretation: 'Percentual de erros detectados em desenvolvimento. Quanto MAIOR, MELHOR o processo de QA. >70% = excelente, 50-70% = bom, <50% = muitos erros escapando para produção.'
+      },
+      {
         name: 'Taxa de Bugs',
         formula: '(bugs fechados / total itens fechados) × 100',
         fields: ['type = Bug', 'closedDate'],
@@ -748,6 +760,18 @@ const DocumentationDashboard: React.FC = () => {
       <div className="bg-ds-navy rounded-lg border border-ds-border p-4">
         <h2 className="text-xl font-bold text-white mb-4">📚 Glossário</h2>
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="bg-ds-dark-blue p-3 rounded border-l-4 border-yellow-400">
+            <h4 className="font-bold text-yellow-400">🐛 Bug</h4>
+            <p className="text-ds-text text-sm">Erro detectado <strong>EM DESENVOLVIMENTO</strong>, antes de ir para produção. Não impactou o cliente final. Indica que o processo de QA está funcionando.</p>
+          </div>
+          <div className="bg-ds-dark-blue p-3 rounded border-l-4 border-red-400">
+            <h4 className="font-bold text-red-400">⚠️ Issue</h4>
+            <p className="text-ds-text text-sm">Erro que <strong>ESCAPOU PARA PRODUÇÃO</strong> e impactou o cliente. Mais grave que Bug, pois chegou ao usuário final. Pode ter reincidência.</p>
+          </div>
+          <div className="bg-ds-dark-blue p-3 rounded border-l-4 border-orange-400">
+            <h4 className="font-bold text-orange-400">🔄 Reincidência</h4>
+            <p className="text-ds-text text-sm">Issue (erro em produção) que voltou a acontecer. Indica problema não resolvido completamente. Campo exclusivo de Issues.</p>
+          </div>
           <div className="bg-ds-dark-blue p-3 rounded">
             <h4 className="font-bold text-ds-green">Cycle Time</h4>
             <p className="text-ds-text text-sm">Tempo desde o início do trabalho (ativação) até a conclusão. Mede velocidade de desenvolvimento.</p>
