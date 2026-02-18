@@ -51,14 +51,14 @@ const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data }) => {
       .sort((a, b) => b.reworkRate - a.reworkRate);
 
     // Por pessoa (top reincidentes)
-    const personRework: Record<string, { reincidences: number; team: string; bugs: number; totalReincidenceValue: number }> = {};
+    const personRework: Record<string, { reincidences: number; team: string; issues: number; totalReincidenceValue: number }> = {};
     data.forEach(item => {
       const person = item.assignedTo || 'Não Atribuído';
-      if (!personRework[person]) personRework[person] = { reincidences: 0, team: item.team || 'Sem Time', bugs: 0, totalReincidenceValue: 0 };
+      if (!personRework[person]) personRework[person] = { reincidences: 0, team: item.team || 'Sem Time', issues: 0, totalReincidenceValue: 0 };
       
-      // Contar apenas bugs
-      if (item.type === 'Bug') {
-        personRework[person].bugs++;
+      // Contar apenas Issues (onde o campo reincidência é usado)
+      if (item.type === 'Issue') {
+        personRework[person].issues++;
         
         // Se tem campo reincidencia preenchido
         const reincValue = Number(item.reincidencia);
@@ -70,11 +70,11 @@ const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data }) => {
     });
 
     const personData = Object.entries(personRework)
-      .filter(([_, d]) => d.bugs > 0 && d.reincidences > 0)
+      .filter(([_, d]) => d.issues > 0 && d.reincidences > 0)
       .map(([person, d]) => ({ 
         person, 
         ...d, 
-        rate: Math.round((d.reincidences / d.bugs) * 1000) / 10 
+        rate: Math.round((d.reincidences / d.issues) * 1000) / 10 
       }))
       .sort((a, b) => b.totalReincidenceValue - a.totalReincidenceValue)
       .slice(0, 10);
@@ -154,7 +154,7 @@ const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data }) => {
                   </div>
                   <div className="text-right">
                     <p className="text-orange-400 font-bold">{p.totalReincidenceValue} reincidências</p>
-                    <p className="text-ds-text text-xs">{p.reincidences} bugs ({p.rate}%)</p>
+                    <p className="text-ds-text text-xs">{p.reincidences} issues ({p.rate}%)</p>
                   </div>
                 </div>
               ))}
