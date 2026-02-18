@@ -154,12 +154,12 @@ const TeamPerformanceBarChart: React.FC<TeamPerformanceBarChartProps> = ({ data 
             formatter={(value: number, name: string) => [value, `${name} (clique para ver)`]}
           />
           <Legend />
-          <Bar dataKey="completed" name="Concluídos" fill={CHART_COLORS.primary} cursor="pointer">
+          <Bar dataKey="completed" name="Concluídos" fill={CHART_COLORS.primary} cursor="pointer" label={{ position: 'top', fill: CHART_COLORS.primary, fontSize: 10, fontWeight: 'bold' }}>
             {chartData.map((entry, index) => (
               <Cell key={`completed-${index}`} onClick={() => handleCompletedClick(entry)} />
             ))}
           </Bar>
-          <Bar dataKey="inProgress" name="Em Progresso" fill={CHART_COLORS.secondary} cursor="pointer">
+          <Bar dataKey="inProgress" name="Em Progresso" fill={CHART_COLORS.secondary} cursor="pointer" label={{ position: 'top', fill: CHART_COLORS.secondary, fontSize: 10, fontWeight: 'bold' }}>
             {chartData.map((entry, index) => (
               <Cell key={`inprogress-${index}`} onClick={() => handleInProgressClick(entry)} />
             ))}

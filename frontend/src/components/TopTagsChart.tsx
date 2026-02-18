@@ -142,7 +142,7 @@ const TopTagsChart: React.FC<TopTagsChartProps> = ({ data }) => {
             itemStyle={{ color: '#e6f1ff' }}
             formatter={(value: number) => [value, 'Tags (clique para ver)']}
           />
-          <Bar dataKey="value" name="Ocorrências" fill={CHART_COLORS.primary} cursor="pointer">
+          <Bar dataKey="value" name="Ocorrências" fill={CHART_COLORS.primary} cursor="pointer" label={{ position: 'top', fill: CHART_COLORS.primary, fontSize: 10, fontWeight: 'bold' }}>
             {chartData.map((entry, index) => (
               <Cell key={`cell-${index}`} onClick={() => handleClick(entry)} />
             ))}

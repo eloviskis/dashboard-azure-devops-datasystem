@@ -51,8 +51,8 @@ const ClientThroughputChart: React.FC<ClientThroughputChartProps> = ({ data }) =
           itemStyle={{ color: '#e6f1ff' }}
         />
         <Legend />
-        <Bar dataKey="completed" name="Concluídos" fill={CHART_COLORS.primary} />
-        <Bar dataKey="inProgress" name="Em Progresso" fill={CHART_COLORS.secondary} />
+        <Bar dataKey="completed" name="Concluídos" fill={CHART_COLORS.primary} label={{ position: 'top', fill: CHART_COLORS.primary, fontSize: 10, fontWeight: 'bold' }} />
+        <Bar dataKey="inProgress" name="Em Progresso" fill={CHART_COLORS.secondary} label={{ position: 'top', fill: CHART_COLORS.secondary, fontSize: 10, fontWeight: 'bold' }} />
       </BarChart>
     </ResponsiveContainer>
   );
