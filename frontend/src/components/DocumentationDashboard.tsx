@@ -153,9 +153,9 @@ const DOCUMENTATION: DocSection[] = [
       },
       {
         name: 'Top Pessoas com Reincidência',
-        formula: 'Soma do valor do campo reincidência para bugs da pessoa / Total de bugs da pessoa',
-        fields: ['type = Bug', 'reincidencia (Custom.REINCIDENCIA)', 'assignedTo'],
-        interpretation: 'Ranking de bugs com reincidência. Ordena por soma total de reincidências. Mostra: total de reincidências (soma), número de bugs com reincidência, e taxa percentual. Considera apenas BUGS, não todos os work items.'
+        formula: 'Soma do valor do campo reincidência para issues da pessoa / Total de issues da pessoa',
+        fields: ['type = Issue', 'reincidencia (Custom.REINCIDENCIA)', 'assignedTo'],
+        interpretation: 'Ranking de issues com reincidência. Ordena por soma total de reincidências. Mostra: total de reincidências (soma), número de issues com reincidência, e taxa percentual. Considera apenas ISSUES, onde o campo reincidência é utilizado no Azure DevOps.'
       }
     ]
   },
