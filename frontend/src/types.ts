@@ -50,7 +50,8 @@ export interface WorkItem {
   reincidencia?: number | string | null;
   performanceDays?: number | string | null;
   qa?: string | null;
-  causaRaiz?: string | null;
+  causaRaiz?: string | null;           // Custom.Raizdoproblema (campo novo)
+  rootCauseLegacy?: string | null;     // Microsoft.VSTS.CMMI.RootCause (campo antigo)
   createdBy?: string | null;
   po?: string | null;
   readyDate?: string | Date | null;
@@ -65,6 +66,14 @@ export interface WorkItem {
   branchBase?: string | null;       // Branch base
   deliveredVersion?: string | null; // Versão entregue
   baseVersion?: string | null;      // Versão base
+  // Campos de Identificação e Falha do Processo
+  identificacao?: string | null;    // Custom.7ac99842... - Quem identificou (Cliente, Interno, etc)
+  falhaDoProcesso?: string | null;  // Custom.Falhadoprocesso - Por que o problema ocorreu
+  // Campos de estimativa de tempo (Tasks)
+  originalEstimate?: number | null; // Estimativa original em horas
+  remainingWork?: number | null;    // Trabalho restante em horas
+  completedWork?: number | null;    // Trabalho completado em horas
+  parentId?: number | null;         // ID do item pai (User Story/Issue)
   [key: string]: any;
 }
 

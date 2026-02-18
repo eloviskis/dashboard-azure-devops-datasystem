@@ -192,7 +192,9 @@ const initDatabase = async () => {
         application TEXT,
         branch_base TEXT,
         delivered_version TEXT,
-        base_version TEXT
+        base_version TEXT,
+        identificacao TEXT,
+        falha_do_processo TEXT
       )
     `;
     console.log('✅ work_items table ready');
@@ -406,18 +408,23 @@ async function syncData() {
         const branchBase = fields['Custom.BranchBase'] || '';
         const deliveredVersion = fields['Custom.DeliveredVersion'] || '';
         const baseVersion = fields['Custom.BaseVersion'] || '';
+        // Campos de Identificação e Falha do Processo
+        const identificacao = fields['Custom.7ac99842-e0ec-4f18-b91b-53bfe3e3b3f5'] || '';
+        const falhaDoProcesso = fields['Custom.Falhadoprocesso'] || '';
 
         await sql`
           INSERT INTO work_items (work_item_id, title, state, type, assigned_to, team, area_path, iteration_path,
             created_date, changed_date, closed_date, story_points, tags, tipo_cliente, priority, url, first_activation_date,
             code_review_level1, code_review_level2, custom_type, root_cause_status, squad, area, complexity,
             reincidencia, performance_days, qa, causa_raiz, root_cause_legacy, created_by, po, ready_date, done_date,
-            root_cause_task, root_cause_team, root_cause_version, dev, platform, application, branch_base, delivered_version, base_version, synced_at)
+            root_cause_task, root_cause_team, root_cause_version, dev, platform, application, branch_base, delivered_version, base_version,
+            identificacao, falha_do_processo, synced_at)
           VALUES (${workItemId}, ${title}, ${state}, ${type}, ${assignedTo}, ${team}, ${areaPath}, ${iterationPath},
             ${createdDate}, ${changedDate}, ${closedDate}, ${storyPoints}, ${tags}, ${tipoCliente}, ${priority}, ${url}, ${activatedDate || null},
             ${codeReviewLevel1}, ${codeReviewLevel2}, ${customType}, ${rootCauseStatus}, ${squad}, ${area}, ${complexity},
             ${reincidencia}, ${performanceDays}, ${qa}, ${causaRaiz}, ${rootCauseLegacy}, ${createdBy}, ${po}, ${readyDate}, ${doneDate},
-            ${rootCauseTask}, ${rootCauseTeam}, ${rootCauseVersion}, ${dev}, ${platform}, ${application}, ${branchBase}, ${deliveredVersion}, ${baseVersion}, ${new Date().toISOString()})
+            ${rootCauseTask}, ${rootCauseTeam}, ${rootCauseVersion}, ${dev}, ${platform}, ${application}, ${branchBase}, ${deliveredVersion}, ${baseVersion},
+            ${identificacao}, ${falhaDoProcesso}, ${new Date().toISOString()})
           ON CONFLICT (work_item_id) DO UPDATE SET
             title = EXCLUDED.title, state = EXCLUDED.state, type = EXCLUDED.type, assigned_to = EXCLUDED.assigned_to,
             team = EXCLUDED.team, area_path = EXCLUDED.area_path, iteration_path = EXCLUDED.iteration_path,
@@ -450,6 +457,8 @@ async function syncData() {
             branch_base = EXCLUDED.branch_base,
             delivered_version = EXCLUDED.delivered_version,
             base_version = EXCLUDED.base_version,
+            identificacao = EXCLUDED.identificacao,
+            falha_do_processo = EXCLUDED.falha_do_processo,
             synced_at = EXCLUDED.synced_at
         `;
       }
@@ -862,6 +871,41 @@ app.get('/health', async (req, res) => {
   });
 });
 
+// Public database connection test endpoint (no auth required)
+app.get('/api/test-db', async (req, res) => {
+  if (!pool) {
+    return res.status(500).json({
+      success: false,
+      error: 'Database not configured',
+      message: 'DATABASE_URL environment variable is not set'
+    });
+  }
+
+  try {
+    const start = Date.now();
+    const result = await pool.query('SELECT NOW() as time, version() as version, current_database() as database');
+    const duration = Date.now() - start;
+    
+    res.json({ 
+      success: true,
+      connection: 'OK',
+      duration: `${duration}ms`,
+      server_time: result.rows[0].time,
+      database: result.rows[0].database,
+      version: result.rows[0].version.split(' ')[0] + ' ' + result.rows[0].version.split(' ')[1],
+      environment: process.env.VERCEL ? 'Vercel Serverless' : 'Local/VPS'
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      success: false,
+      error: error.message,
+      code: error.code,
+      detail: error.detail || 'Connection failed',
+      hint: 'Check VPS firewall, PostgreSQL configuration (listen_addresses, pg_hba.conf), and DATABASE_URL'
+    });
+  }
+});
+
 app.get('/api/items', authenticateToken, async (req, res) => {
   try {
     console.log('📊 GET /api/items - Fetching work items...');
@@ -927,7 +971,10 @@ app.get('/api/items', authenticateToken, async (req, res) => {
         originalEstimate: row.original_estimate,
         remainingWork: row.remaining_work,
         completedWork: row.completed_work,
-        parentId: row.parent_id
+        parentId: row.parent_id,
+        // Campos de Identificação e Falha do Processo
+        identificacao: row.identificacao,
+        falhaDoProcesso: row.falha_do_processo
       };
     });
 
@@ -995,7 +1042,10 @@ app.get('/api/items/period/:days', authenticateToken, async (req, res) => {
       application: row.application,
       branchBase: row.branch_base,
       deliveredVersion: row.delivered_version,
-      baseVersion: row.base_version
+      baseVersion: row.base_version,
+      // Campos de Identificação e Falha do Processo
+      identificacao: row.identificacao,
+      falhaDoProcesso: row.falha_do_processo
     }));
 
     res.json(items);
@@ -1006,22 +1056,66 @@ app.get('/api/items/period/:days', authenticateToken, async (req, res) => {
 
 app.get('/api/sync/status', authenticateToken, async (req, res) => {
   try {
-    // Primeiro tenta buscar o último sync bem-sucedido
-    let rows = await sql`SELECT * FROM sync_log WHERE status = 'success' ORDER BY sync_time DESC LIMIT 1`;
+    // Estratégia híbrida: verifica sync_log E última atualização dos dados reais
     
-    // Se houver sucesso e for recente (últimas 24h), usa ele
-    if (rows && rows.length > 0) {
-      const syncDate = new Date(rows[0].sync_time);
-      const hoursAgo = (Date.now() - syncDate.getTime()) / (1000 * 60 * 60);
+    // 1. Tenta buscar do sync_log (sincronização via API)
+    let syncLogRows = await sql`SELECT * FROM sync_log WHERE status = 'success' ORDER BY sync_time DESC LIMIT 1`;
+    
+    // 2. Verifica última atualização real dos work_items (sincronização externa)
+    const dataCheckRows = await sql`
+      SELECT 
+        MAX(changed_date) as last_update,
+        COUNT(*) as total_items
+      FROM work_items
+    `;
+    
+    const lastDataUpdate = dataCheckRows && dataCheckRows.length > 0 ? dataCheckRows[0] : null;
+    
+    // Se temos dados no banco
+    if (lastDataUpdate && lastDataUpdate.total_items > 0) {
+      const lastUpdateDate = new Date(lastDataUpdate.last_update);
+      const hoursAgo = (Date.now() - lastUpdateDate.getTime()) / (1000 * 60 * 60);
+      
+      // Se os dados foram atualizados recentemente (< 2 horas), consideramos sincronizado
+      if (hoursAgo <= 2) {
+        return res.json({
+          status: 'success',
+          sync_time: lastDataUpdate.last_update,
+          work_items: lastDataUpdate.total_items,
+          message: 'Dados sincronizados externamente',
+          source: 'external_sync'
+        });
+      }
+      
+      // Se tem dados mas já estão antigos (> 2 horas mas < 24 horas)
       if (hoursAgo <= 24) {
-        return res.json(rows[0]);
+        return res.json({
+          status: 'warning',
+          sync_time: lastDataUpdate.last_update,
+          work_items: lastDataUpdate.total_items,
+          message: `Dados com ${Math.round(hoursAgo)}h de atraso`,
+          source: 'external_sync_old'
+        });
       }
     }
     
-    // Se não houver sucesso recente, retorna o mais recente (qualquer status)
-    rows = await sql`SELECT * FROM sync_log ORDER BY sync_time DESC LIMIT 1`;
-    res.json(rows[0] || { status: 'No sync yet', syncTime: new Date().toISOString() });
+    // 3. Fallback para sync_log se houver
+    if (syncLogRows && syncLogRows.length > 0) {
+      const syncDate = new Date(syncLogRows[0].sync_time);
+      const hoursAgo = (Date.now() - syncDate.getTime()) / (1000 * 60 * 60);
+      if (hoursAgo <= 24) {
+        return res.json(syncLogRows[0]);
+      }
+    }
+    
+    // 4. Sem dados recentes
+    res.json({ 
+      status: 'error', 
+      sync_time: new Date().toISOString(),
+      message: 'Nenhuma sincronização recente encontrada'
+    });
   } catch (err) {
+    console.error('Error in /api/sync/status:', err);
     res.status(500).json({ error: 'Failed to fetch sync status' });
   }
 });

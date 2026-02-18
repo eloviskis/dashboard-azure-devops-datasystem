@@ -252,6 +252,9 @@ async function saveWorkItems(items) {
       const po = f['Custom.PO'] || '';
       const readyDate = f['Custom.ReadyDate'] || null;
       const doneDate = f['Custom.DoneDate'] || null;
+      // Campos de identificação e falha do processo
+      const identificacao = f['Custom.7ac99842-e0ec-4f18-b91b-53bfe3e3b3f5'] || '';
+      const falhaDoProcesso = f['Custom.Falhadoprocesso'] || '';
       // Campos de estimativa de tempo (Tasks)
       const originalEstimate = f['Microsoft.VSTS.Scheduling.OriginalEstimate'] || null;
       const remainingWork = f['Microsoft.VSTS.Scheduling.RemainingWork'] || null;
@@ -266,8 +269,8 @@ async function saveWorkItems(items) {
           priority, code_review_level1, code_review_level2, tipo_cliente, custom_type,
           root_cause_status, squad, area, reincidencia, performance_days, qa, complexity,
           causa_raiz, root_cause_legacy, created_by, po, ready_date, done_date, url, synced_at,
-          original_estimate, remaining_work, completed_work, parent_id
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38)
+          original_estimate, remaining_work, completed_work, parent_id, identificacao, falha_do_processo
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40)
         ON CONFLICT (work_item_id) DO UPDATE SET
           title = EXCLUDED.title, state = EXCLUDED.state, type = EXCLUDED.type,
           assigned_to = EXCLUDED.assigned_to, team = EXCLUDED.team, area_path = EXCLUDED.area_path,
@@ -283,14 +286,15 @@ async function saveWorkItems(items) {
           ready_date = EXCLUDED.ready_date, done_date = EXCLUDED.done_date, url = EXCLUDED.url,
           synced_at = EXCLUDED.synced_at,
           original_estimate = EXCLUDED.original_estimate, remaining_work = EXCLUDED.remaining_work,
-          completed_work = EXCLUDED.completed_work, parent_id = EXCLUDED.parent_id
+          completed_work = EXCLUDED.completed_work, parent_id = EXCLUDED.parent_id,
+          identificacao = EXCLUDED.identificacao, falha_do_processo = EXCLUDED.falha_do_processo
       `, [
         workItemId, title, state, type, assignedTo, team, areaPath, iterationPath,
         createdDate, changedDate, closedDate, firstActivationDate, storyPoints, tags,
         priority, codeReviewLevel1, codeReviewLevel2, tipoCliente, customType,
         rootCauseStatus, squad, area, reincidencia, performanceDays, qa, complexity,
         causaRaiz, rootCauseLegacy, createdBy, po, readyDate, doneDate, url, syncedAt,
-        originalEstimate, remainingWork, completedWork, parentId
+        originalEstimate, remainingWork, completedWork, parentId, identificacao, falhaDoProcesso
       ]);
       
       saved++;
