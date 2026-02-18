@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell } from 'recharts';
 import { WorkItem } from '../types';
 import { CHART_COLORS } from '../constants';
@@ -7,9 +7,103 @@ interface ReworkAnalysisChartProps {
   data: WorkItem[];
 }
 
+interface ModalData {
+  title: string;
+  items: WorkItem[];
+  color: string;
+}
+
 const COMPLETED_STATES = ['Done', 'Concluído', 'Closed', 'Fechado', 'Finished', 'Resolved', 'Pronto'];
+const AZURE_DEVOPS_BASE_URL = 'https://dev.azure.com/datasystemsoftwares/USE/_workitems/edit';
+
+// Helper para gerar URL do work item
+const getWorkItemUrl = (workItemId: number | string): string => {
+  return `${AZURE_DEVOPS_BASE_URL}/${workItemId}`;
+};
+
+// Componente do Modal
+const ItemListModal: React.FC<{ data: ModalData | null; onClose: () => void }> = ({ data, onClose }) => {
+  if (!data) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50" onClick={onClose}>
+      <div 
+        className="bg-ds-navy border border-ds-border rounded-lg shadow-2xl max-w-4xl w-full mx-4 max-h-[80vh] flex flex-col"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="p-4 rounded-t-lg flex justify-between items-center" style={{ backgroundColor: data.color }}>
+          <h2 className="text-white font-bold text-lg">{data.title}</h2>
+          <button
+            onClick={onClose}
+            className="text-white hover:text-gray-200 text-2xl font-bold leading-none"
+          >
+            ×
+          </button>
+        </div>
+        
+        {/* Content */}
+        <div className="p-4 overflow-y-auto flex-1">
+          <div className="text-ds-text mb-3 text-sm">
+            Total: <span className="font-bold text-white">{data.items.length}</span> itens
+          </div>
+          
+          {data.items.length === 0 ? (
+            <div className="text-ds-text text-center py-8">Nenhum item encontrado</div>
+          ) : (
+            <ul className="space-y-2">
+              {data.items.map((item, idx) => (
+                <li 
+                  key={item.workItemId || idx}
+                  className="bg-ds-dark-blue border border-ds-border rounded-lg p-3 hover:border-ds-green transition-colors"
+                >
+                  <div className="flex items-start gap-3">
+                    <span className="text-xs font-mono px-2 py-1 rounded bg-blue-600 text-white">
+                      #{item.workItemId}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <a 
+                        href={getWorkItemUrl(item.workItemId)} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-white hover:text-ds-green font-medium block truncate"
+                        title={item.title}
+                      >
+                        {item.title}
+                      </a>
+                      <div className="flex gap-4 mt-1 text-xs text-ds-text flex-wrap">
+                        <span>👤 {item.assignedTo || 'Não atribuído'}</span>
+                        <span>📊 {item.state}</span>
+                        <span>🏢 {item.team || 'Sem time'}</span>
+                        {item.reincidencia && Number(item.reincidencia) > 0 && (
+                          <span className="text-orange-400">🔄 Reincidência: {item.reincidencia}</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        
+        {/* Footer */}
+        <div className="p-4 border-t border-ds-border">
+          <button 
+            onClick={onClose}
+            className="w-full bg-ds-border hover:bg-ds-green text-white py-2 px-4 rounded-lg transition-colors"
+          >
+            Fechar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data }) => {
+  const [modalData, setModalData] = useState<ModalData | null>(null);
+
   const analysis = useMemo(() => {
     // Bugs (erros em desenvolvimento) vs Issues (erros em produção)
     const bugs = data.filter(i => i.type === 'Bug');
@@ -115,18 +209,74 @@ const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data }) => {
       teamData,
       personData,
       bugVsIssueComparison,
+      bugs,
+      issues,
+      issuesWithReincidencia,
     };
   }, [data]);
+
+  // Funções para abrir modal com filtros
+  const handleShowBugs = () => {
+    setModalData({
+      title: 'Bugs (Detectados em Desenvolvimento)',
+      items: analysis.bugs,
+      color: '#FFC107'
+    });
+  };
+
+  const handleShowIssues = () => {
+    setModalData({
+      title: 'Issues (Erros em Produção)',
+      items: analysis.issues,
+      color: '#f56565'
+    });
+  };
+
+  const handleShowIssuesWithReincidencia = () => {
+    setModalData({
+      title: 'Issues com Reincidência',
+      items: analysis.issuesWithReincidencia,
+      color: '#ed8936'
+    });
+  };
+
+  const handleShowPersonIssues = (person: string) => {
+    const personIssues = analysis.issues.filter(i => 
+      (i.assignedTo || 'Não Atribuído') === person &&
+      i.reincidencia && Number(i.reincidencia) > 0
+    );
+    setModalData({
+      title: `Issues com Reincidência - ${person}`,
+      items: personIssues,
+      color: '#ed8936'
+    });
+  };
+
+  const handleBarClick = (data: any, category: string) => {
+    if (category === 'Bugs\n(Dev)') {
+      handleShowBugs();
+    } else if (category === 'Issues\n(Produção)') {
+      handleShowIssues();
+    }
+  };
 
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
-        <div className="bg-ds-navy p-4 rounded-lg border border-ds-border text-center">
+        <div 
+          className="bg-ds-navy p-4 rounded-lg border border-ds-border text-center cursor-pointer hover:border-yellow-400 transition-colors"
+          onClick={handleShowBugs}
+          title="Clique para ver detalhes"
+        >
           <p className="text-ds-text text-xs">Bugs (Dev)</p>
           <p className="text-2xl font-bold text-yellow-400">{analysis.totalBugs}</p>
           <p className="text-xs text-ds-text mt-1">Detectados antes</p>
         </div>
-        <div className="bg-ds-navy p-4 rounded-lg border border-ds-border text-center">
+        <div 
+          className="bg-ds-navy p-4 rounded-lg border border-ds-border text-center cursor-pointer hover:border-red-400 transition-colors"
+          onClick={handleShowIssues}
+          title="Clique para ver detalhes"
+        >
           <p className="text-ds-text text-xs">Issues (Produção)</p>
           <p className="text-2xl font-bold text-red-400">{analysis.totalIssues}</p>
           <p className="text-xs text-ds-text mt-1">Escaparam para prod</p>
@@ -138,7 +288,11 @@ const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data }) => {
           </p>
           <p className="text-xs text-ds-text mt-1">Pegos em Dev</p>
         </div>
-        <div className="bg-ds-navy p-4 rounded-lg border border-ds-border text-center">
+        <div 
+          className="bg-ds-navy p-4 rounded-lg border border-ds-border text-center cursor-pointer hover:border-orange-400 transition-colors"
+          onClick={handleShowIssuesWithReincidencia}
+          title="Clique para ver detalhes"
+        >
           <p className="text-ds-text text-xs">Issues Reincidentes</p>
           <p className="text-2xl font-bold text-orange-400">{analysis.issuesWithReincidencia}</p>
           <p className="text-xs text-ds-text mt-1">Voltaram em prod</p>
@@ -176,8 +330,24 @@ const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data }) => {
               itemStyle={{ color: '#e6f1ff' }}
             />
             <Legend />
-            <Bar dataKey="total" name="Total" fill="#64b5f6" radius={[4, 4, 0, 0]} label={{ position: 'top', fill: '#e6f1ff', fontSize: 12 }} />
-            <Bar dataKey="comReincidencia" name="Com Reincidência" fill="#ed8936" radius={[4, 4, 0, 0]} label={{ position: 'top', fill: '#e6f1ff', fontSize: 12 }} />
+            <Bar 
+              dataKey="total" 
+              name="Total" 
+              fill="#64b5f6" 
+              radius={[4, 4, 0, 0]} 
+              label={{ position: 'top', fill: '#e6f1ff', fontSize: 12 }} 
+              onClick={(data) => handleBarClick(data, data.category)}
+              cursor="pointer"
+            />
+            <Bar 
+              dataKey="comReincidencia" 
+              name="Com Reincidência" 
+              fill="#ed8936" 
+              radius={[4, 4, 0, 0]} 
+              label={{ position: 'top', fill: '#e6f1ff', fontSize: 12 }}
+              onClick={handleShowIssuesWithReincidencia}
+              cursor="pointer"
+            />
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -207,7 +377,12 @@ const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data }) => {
           {analysis.personData.length > 0 ? (
             <div className="space-y-2">
               {analysis.personData.map((p, idx) => (
-                <div key={p.person} className="flex items-center gap-3 p-2 bg-ds-bg rounded">
+                <div 
+                  key={p.person} 
+                  className="flex items-center gap-3 p-2 bg-ds-bg rounded cursor-pointer hover:bg-ds-dark-blue hover:border hover:border-ds-green transition-colors"
+                  onClick={() => handleShowPersonIssues(p.person)}
+                  title="Clique para ver issues desta pessoa"
+                >
                   <span className="text-ds-green font-bold text-sm w-6">{idx + 1}º</span>
                   <div className="flex-1 min-w-0">
                     <p className="text-ds-light-text text-sm truncate">{p.person}</p>
@@ -223,6 +398,9 @@ const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data }) => {
           ) : <p className="text-ds-text text-center py-8">Nenhuma reincidência encontrada.</p>}
         </div>
       </div>
+
+      {/* Modal de detalhes */}
+      <ItemListModal data={modalData} onClose={() => setModalData(null)} />
     </div>
   );
 };
