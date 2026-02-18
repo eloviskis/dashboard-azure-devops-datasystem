@@ -13,7 +13,7 @@ if (!DATABASE_URL) {
 
 const pool = new Pool({
   connectionString: DATABASE_URL,
-  ssl: /neon\.tech|supabase\.co/.test(DATABASE_URL) ? { rejectUnauthorized: false } : false,
+  ssl: { rejectUnauthorized: false }, // VPS PostgreSQL sempre usa SSL
 });
 
 async function runMigration() {

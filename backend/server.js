@@ -1,4 +1,4 @@
-// backend/server.js - PostgreSQL version (compatible with Neon serverless & standard pg)
+// backend/server.js - PostgreSQL version for VPS
 const express = require('express');
 const axios = require('axios');
 const cors = require('cors');
@@ -7,8 +7,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
-// Database driver: use pg (node-postgres) Pool with a tagged-template-literal
-// compatible `sql` function, same API as @neondatabase/serverless
+// Database driver: PostgreSQL (pg) with connection pooling
 const { Pool } = require('pg');
 
 // JWT Secret
@@ -34,7 +33,7 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// PostgreSQL setup (works with local PG, Neon, Supabase, any PG-compatible DB)
+// PostgreSQL setup for VPS database
 const DATABASE_URL = process.env.DATABASE_URL;
 if (!DATABASE_URL) {
   console.error('❌ DATABASE_URL not configured');
@@ -47,8 +46,8 @@ if (DATABASE_URL) {
   // Optimized for Vercel serverless environment
   pool = new Pool({
     connectionString: DATABASE_URL,
-    // Enable SSL only for cloud providers (Neon/Supabase URLs contain 'neon' or 'supabase')
-    ssl: /neon\.tech|supabase\.co/.test(DATABASE_URL) ? { rejectUnauthorized: false } : false,
+    // VPS PostgreSQL requires SSL with self-signed certificate
+    ssl: { rejectUnauthorized: false },
     // Serverless-friendly settings: smaller pool, faster timeouts
     max: 2, // Reduced for serverless - Vercel doesn't keep connections alive
     min: 0,
@@ -57,7 +56,7 @@ if (DATABASE_URL) {
     allowExitOnIdle: true, // Allow pool to close when all connections are idle
   });
 
-  // Tagged template literal function compatible with Neon's sql`...` API
+  // Tagged template literal function for SQL queries
   // Usage: await sql`SELECT * FROM users WHERE id = ${id}`
   sql = async (strings, ...values) => {
     const text = strings.reduce((prev, curr, i) => {
@@ -72,7 +71,7 @@ if (DATABASE_URL) {
   console.log('⚠️ No DATABASE_URL — database features disabled');
 }
 
-// Helper functions for Neon PostgreSQL
+// Helper functions for PostgreSQL queries
 const dbAllAsync = async (query, params = []) => {
   try {
     if (!sql) throw new Error('Database not configured');
