@@ -42,6 +42,27 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   return null;
 };
 
+// Custom Label para garantir renderização segura
+const CustomLabel = (props: any) => {
+  const { x, y, width, value } = props;
+  try {
+    const displayValue = typeof value === 'object' ? '' : String(value || '');
+    return (
+      <text 
+        x={x + width / 2} 
+        y={y - 5} 
+        fill="#e6f1ff" 
+        textAnchor="middle" 
+        fontSize={12}
+      >
+        {displayValue}
+      </text>
+    );
+  } catch (e) {
+    return null;
+  }
+};
+
 // Componente do Modal
 const ItemListModal: React.FC<{ data: ModalData | null; onClose: () => void }> = ({ data, onClose }) => {
   if (!data) return null;
@@ -122,8 +143,18 @@ const ItemListModal: React.FC<{ data: ModalData | null; onClose: () => void }> =
   );
 };
 
-const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data }) => {
+const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data: rawData }) => {
   const [modalData, setModalData] = useState<ModalData | null>(null);
+
+  // Sanitizar dados de entrada para remover referências circulares ou objetos complexos
+  const data = useMemo(() => {
+    return rawData.map(item => ({
+      ...item,
+      // Garantir que campos complexos não sejam objetos
+      tags: Array.isArray(item.tags) ? item.tags.join(', ') : String(item.tags || ''),
+      timeInStatusDays: undefined, // Remover objeto complexo
+    }));
+  }, [rawData]);
 
   const analysis = useMemo(() => {
     // Bugs (erros em desenvolvimento) vs Issues (erros em produção)
@@ -352,7 +383,7 @@ const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data }) => {
               name="Total" 
               fill="#64b5f6" 
               radius={[4, 4, 0, 0]} 
-              label={{ position: 'top', fill: '#e6f1ff', fontSize: 12, formatter: (value: any) => String(value) }} 
+              label={<CustomLabel />}
               onClick={(data: any) => {
                 const category = data && data.category ? String(data.category) : '';
                 handleBarClick(category);
@@ -364,7 +395,7 @@ const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data }) => {
               name="Com Reincidência" 
               fill="#ed8936" 
               radius={[4, 4, 0, 0]} 
-              label={{ position: 'top', fill: '#e6f1ff', fontSize: 12, formatter: (value: any) => String(value) }}
+              label={<CustomLabel />}
               onClick={handleShowIssuesWithReincidencia}
               cursor="pointer"
             />
