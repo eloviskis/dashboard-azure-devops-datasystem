@@ -59,7 +59,7 @@ const ItemListModal: React.FC<{ data: ModalData | null; onClose: () => void }> =
                 >
                   <div className="flex items-start gap-3">
                     <span className="text-xs font-mono px-2 py-1 rounded bg-blue-600 text-white">
-                      #{item.workItemId}
+                      #{String(item.workItemId)}
                     </span>
                     <div className="flex-1 min-w-0">
                       <a 
@@ -67,16 +67,16 @@ const ItemListModal: React.FC<{ data: ModalData | null; onClose: () => void }> =
                         target="_blank" 
                         rel="noopener noreferrer"
                         className="text-white hover:text-ds-green font-medium block truncate"
-                        title={item.title}
+                        title={String(item.title)}
                       >
-                        {item.title}
+                        {String(item.title)}
                       </a>
                       <div className="flex gap-4 mt-1 text-xs text-ds-text flex-wrap">
-                        <span>👤 {item.assignedTo || 'Não atribuído'}</span>
-                        <span>📊 {item.state}</span>
-                        <span>🏢 {item.team || 'Sem time'}</span>
+                        <span>👤 {String(item.assignedTo || 'Não atribuído')}</span>
+                        <span>📊 {String(item.state)}</span>
+                        <span>🏢 {String(item.team || 'Sem time')}</span>
                         {item.reincidencia && Number(item.reincidencia) > 0 && (
-                          <span className="text-orange-400">🔄 Reincidência: {item.reincidencia}</span>
+                          <span className="text-orange-400">🔄 Reincidência: {String(item.reincidencia)}</span>
                         )}
                       </div>
                     </div>
@@ -269,7 +269,7 @@ const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data }) => {
           title="Clique para ver detalhes"
         >
           <p className="text-ds-text text-xs">Bugs (Dev)</p>
-          <p className="text-2xl font-bold text-yellow-400">{analysis.totalBugs}</p>
+          <p className="text-2xl font-bold text-yellow-400">{String(analysis.totalBugs)}</p>
           <p className="text-xs text-ds-text mt-1">Detectados antes</p>
         </div>
         <div 
@@ -278,13 +278,13 @@ const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data }) => {
           title="Clique para ver detalhes"
         >
           <p className="text-ds-text text-xs">Issues (Produção)</p>
-          <p className="text-2xl font-bold text-red-400">{analysis.totalIssues}</p>
+          <p className="text-2xl font-bold text-red-400">{String(analysis.totalIssues)}</p>
           <p className="text-xs text-ds-text mt-1">Escaparam para prod</p>
         </div>
         <div className="bg-ds-navy p-4 rounded-lg border border-ds-border text-center">
           <p className="text-ds-text text-xs">Taxa de Detecção</p>
           <p className={`text-2xl font-bold ${analysis.detectionRate > 70 ? 'text-green-400' : analysis.detectionRate > 50 ? 'text-yellow-400' : 'text-red-400'}`}>
-            {analysis.detectionRate}%
+            {String(analysis.detectionRate)}%
           </p>
           <p className="text-xs text-ds-text mt-1">Pegos em Dev</p>
         </div>
@@ -294,19 +294,19 @@ const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data }) => {
           title="Clique para ver detalhes"
         >
           <p className="text-ds-text text-xs">Issues Reincidentes</p>
-          <p className="text-2xl font-bold text-orange-400">{analysis.issuesWithReincidencia}</p>
+          <p className="text-2xl font-bold text-orange-400">{String(analysis.issuesWithReincidencia)}</p>
           <p className="text-xs text-ds-text mt-1">Voltaram em prod</p>
         </div>
         <div className="bg-ds-navy p-4 rounded-lg border border-ds-border text-center">
           <p className="text-ds-text text-xs">Taxa Reincidência</p>
           <p className={`text-2xl font-bold ${analysis.globalReincidenceRate > 15 ? 'text-red-400' : analysis.globalReincidenceRate > 8 ? 'text-yellow-400' : 'text-green-400'}`}>
-            {analysis.globalReincidenceRate}%
+            {String(analysis.globalReincidenceRate)}%
           </p>
           <p className="text-xs text-ds-text mt-1">De issues em prod</p>
         </div>
         <div className="bg-ds-navy p-4 rounded-lg border border-ds-border text-center">
           <p className="text-ds-text text-xs">CT Médio Bugs</p>
-          <p className="text-2xl font-bold text-ds-light-text">{analysis.avgBugCT}</p>
+          <p className="text-2xl font-bold text-ds-light-text">{String(analysis.avgBugCT)}</p>
           <p className="text-xs text-ds-text mt-1">dias</p>
         </div>
       </div>
@@ -335,7 +335,7 @@ const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data }) => {
               name="Total" 
               fill="#64b5f6" 
               radius={[4, 4, 0, 0]} 
-              label={{ position: 'top', fill: '#e6f1ff', fontSize: 12 }} 
+              label={{ position: 'top', fill: '#e6f1ff', fontSize: 12, formatter: (value: any) => String(value) }} 
               onClick={(data) => handleBarClick(data, data.category)}
               cursor="pointer"
             />
@@ -344,7 +344,7 @@ const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data }) => {
               name="Com Reincidência" 
               fill="#ed8936" 
               radius={[4, 4, 0, 0]} 
-              label={{ position: 'top', fill: '#e6f1ff', fontSize: 12 }}
+              label={{ position: 'top', fill: '#e6f1ff', fontSize: 12, formatter: (value: any) => String(value) }}
               onClick={handleShowIssuesWithReincidencia}
               cursor="pointer"
             />
@@ -383,14 +383,14 @@ const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data }) => {
                   onClick={() => handleShowPersonIssues(p.person)}
                   title="Clique para ver issues desta pessoa"
                 >
-                  <span className="text-ds-green font-bold text-sm w-6">{idx + 1}º</span>
+                  <span className="text-ds-green font-bold text-sm w-6">{String(idx + 1)}º</span>
                   <div className="flex-1 min-w-0">
-                    <p className="text-ds-light-text text-sm truncate">{p.person}</p>
-                    <p className="text-ds-text text-xs">{p.team}</p>
+                    <p className="text-ds-light-text text-sm truncate">{String(p.person)}</p>
+                    <p className="text-ds-text text-xs">{String(p.team)}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-orange-400 font-bold">{p.totalReincidenceValue} reincidências</p>
-                    <p className="text-ds-text text-xs">{p.reincidences} issues ({p.rate}%)</p>
+                    <p className="text-orange-400 font-bold">{String(p.totalReincidenceValue)} reincidências</p>
+                    <p className="text-ds-text text-xs">{String(p.reincidences)} issues ({String(p.rate)}%)</p>
                   </div>
                 </div>
               ))}
