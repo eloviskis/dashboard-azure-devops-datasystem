@@ -34,7 +34,7 @@ const ClientThroughputChart: React.FC<ClientThroughputChartProps> = ({ data }) =
 
   return (
     <ResponsiveContainer width="100%" height={350}>
-      <BarChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+      <BarChart data={chartData} margin={{ top: 30, right: 30, left: 20, bottom: 5 }}>
         <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
         <XAxis dataKey="name" stroke={CHART_COLORS.text} fontSize={12} interval={0} angle={-45} textAnchor="end" height={100} />
         <YAxis stroke={CHART_COLORS.text} />

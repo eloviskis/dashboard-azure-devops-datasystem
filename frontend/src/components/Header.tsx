@@ -43,7 +43,9 @@ const Header: React.FC<HeaderProps> = ({ lastSyncStatus, onOpenUserManagement, o
             return { colorClass: 'bg-gray-500', text: 'Verificando status...' };
         }
         
-        const syncDate = new Date(lastSyncStatus.syncTime);
+        // Suporta tanto syncTime (camelCase) quanto sync_time (snake_case)
+        const syncTimeStr = lastSyncStatus.syncTime || lastSyncStatus.sync_time;
+        const syncDate = syncTimeStr ? new Date(syncTimeStr) : new Date();
         const isRecent = !isNaN(syncDate.getTime()) && (Date.now() - syncDate.getTime()) < 60 * 60 * 1000; // < 1h
         
         if (lastSyncStatus.status === 'success') {
@@ -52,11 +54,23 @@ const Header: React.FC<HeaderProps> = ({ lastSyncStatus, onOpenUserManagement, o
                     return { colorClass: 'bg-green-500', text: 'Dados sincronizados' };
                 }
                 const timeAgo = formatDistanceToNow(syncDate, { addSuffix: true, locale: ptBR });
-                return { colorClass: 'bg-green-500', text: `Dados sincronizados ${timeAgo}` };
+                const itemsText = lastSyncStatus.work_items ? ` (${lastSyncStatus.work_items.toLocaleString()} itens)` : '';
+                return { colorClass: 'bg-green-500', text: `Sincronizado ${timeAgo}${itemsText}` };
             } catch {
                 return { colorClass: 'bg-green-500', text: 'Dados sincronizados' };
             }
         }
+        
+        if (lastSyncStatus.status === 'warning') {
+            try {
+                const timeAgo = formatDistanceToNow(syncDate, { addSuffix: true, locale: ptBR });
+                const message = lastSyncStatus.message || `Última atualização ${timeAgo}`;
+                return { colorClass: 'bg-yellow-500', text: message };
+            } catch {
+                return { colorClass: 'bg-yellow-500', text: lastSyncStatus.message || 'Dados levemente desatualizados' };
+            }
+        }
+        
         if (lastSyncStatus.status === 'error') {
             // Se o sync é recente (< 1h), pode ser timeout do Vercel — dados provavelmente estão OK
             if (isRecent) {

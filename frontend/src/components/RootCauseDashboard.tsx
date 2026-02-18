@@ -169,9 +169,17 @@ export const RootCauseDashboard: React.FC<Props> = ({ data }) => {
   const issues = data.filter(w => w.type === 'Issue');
   const issuesFechadas = issues.filter(w => w.state === 'Closed');
   const issuesCriadas = issues.filter(w => !!w.createdDate);
-  // Usa customType ao invés de buscar no título
-  const issuesCorrecao = issuesFechadas.filter(w => w.customType === 'Correção');
-  const issuesOutrosType = issuesFechadas.filter(w => w.customType !== 'Correção');
+  
+  // Verifica se há field customType preenchido em alguma issue
+  const hasCustomTypeData = issuesFechadas.some(w => w.customType && w.customType.trim() !== '');
+  
+  // Se customType está disponível, usa para filtrar; senão, considera todas as Issues fechadas como Correção
+  const issuesCorrecao = hasCustomTypeData 
+    ? issuesFechadas.filter(w => w.customType === 'Correção')
+    : issuesFechadas; // Sem campo customType, todas Issues fechadas são tratadas como correção
+  const issuesOutrosType = hasCustomTypeData 
+    ? issuesFechadas.filter(w => w.customType !== 'Correção')
+    : []; // Sem customType, não há "outras"
   // Usa causaRaiz (Microsoft.VSTS.CMMI.RootCause) para verificar causa raiz - nas Issues FECHADAS de Correção
   const issuesSemCausaRaiz = issuesCorrecao.filter(w => isCausaRaizEmpty(w.causaRaiz));
   // P0 = priority null ou 0 (null vem do Azure como P0) - nas Issues de CORREÇÃO FECHADAS
@@ -300,6 +308,46 @@ export const RootCauseDashboard: React.FC<Props> = ({ data }) => {
       return numB - numA;
     });
 
+  // Issues por Tipo de Cliente
+  const tipoClienteCounts = issuesCorrecao.reduce((acc, item) => {
+    const tipoCliente = item.tipoCliente || '(não informado)';
+    acc[tipoCliente] = (acc[tipoCliente] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+  const tipoClienteChart = Object.entries(tipoClienteCounts)
+    .map(([name, value]) => ({ name, value }))
+    .sort((a, b) => b.value - a.value);
+
+  // Raiz do Problema (campo novo - Custom.Raizdoproblema)
+  const causaRaizCounts = issuesCorrecao.reduce((acc, item) => {
+    const causa = item.causaRaiz || '(não informado)';
+    acc[causa] = (acc[causa] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+  const causaRaizChart = Object.entries(causaRaizCounts)
+    .map(([name, value]) => ({ name, value }))
+    .sort((a, b) => b.value - a.value);
+
+  // Identificação (Custom.7ac99842-e0ec-4f18-b91b-53bfe3e3b3f5)
+  const identificacaoCounts = issuesCorrecao.reduce((acc, item) => {
+    const identificacao = item.identificacao || '(não informado)';
+    acc[identificacao] = (acc[identificacao] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+  const identificacaoChart = Object.entries(identificacaoCounts)
+    .map(([name, value]) => ({ name, value }))
+    .sort((a, b) => b.value - a.value);
+
+  // Falha do Processo (Custom.Falhadoprocesso)
+  const falhaDoProcessoCounts = issuesCorrecao.reduce((acc, item) => {
+    const falha = item.falhaDoProcesso || '(não informado)';
+    acc[falha] = (acc[falha] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+  const falhaDoProcessoChart = Object.entries(falhaDoProcessoCounts)
+    .map(([name, value]) => ({ name, value }))
+    .sort((a, b) => b.value - a.value);
+
   // Handlers de clique nos gráficos
   const handleTypeClick = (chartData: any, index: number) => {
     const typeName = chartData.name;
@@ -426,6 +474,46 @@ export const RootCauseDashboard: React.FC<Props> = ({ data }) => {
     });
   };
 
+  const handleTipoClienteClick = (chartData: any, index: number) => {
+    const tipoClienteName = chartData.name;
+    const items = issuesCorrecao.filter(w => (w.tipoCliente || '(não informado)') === tipoClienteName);
+    setModalData({
+      title: `Correções - Tipo de Cliente: ${tipoClienteName}`,
+      items,
+      color: COLORS[index % COLORS.length]
+    });
+  };
+
+  const handleCausaRaizClick = (chartData: any, index: number) => {
+    const causaName = chartData.name;
+    const items = issuesCorrecao.filter(w => (w.causaRaiz || '(não informado)') === causaName);
+    setModalData({
+      title: `Correções - Raiz do Problema: ${causaName}`,
+      items,
+      color: COLORS[index % COLORS.length]
+    });
+  };
+
+  const handleIdentificacaoClick = (chartData: any, index: number) => {
+    const identificacaoName = chartData.name;
+    const items = issuesCorrecao.filter(w => (w.identificacao || '(não informado)') === identificacaoName);
+    setModalData({
+      title: `Correções - Identificação: ${identificacaoName}`,
+      items,
+      color: COLORS[index % COLORS.length]
+    });
+  };
+
+  const handleFalhaDoProcessoClick = (chartData: any, index: number) => {
+    const falhaName = chartData.name;
+    const items = issuesCorrecao.filter(w => (w.falhaDoProcesso || '(não informado)') === falhaName);
+    setModalData({
+      title: `Correções - Falha do Processo: ${falhaName}`,
+      items,
+      color: COLORS[index % COLORS.length]
+    });
+  };
+
   return (
     <div className="space-y-6">
       {/* Modal */}
@@ -506,16 +594,18 @@ export const RootCauseDashboard: React.FC<Props> = ({ data }) => {
           <div className="font-bold mb-2">Correções do mês por prioridade</div>
           <ChartInfoLamp info="Issues de correção agrupadas por prioridade (P0-P4). Clique para ver os itens de cada prioridade." />
           <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={correcaoPriorityChart}>
+            <BarChart data={correcaoPriorityChart} margin={{ top: 20, right: 10, left: 10, bottom: 5 }}>
               <XAxis dataKey="name" tick={{ fill: '#fff', fontSize: 12 }} />
               <YAxis tick={{ fill: '#fff', fontSize: 12 }} />
               <Tooltip 
                 formatter={(value: number) => [`${value} (clique para ver)`, 'Qtd']}
+                contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', color: '#fff' }}
               />
               <Bar 
                 dataKey="value" 
                 radius={[4, 4, 0, 0]}
                 cursor="pointer"
+                label={{ position: 'top', fill: '#FFD600', fontWeight: 'bold', fontSize: 12 }}
                 onClick={(data, index) => handlePriorityClick(data, index)}
               >
                 {correcaoPriorityChart.map((entry, idx) => (
@@ -552,6 +642,7 @@ export const RootCauseDashboard: React.FC<Props> = ({ data }) => {
               />
               <Tooltip 
                 formatter={(value: number) => [`${value} issues (clique para ver)`, 'Quantidade']}
+                contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', color: '#fff' }}
               />
               <Bar 
                 dataKey="value" 
@@ -601,6 +692,7 @@ export const RootCauseDashboard: React.FC<Props> = ({ data }) => {
                 `${value} issues`,
                 name === 'Sem Causa Raiz' ? '🔴 Sem Causa Raiz (clique)' : '🟢 Com Causa Raiz (clique)'
               ]}
+              contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', color: '#fff' }}
             />
             <Legend iconType="rect" />
             <Bar 
@@ -642,7 +734,7 @@ export const RootCauseDashboard: React.FC<Props> = ({ data }) => {
               <BarChart data={rootCauseTeamChart.slice(0, 10)} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                 <XAxis type="number" tick={{ fill: '#FFD600', fontSize: 12 }} axisLine={false} />
                 <YAxis type="category" dataKey="name" tick={{ fill: '#fff', fontSize: 11 }} width={120} axisLine={false} />
-                <Tooltip formatter={(value: number) => [`${value} issues (clique)`, 'Qtd']} />
+                <Tooltip formatter={(value: number) => [`${value} issues (clique)`, 'Qtd']} contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', color: '#fff' }} />
                 <Bar dataKey="value" radius={[0, 8, 8, 0]} cursor="pointer" onClick={(data, index) => handleRootCauseTeamClick(data, index)}>
                   {rootCauseTeamChart.slice(0, 10).map((entry, idx) => (
                     <Cell key={`cell-${entry.name}`} fill={COLORS[idx % COLORS.length]} />
@@ -681,7 +773,7 @@ export const RootCauseDashboard: React.FC<Props> = ({ data }) => {
                     <Cell key={`cell-${entry.name}`} fill={COLORS[idx % COLORS.length]} />
                   ))}
                 </Pie>
-                <Tooltip formatter={(value: number) => [`${value} issues (clique)`, 'Qtd']} />
+                <Tooltip formatter={(value: number) => [`${value} issues (clique)`, 'Qtd']} contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', color: '#fff' }} />
               </PieChart>
             </ResponsiveContainer>
           )}
@@ -706,7 +798,7 @@ export const RootCauseDashboard: React.FC<Props> = ({ data }) => {
               <BarChart data={squadChart.slice(0, 10)} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                 <XAxis type="number" tick={{ fill: '#FFD600', fontSize: 12 }} axisLine={false} />
                 <YAxis type="category" dataKey="name" tick={{ fill: '#fff', fontSize: 11 }} width={120} axisLine={false} />
-                <Tooltip formatter={(value: number) => [`${value} issues (clique)`, 'Qtd']} />
+                <Tooltip formatter={(value: number) => [`${value} issues (clique)`, 'Qtd']} contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', color: '#fff' }} />
                 <Bar dataKey="value" radius={[0, 8, 8, 0]} cursor="pointer" onClick={(data, index) => handleSquadClick(data, index)}>
                   {squadChart.slice(0, 10).map((entry, idx) => (
                     <Cell key={`cell-${entry.name}`} fill={COLORS[idx % COLORS.length]} />
@@ -745,7 +837,7 @@ export const RootCauseDashboard: React.FC<Props> = ({ data }) => {
                     <Cell key={`cell-${entry.name}`} fill={COLORS[idx % COLORS.length]} />
                   ))}
                 </Pie>
-                <Tooltip formatter={(value: number) => [`${value} issues (clique)`, 'Qtd']} />
+                <Tooltip formatter={(value: number) => [`${value} issues (clique)`, 'Qtd']} contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', color: '#fff' }} />
               </PieChart>
             </ResponsiveContainer>
           )}
@@ -770,7 +862,7 @@ export const RootCauseDashboard: React.FC<Props> = ({ data }) => {
               <BarChart data={devChart.slice(0, 10)} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                 <XAxis type="number" tick={{ fill: '#FFD600', fontSize: 12 }} axisLine={false} />
                 <YAxis type="category" dataKey="name" tick={{ fill: '#fff', fontSize: 11 }} width={150} axisLine={false} />
-                <Tooltip formatter={(value: number) => [`${value} issues (clique)`, 'Qtd']} />
+                <Tooltip formatter={(value: number) => [`${value} issues (clique)`, 'Qtd']} contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', color: '#fff' }} />
                 <Bar dataKey="value" radius={[0, 8, 8, 0]} cursor="pointer" onClick={(data, index) => handleDevClick(data, index)}>
                   {devChart.slice(0, 10).map((entry, idx) => (
                     <Cell key={`cell-${entry.name}`} fill={COLORS[idx % COLORS.length]} />
@@ -797,9 +889,117 @@ export const RootCauseDashboard: React.FC<Props> = ({ data }) => {
               <BarChart data={reincidenciaChart} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
                 <XAxis dataKey="name" tick={{ fill: '#fff', fontSize: 12 }} />
                 <YAxis tick={{ fill: '#fff', fontSize: 12 }} />
-                <Tooltip formatter={(value: number) => [`${value} issues (clique)`, 'Qtd']} />
+                <Tooltip formatter={(value: number) => [`${value} issues (clique)`, 'Qtd']} contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', color: '#fff' }} />
                 <Bar dataKey="value" radius={[4, 4, 0, 0]} cursor="pointer" onClick={(data, index) => handleReincidenciaClick(data, index)}>
                   {reincidenciaChart.map((entry, idx) => (
+                    <Cell key={`cell-${entry.name}`} fill={entry.name === '(não informado)' ? '#666' : COLORS[idx % COLORS.length]} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+
+        {/* Raiz do Problema (Campo Novo - Custom.Raizdoproblema) */}
+        <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
+          <div className="font-bold mb-2">Raiz do Problema por Tipo (Campo Novo)</div>
+          <ChartInfoLamp info="Campo novo de causa raiz (Custom.Raizdoproblema). Classificação mais precisa do problema encontrado." />
+          {causaRaizChart.length === 0 || (causaRaizChart.length === 1 && causaRaizChart[0].name === '(não informado)') ? (
+            <div className="flex items-center justify-center h-[200px] text-ds-text text-center">
+              <div>
+                <div className="text-4xl mb-2">📊</div>
+                <div className="text-sm">Sem dados de Raiz do Problema (Campo Novo)</div>
+              </div>
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={causaRaizChart.slice(0, 10)} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                <XAxis type="number" tick={{ fill: '#FFD600', fontSize: 12 }} axisLine={false} />
+                <YAxis type="category" dataKey="name" tick={{ fill: '#fff', fontSize: 11 }} width={150} axisLine={false} />
+                <Tooltip formatter={(value: number) => [`${value} issues (clique)`, 'Qtd']} contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', color: '#fff' }} />
+                <Bar dataKey="value" radius={[0, 8, 8, 0]} cursor="pointer" onClick={(data, index) => handleCausaRaizClick(data, index)}>
+                  {causaRaizChart.slice(0, 10).map((entry, idx) => (
+                    <Cell key={`cell-${entry.name}`} fill={entry.name === '(não informado)' ? '#666' : COLORS[idx % COLORS.length]} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+
+        {/* Identificação */}
+        <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
+          <div className="font-bold mb-2">Quem Identificou o Problema</div>
+          <ChartInfoLamp info="Como o problema foi identificado: Cliente, Interno, Monitoramento, Parceiro ou Testes automatizados." />
+          {identificacaoChart.length === 0 || (identificacaoChart.length === 1 && identificacaoChart[0].name === '(não informado)') ? (
+            <div className="flex items-center justify-center h-[200px] text-ds-text text-center">
+              <div>
+                <div className="text-4xl mb-2">📊</div>
+                <div className="text-sm">Sem dados de Identificação</div>
+              </div>
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={identificacaoChart} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                <XAxis dataKey="name" tick={{ fill: '#fff', fontSize: 11 }} />
+                <YAxis tick={{ fill: '#fff', fontSize: 12 }} />
+                <Tooltip formatter={(value: number) => [`${value} issues (clique)`, 'Qtd']} contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', color: '#fff' }} />
+                <Bar dataKey="value" radius={[4, 4, 0, 0]} cursor="pointer" onClick={(data, index) => handleIdentificacaoClick(data, index)}>
+                  {identificacaoChart.map((entry, idx) => (
+                    <Cell key={`cell-${entry.name}`} fill={entry.name === '(não informado)' ? '#666' : COLORS[idx % COLORS.length]} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+
+        {/* Falha do Processo */}
+        <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
+          <div className="font-bold mb-2">Falha do Processo</div>
+          <ChartInfoLamp info="Por que o problema não foi detectado antes: falta de testes, code review, análise de impacto, etc." />
+          {falhaDoProcessoChart.length === 0 || (falhaDoProcessoChart.length === 1 && falhaDoProcessoChart[0].name === '(não informado)') ? (
+            <div className="flex items-center justify-center h-[200px] text-ds-text text-center">
+              <div>
+                <div className="text-4xl mb-2">📊</div>
+                <div className="text-sm">Sem dados de Falha do Processo</div>
+              </div>
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={falhaDoProcessoChart.slice(0, 10)} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                <XAxis type="number" tick={{ fill: '#FFD600', fontSize: 12 }} axisLine={false} />
+                <YAxis type="category" dataKey="name" tick={{ fill: '#fff', fontSize: 9 }} width={180} axisLine={false} />
+                <Tooltip formatter={(value: number) => [`${value} issues (clique)`, 'Qtd']} contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', color: '#fff' }} />
+                <Bar dataKey="value" radius={[0, 8, 8, 0]} cursor="pointer" onClick={(data, index) => handleFalhaDoProcessoClick(data, index)}>
+                  {falhaDoProcessoChart.slice(0, 10).map((entry, idx) => (
+                    <Cell key={`cell-${entry.name}`} fill={entry.name === '(não informado)' ? '#666' : COLORS[idx % COLORS.length]} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+
+        {/* Tipo de Cliente */}
+        <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
+          <div className="font-bold mb-2">Correções por Tipo de Cliente</div>
+          <ChartInfoLamp info="Distribuição de correções por tipo/nível de SLA do cliente. Ajuda a identificar clientes com maior volume de problemas." />
+          {tipoClienteChart.length === 0 || (tipoClienteChart.length === 1 && tipoClienteChart[0].name === '(não informado)') ? (
+            <div className="flex items-center justify-center h-[200px] text-ds-text text-center">
+              <div>
+                <div className="text-4xl mb-2">📊</div>
+                <div className="text-sm">Sem dados de Tipo de Cliente</div>
+              </div>
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={tipoClienteChart.slice(0, 10)} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                <XAxis dataKey="name" tick={{ fill: '#fff', fontSize: 10 }} interval={0} angle={-15} textAnchor="end" height={60} />
+                <YAxis tick={{ fill: '#fff', fontSize: 12 }} />
+                <Tooltip formatter={(value: number) => [`${value} issues (clique)`, 'Qtd']} contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', color: '#fff' }} />
+                <Bar dataKey="value" radius={[4, 4, 0, 0]} cursor="pointer" onClick={(data, index) => handleTipoClienteClick(data, index)}>
+                  {tipoClienteChart.slice(0, 10).map((entry, idx) => (
                     <Cell key={`cell-${entry.name}`} fill={entry.name === '(não informado)' ? '#666' : COLORS[idx % COLORS.length]} />
                   ))}
                 </Bar>

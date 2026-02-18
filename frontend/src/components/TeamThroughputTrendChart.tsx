@@ -3,7 +3,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 import { WorkItem } from '../types.ts';
 import { CHART_COLORS } from '../constants.ts';
 import { EmptyState } from './ChartStates.tsx';
-import { getWeek, getYear, getMonth, format } from 'date-fns'; // Updated to named imports
+import { getWeek, getYear, getMonth, format, subWeeks, subMonths, addDays, isWithinInterval, eachYearOfInterval, startOfYear, endOfYear } from 'date-fns'; // Updated to named imports
 import { ptBR } from 'date-fns/locale';
 import { COMPLETED_STATES } from '../utils/metrics.ts';
 
@@ -11,7 +11,7 @@ interface TeamThroughputTrendChartProps {
   data: WorkItem[];
 }
 
-type GroupMode = 'weekly' | 'monthly';
+type GroupMode = 'weekly' | 'biweekly' | 'monthly' | 'yearly';
 
 const TeamThroughputTrendChart: React.FC<TeamThroughputTrendChartProps> = ({ data }) => {
   const [groupMode, setGroupMode] = useState<GroupMode>('weekly');
@@ -44,6 +44,65 @@ const TeamThroughputTrendChart: React.FC<TeamThroughputTrendChartProps> = ({ dat
       return { chartData, teams };
     }
 
+    if (groupMode === 'biweekly') {
+      const now = new Date();
+      const start = subMonths(now, 6);
+      const periods: { start: Date; end: Date; key: string }[] = [];
+      let cursor = new Date(start);
+      while (cursor < now) {
+        const periodEnd = addDays(cursor, 13);
+        const label = `${format(cursor, 'dd/MM')}-${format(periodEnd > now ? now : periodEnd, 'dd/MM')}`;
+        periods.push({ start: new Date(cursor), end: periodEnd > now ? now : periodEnd, key: label });
+        cursor = addDays(cursor, 14);
+      }
+      
+      const throughputByBiweek: Record<string, Record<string, number>> = {};
+      periods.forEach(p => {
+        throughputByBiweek[p.key] = {};
+        completedItems.forEach(item => {
+          const d = new Date(item.closedDate!);
+          if (isWithinInterval(d, { start: p.start, end: p.end })) {
+            throughputByBiweek[p.key][item.team!] = (throughputByBiweek[p.key][item.team!] || 0) + 1;
+          }
+        });
+      });
+
+      const chartData = periods.map(p => ({
+        week: p.key,
+        ...(throughputByBiweek[p.key] as object)
+      }));
+
+      return { chartData, teams };
+    }
+
+    if (groupMode === 'yearly') {
+      const now = new Date();
+      const start = subMonths(now, 36);
+      try {
+        const years = eachYearOfInterval({ start, end: now });
+        const throughputByYear: Record<string, Record<string, number>> = {};
+        
+        years.forEach(yearStart => {
+          const yearEnd = endOfYear(yearStart);
+          const yearKey = format(yearStart, 'yyyy');
+          throughputByYear[yearKey] = {};
+          completedItems.forEach(item => {
+            const d = new Date(item.closedDate!);
+            if (isWithinInterval(d, { start: yearStart, end: yearEnd })) {
+              throughputByYear[yearKey][item.team!] = (throughputByYear[yearKey][item.team!] || 0) + 1;
+            }
+          });
+        });
+
+        const chartData = years.map(yearStart => ({
+          week: format(yearStart, 'yyyy'),
+          ...(throughputByYear[format(yearStart, 'yyyy')] as object)
+        }));
+
+        return { chartData, teams };
+      } catch { return { chartData: [], teams }; }
+    }
+
     // Weekly (default)
     const throughputByWeek = completedItems.reduce((acc, item) => {
       const weekKey = `${getYear(item.closedDate!)}-W${getWeek(item.closedDate!, { weekStartsOn: 1 }).toString().padStart(2, '0')}`;
@@ -73,7 +132,9 @@ const TeamThroughputTrendChart: React.FC<TeamThroughputTrendChartProps> = ({ dat
       <div className="flex items-center gap-2 mb-4">
         {[
           { value: 'weekly' as GroupMode, label: 'Semanal' },
+          { value: 'biweekly' as GroupMode, label: 'Quinzenal' },
           { value: 'monthly' as GroupMode, label: 'Mensal' },
+          { value: 'yearly' as GroupMode, label: 'Anual' },
         ].map(opt => (
           <button
             key={opt.value}
@@ -101,7 +162,8 @@ const TeamThroughputTrendChart: React.FC<TeamThroughputTrendChartProps> = ({ dat
               key={team} 
               dataKey={team} 
               stackId="a" 
-              fill={CHART_COLORS.palette[index % CHART_COLORS.palette.length]} 
+              fill={CHART_COLORS.palette[index % CHART_COLORS.palette.length]}
+              label={{ position: 'inside', fill: '#fff', fontSize: 9 }}
             />
           ))}
         </BarChart>

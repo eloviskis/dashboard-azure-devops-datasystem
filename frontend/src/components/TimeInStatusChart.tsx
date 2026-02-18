@@ -73,7 +73,8 @@ const TimeInStatusChart: React.FC<TimeInStatusChartProps> = ({ data }) => {
                 key={status} 
                 dataKey={status} 
                 stackId="a" 
-                fill={CHART_COLORS.palette[index % CHART_COLORS.palette.length]} 
+                fill={CHART_COLORS.palette[index % CHART_COLORS.palette.length]}
+                label={{ position: 'inside', fill: '#fff', fontSize: 9 }}
             />
         ))}
       </BarChart>

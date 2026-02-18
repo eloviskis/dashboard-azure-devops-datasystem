@@ -60,8 +60,8 @@ const LeadVsCycleTimeChart: React.FC<LeadVsCycleTimeChartProps> = ({ data }) => 
           formatter={(value: number, name: string) => [`${value} dias`, name]}
         />
         <Legend wrapperStyle={{ color: CHART_COLORS.text }} />
-        <Bar dataKey="Lead Time" fill={CHART_COLORS.secondary} />
-        <Bar dataKey="Cycle Time" fill={CHART_COLORS.primary} />
+        <Bar dataKey="Lead Time" fill={CHART_COLORS.secondary} label={{ position: 'top', fill: '#47C5FB', fontSize: 9 }} />
+        <Bar dataKey="Cycle Time" fill={CHART_COLORS.primary} label={{ position: 'top', fill: '#64FFDA', fontSize: 9 }} />
       </BarChart>
     </ResponsiveContainer>
   );

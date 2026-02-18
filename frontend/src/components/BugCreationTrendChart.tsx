@@ -3,13 +3,15 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 import { WorkItem } from '../types.ts';
 import { CHART_COLORS } from '../constants.ts';
 import { EmptyState } from './ChartStates.tsx';
-// Fix: Import date-fns functions from their respective submodules for v2 compatibility.
-import { format, subDays, eachDayOfInterval } from 'date-fns';
+import { format, subDays, eachDayOfInterval, subWeeks, subMonths, eachWeekOfInterval, eachMonthOfInterval, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 interface BugCreationTrendChartProps {
   data: WorkItem[];
-  period: number;
+  period?: number;
 }
+
+type BugTrendGroupMode = 'daily' | 'weekly' | 'monthly';
 
 interface ModalData {
   title: string;
@@ -93,36 +95,84 @@ const ItemListModal: React.FC<{ data: ModalData | null; onClose: () => void }> =
   );
 };
 
-const BugCreationTrendChart: React.FC<BugCreationTrendChartProps> = ({ data, period }) => {
+const BugCreationTrendChart: React.FC<BugCreationTrendChartProps> = ({ data }) => {
   const [modalData, setModalData] = useState<ModalData | null>(null);
+  const [groupMode, setGroupMode] = useState<BugTrendGroupMode>('daily');
+
   const chartData = useMemo(() => {
     const endDate = new Date();
-    const startDate = subDays(endDate, period - 1);
-    const dateRange = eachDayOfInterval({ start: startDate, end: endDate });
 
-    const itemsByDay = data.reduce((acc, item) => {
-      const dateStr = format(item.createdDate, 'yyyy-MM-dd');
-      if (!acc[dateStr]) {
-        acc[dateStr] = { bugs: 0, issues: 0 };
-      }
-      if (item.type === 'Bug') {
-        acc[dateStr].bugs += 1;
-      } else if (item.type === 'Issue') {
-        acc[dateStr].issues += 1;
-      }
-      return acc;
-    }, {} as Record<string, { bugs: number, issues: number }>);
-    
-    return dateRange.map(date => {
-      const dateStr = format(date, 'yyyy-MM-dd');
-      const formattedDate = format(date, 'dd/MM');
+    if (groupMode === 'daily') {
+      const startDate = subDays(endDate, 29);
+      const dateRange = eachDayOfInterval({ start: startDate, end: endDate });
+
+      const itemsByDay = data.reduce((acc, item) => {
+        const dateStr = format(item.createdDate, 'yyyy-MM-dd');
+        if (!acc[dateStr]) {
+          acc[dateStr] = { bugs: 0, issues: 0 };
+        }
+        if (item.type === 'Bug') {
+          acc[dateStr].bugs += 1;
+        } else if (item.type === 'Issue') {
+          acc[dateStr].issues += 1;
+        }
+        return acc;
+      }, {} as Record<string, { bugs: number, issues: number }>);
+      
+      return dateRange.map(date => {
+        const dateStr = format(date, 'yyyy-MM-dd');
+        const formattedDate = format(date, 'dd/MM');
+        return {
+          date: formattedDate,
+          Bugs: itemsByDay[dateStr]?.bugs || 0,
+          Issues: itemsByDay[dateStr]?.issues || 0,
+        };
+      });
+    }
+
+    if (groupMode === 'weekly') {
+      const startDate = subWeeks(endDate, 12);
+      const weeks = eachWeekOfInterval({ start: startDate, end: endDate }, { weekStartsOn: 1 });
+
+      return weeks.map(weekStart => {
+        const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
+        const bugs = data.filter(item => {
+          const created = new Date(item.createdDate);
+          return item.type === 'Bug' && isWithinInterval(created, { start: weekStart, end: weekEnd });
+        }).length;
+        const issues = data.filter(item => {
+          const created = new Date(item.createdDate);
+          return item.type === 'Issue' && isWithinInterval(created, { start: weekStart, end: weekEnd });
+        }).length;
+        return {
+          date: format(weekStart, 'dd/MM'),
+          Bugs: bugs,
+          Issues: issues,
+        };
+      });
+    }
+
+    // monthly
+    const startDate = subMonths(endDate, 12);
+    const months = eachMonthOfInterval({ start: startDate, end: endDate });
+
+    return months.map(monthStart => {
+      const monthEnd = endOfMonth(monthStart);
+      const bugs = data.filter(item => {
+        const created = new Date(item.createdDate);
+        return item.type === 'Bug' && isWithinInterval(created, { start: monthStart, end: monthEnd });
+      }).length;
+      const issues = data.filter(item => {
+        const created = new Date(item.createdDate);
+        return item.type === 'Issue' && isWithinInterval(created, { start: monthStart, end: monthEnd });
+      }).length;
       return {
-        date: formattedDate,
-        Bugs: itemsByDay[dateStr]?.bugs || 0,
-        Issues: itemsByDay[dateStr]?.issues || 0,
+        date: format(monthStart, 'MMM/yy', { locale: ptBR }),
+        Bugs: bugs,
+        Issues: issues,
       };
     });
-  }, [data, period]);
+  }, [data, groupMode]);
 
   if (data.length === 0) {
     return <EmptyState message="Nenhuma tendência de criação para exibir." />;
@@ -130,6 +180,21 @@ const BugCreationTrendChart: React.FC<BugCreationTrendChartProps> = ({ data, per
 
   return (
     <>
+      <div className="flex items-center gap-2 mb-4">
+        {[
+          { value: 'daily' as BugTrendGroupMode, label: 'Diário (30d)' },
+          { value: 'weekly' as BugTrendGroupMode, label: 'Semanal' },
+          { value: 'monthly' as BugTrendGroupMode, label: 'Mensal' },
+        ].map(opt => (
+          <button
+            key={opt.value}
+            onClick={() => setGroupMode(opt.value)}
+            className={`px-3 py-1.5 text-xs rounded-md font-medium transition-colors ${groupMode === opt.value ? 'bg-ds-green text-ds-dark-blue' : 'bg-ds-muted/20 text-ds-text hover:bg-ds-muted/40'}`}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
       <ResponsiveContainer width="100%" height={300}>
         <LineChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
           <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />

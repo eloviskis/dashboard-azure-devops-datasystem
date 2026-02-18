@@ -483,7 +483,7 @@ export const POAnalysisDashboard: React.FC<Props> = ({ data }) => {
               contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }} labelStyle={{ color: '#64ffda', fontWeight: 'bold' }} itemStyle={{ color: '#e6f1ff' }}
             />
             <Legend />
-            <Bar dataKey="criados" name="Criados" fill="#64B5F6" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="criados" name="Criados" fill="#64B5F6" radius={[4, 4, 0, 0]} label={{ position: 'top', fill: '#64B5F6', fontSize: 9 }} />
             <Bar 
               dataKey="fechados" 
               name="Fechados" 
@@ -491,6 +491,7 @@ export const POAnalysisDashboard: React.FC<Props> = ({ data }) => {
               radius={[4, 4, 0, 0]}
               cursor="pointer"
               onClick={(data, index) => handleConclusaoClick(data, index)}
+              label={{ position: 'top', fill: '#43A047', fontSize: 9 }}
             />
           </BarChart>
         </ResponsiveContainer>

@@ -272,39 +272,94 @@ const ScrumCTCDashboard: React.FC<ScrumCTCDashboardProps> = ({ data }) => {
   // Burndown data for current sprint
   const burndownData = useMemo(() => {
     if (!currentSprint) return [];
-    // Get items from current sprint
-    const currentSprintData = sprintData.find(s => s.name.includes(currentSprint.name.replace(/.*\\/, '')));
+    // Get items from current sprint - match by sprint name
+    const sprintNamePart = currentSprint.name.replace(/.*\\/, '').split(' ')[0]; // Get just CONSTANCE_SPRINT_146
+    const currentSprintData = sprintData.find(s => s.name.includes(sprintNamePart) || sprintNamePart.includes(s.name));
     if (!currentSprintData) return [];
     const items = currentSprintData.items;
     if (items.length === 0) return [];
     
-    const totalItems = items.length;
-    const totalSP = items.reduce((s, i) => s + (i.storyPoints || 0), 0);
+    // Separate User Stories (have Story Points) from Tasks (have hours)
+    const userStories = items.filter(i => i.type === 'User Story' || i.type === 'Eventuality' || i.type === 'General');
+    const tasks = items.filter(i => i.type === 'Task' || i.type === 'QA');
     
-    // Determine sprint date range
-    const createdDates = items.map(i => new Date(i.createdDate || '').getTime()).filter(d => !isNaN(d));
-    const sprintStart = createdDates.length > 0 ? new Date(Math.min(...createdDates)) : new Date();
-    const sprintEnd = addDays(sprintStart, sprintDuration * 7);
-    const totalDays = differenceInDays(sprintEnd, sprintStart) || 1;
+    // User Stories use Story Points
+    const totalSP = userStories.reduce((s, i) => s + (i.storyPoints || 0), 0);
+    const totalStories = userStories.length;
+    
+    // Tasks use estimated hours (remaining_work for actual remaining)
+    const totalHours = tasks.reduce((s, i) => s + (i.originalEstimate || 0), 0);
+    
+    // For burndown we track: User Stories (SP) and all items count
+    const totalItems = items.length;
+    
+    // Determine sprint date range using sprint duration setting
+    const sprintDays = sprintDuration * 7;
+    const now = new Date();
+    
+    // Find sprint period based on activity
+    const allDates = items.map(i => new Date(i.createdDate || i.changedDate || '').getTime()).filter(d => !isNaN(d) && d > 0);
+    const closedDates = items.filter(i => i.closedDate && COMPLETED_STATES.includes(i.state)).map(i => new Date(i.closedDate!).getTime());
+    
+    let sprintStart: Date;
+    let sprintEnd: Date;
+    
+    if (allDates.length > 0) {
+      // Use earliest item creation as sprint start
+      const minDate = new Date(Math.min(...allDates));
+      sprintStart = minDate;
+      // Sprint ends after configured duration, or now if sprint is ongoing
+      sprintEnd = addDays(sprintStart, sprintDays);
+      if (sprintEnd < now) {
+        // Sprint already finished - use actual end
+        const maxClosed = closedDates.length > 0 ? new Date(Math.max(...closedDates)) : sprintEnd;
+        sprintEnd = maxClosed;
+      }
+    } else {
+      sprintStart = addDays(now, -sprintDays);
+      sprintEnd = now;
+    }
+    
+    // Limit to reasonable range
+    let totalDays = differenceInDays(sprintEnd, sprintStart) || sprintDays;
+    if (totalDays > sprintDays + 7) totalDays = sprintDays + 7; // Allow 1 week buffer
+    if (totalDays < 1) totalDays = sprintDays;
     
     // Build daily burndown
-    const data: { day: string; remaining: number; spRemaining: number; ideal: number; idealSP: number }[] = [];
+    const data: { day: string; remaining: number; spRemaining: number; hoursRemaining: number; ideal: number; idealSP: number; idealHours: number }[] = [];
     for (let d = 0; d <= totalDays; d++) {
       const date = addDays(sprintStart, d);
       const dateStr = format(date, 'dd/MM');
-      const completedByDate = items.filter(i => {
+      
+      // User Stories completed by date
+      const completedStoriesByDate = userStories.filter(i => {
         if (!i.closedDate) return false;
         return new Date(i.closedDate as string) <= date && COMPLETED_STATES.includes(i.state);
       });
-      const completedItems = completedByDate.length;
-      const completedSP = completedByDate.reduce((s, i) => s + (i.storyPoints || 0), 0);
+      const completedSP = completedStoriesByDate.reduce((s, i) => s + (i.storyPoints || 0), 0);
+      
+      // All items completed by date
+      const completedItemsByDate = items.filter(i => {
+        if (!i.closedDate) return false;
+        return new Date(i.closedDate as string) <= date && COMPLETED_STATES.includes(i.state);
+      });
+      const completedItems = completedItemsByDate.length;
+      
+      // Tasks: sum completed work for items closed by date
+      const completedTasksByDate = tasks.filter(i => {
+        if (!i.closedDate) return false;
+        return new Date(i.closedDate as string) <= date && COMPLETED_STATES.includes(i.state);
+      });
+      const completedHours = completedTasksByDate.reduce((s, i) => s + (i.originalEstimate || 0), 0);
       
       data.push({
         day: dateStr,
         remaining: totalItems - completedItems,
         spRemaining: Math.round((totalSP - completedSP) * 10) / 10,
+        hoursRemaining: Math.round((totalHours - completedHours) * 10) / 10,
         ideal: Math.round((totalItems * (1 - d / totalDays)) * 10) / 10,
         idealSP: Math.round((totalSP * (1 - d / totalDays)) * 10) / 10,
+        idealHours: Math.round((totalHours * (1 - d / totalDays)) * 10) / 10,
       });
     }
     return data;
@@ -354,6 +409,81 @@ const ScrumCTCDashboard: React.FC<ScrumCTCDashboardProps> = ({ data }) => {
 
     return insights;
   }, [kpis, velocityData]);
+
+  // Estimativa vs Realidade - Tasks com campos de tempo
+  const estimateVsRealityData = useMemo(() => {
+    // Filtrar Tasks com campos de estimativa preenchidos
+    const tasksWithEstimates = franquiaItems.filter(item => 
+      item.type === 'Task' && item.originalEstimate != null
+    );
+    
+    // Agrupar por sprint
+    const sprintMap: Record<string, { 
+      name: string; 
+      originalEstimate: number; 
+      completedWork: number; 
+      remainingWork: number; 
+      taskCount: number;
+    }> = {};
+    
+    tasksWithEstimates.forEach(task => {
+      const iterationPath = task.iterationPath as string || 'Sem Sprint';
+      const parts = iterationPath.split('\\');
+      const sprintName = parts[parts.length - 1] || iterationPath;
+      
+      if (!sprintMap[sprintName]) {
+        sprintMap[sprintName] = {
+          name: sprintName,
+          originalEstimate: 0,
+          completedWork: 0,
+          remainingWork: 0,
+          taskCount: 0,
+        };
+      }
+      sprintMap[sprintName].originalEstimate += Number(task.originalEstimate) || 0;
+      sprintMap[sprintName].completedWork += Number(task.completedWork) || 0;
+      sprintMap[sprintName].remainingWork += Number(task.remainingWork) || 0;
+      sprintMap[sprintName].taskCount += 1;
+    });
+    
+    return Object.values(sprintMap)
+      .sort((a, b) => {
+        const numA = a.name.match(/(\d+)/)?.[1];
+        const numB = b.name.match(/(\d+)/)?.[1];
+        if (numA && numB) return parseInt(numA) - parseInt(numB);
+        return a.name.localeCompare(b.name);
+      })
+      .slice(-10); // Últimas 10 sprints
+  }, [franquiaItems]);
+
+  // KPIs de estimativa vs realidade
+  const estimateKpis = useMemo(() => {
+    if (estimateVsRealityData.length === 0) return null;
+    
+    const totalEstimate = estimateVsRealityData.reduce((s, d) => s + d.originalEstimate, 0);
+    const totalCompleted = estimateVsRealityData.reduce((s, d) => s + d.completedWork, 0);
+    const totalRemaining = estimateVsRealityData.reduce((s, d) => s + d.remainingWork, 0);
+    const totalTasks = estimateVsRealityData.reduce((s, d) => s + d.taskCount, 0);
+    
+    // Accuracy: quanto a estimativa foi próxima da realidade
+    const accuracy = totalEstimate > 0 
+      ? Math.round(((totalCompleted + totalRemaining) / totalEstimate) * 100) 
+      : 0;
+    
+    // Variação: completedWork vs originalEstimate
+    const variance = totalEstimate > 0 
+      ? Math.round(((totalCompleted - totalEstimate) / totalEstimate) * 100) 
+      : 0;
+    
+    return {
+      totalEstimate: Math.round(totalEstimate),
+      totalCompleted: Math.round(totalCompleted),
+      totalRemaining: Math.round(totalRemaining),
+      totalTasks,
+      accuracy,
+      variance,
+    };
+  }, [estimateVsRealityData]);
 
   if (franquiaItems.length === 0) {
     return (
@@ -447,18 +577,33 @@ const ScrumCTCDashboard: React.FC<ScrumCTCDashboardProps> = ({ data }) => {
       {burndownData.length > 0 && (
         <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
           <h3 className="text-ds-light-text font-bold text-lg mb-4">🔥 Sprint Burndown — {currentSprint?.name}</h3>
-          <ChartInfoLamp info="Burndown da sprint atual: itens e SP restantes vs. linha ideal. Se a curva real estiver acima da ideal, a sprint está atrasada." />
+          <ChartInfoLamp info="Burndown da sprint atual: SP das User Stories, Horas das Tasks e itens restantes vs. linha ideal. Se a curva real estiver acima da ideal, a sprint está atrasada." />
+          <div className="grid grid-cols-3 gap-4 mb-4">
+            <div className="text-center p-2 bg-ds-navy/50 rounded border border-ds-border">
+              <p className="text-xs text-ds-text">SP Total (User Stories)</p>
+              <p className="text-xl font-bold text-blue-400">{burndownData[0]?.spRemaining || 0}</p>
+            </div>
+            <div className="text-center p-2 bg-ds-navy/50 rounded border border-ds-border">
+              <p className="text-xs text-ds-text">Horas Total (Tasks)</p>
+              <p className="text-xl font-bold text-purple-400">{burndownData[0]?.hoursRemaining || 0}h</p>
+            </div>
+            <div className="text-center p-2 bg-ds-navy/50 rounded border border-ds-border">
+              <p className="text-xs text-ds-text">Itens Totais</p>
+              <p className="text-xl font-bold text-red-400">{burndownData[0]?.remaining || 0}</p>
+            </div>
+          </div>
           <ResponsiveContainer width="100%" height={350}>
             <AreaChart data={burndownData}>
               <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
               <XAxis dataKey="day" stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} />
-              <YAxis stroke={CHART_COLORS.text} />
+              <YAxis yAxisId="left" stroke={CHART_COLORS.text} />
+              <YAxis yAxisId="right" orientation="right" stroke="#A78BFA" />
               <Tooltip contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }} labelStyle={{ color: '#64ffda', fontWeight: 'bold' }} itemStyle={{ color: '#e6f1ff' }} />
               <Legend />
-              <Area type="monotone" dataKey="remaining" name="Itens Restantes" stroke="#F56565" fill="#F56565" fillOpacity={0.15} strokeWidth={2} />
-              <Area type="monotone" dataKey="spRemaining" name="SP Restantes" stroke="#47C5FB" fill="#47C5FB" fillOpacity={0.1} strokeWidth={2} />
-              <Line type="monotone" dataKey="ideal" name="Ideal (Itens)" stroke="#FFB86C" strokeDasharray="5 5" strokeWidth={1.5} dot={false} />
-              <Line type="monotone" dataKey="idealSP" name="Ideal (SP)" stroke="#64FFDA" strokeDasharray="5 5" strokeWidth={1.5} dot={false} />
+              <Area yAxisId="left" type="monotone" dataKey="spRemaining" name="SP Restantes (User Stories)" stroke="#47C5FB" fill="#47C5FB" fillOpacity={0.15} strokeWidth={2} />
+              <Area yAxisId="right" type="monotone" dataKey="hoursRemaining" name="Horas Restantes (Tasks)" stroke="#A78BFA" fill="#A78BFA" fillOpacity={0.1} strokeWidth={2} />
+              <Line yAxisId="left" type="monotone" dataKey="idealSP" name="Ideal (SP)" stroke="#64FFDA" strokeDasharray="5 5" strokeWidth={1.5} dot={false} />
+              <Line yAxisId="right" type="monotone" dataKey="idealHours" name="Ideal (Horas)" stroke="#FFB86C" strokeDasharray="5 5" strokeWidth={1.5} dot={false} />
             </AreaChart>
           </ResponsiveContainer>
         </div>
@@ -475,8 +620,8 @@ const ScrumCTCDashboard: React.FC<ScrumCTCDashboardProps> = ({ data }) => {
             <YAxis stroke={CHART_COLORS.text} />
             <Tooltip contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }} labelStyle={{ color: '#64ffda', fontWeight: 'bold' }} itemStyle={{ color: '#e6f1ff' }} />
             <Legend />
-            <Bar dataKey="committed" name="Comprometido" fill="#47C5FB" opacity={0.6} />
-            <Bar dataKey="delivered" name="Entregue" fill="#64FFDA" />
+            <Bar dataKey="committed" name="Comprometido" fill="#47C5FB" opacity={0.6} label={{ position: 'top', fill: '#47C5FB', fontSize: 9 }} />
+            <Bar dataKey="delivered" name="Entregue" fill="#64FFDA" label={{ position: 'top', fill: '#64FFDA', fontSize: 9 }} />
             <ReferenceLine y={kpis.avgVelocity} stroke="#FFB86C" strokeDasharray="5 5" label={{ value: `Média: ${kpis.avgVelocity}`, position: 'insideTopRight', fill: '#FFB86C', fontSize: 11 }} />
           </BarChart>
         </ResponsiveContainer>
@@ -499,6 +644,64 @@ const ScrumCTCDashboard: React.FC<ScrumCTCDashboardProps> = ({ data }) => {
           </LineChart>
         </ResponsiveContainer>
       </div>
+
+      {/* Estimativa vs Realidade (Tasks) */}
+      {estimateVsRealityData.length > 0 && estimateKpis && (
+        <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
+          <h3 className="text-ds-light-text font-bold text-lg mb-4">⏱️ Estimativa vs Realidade (Tasks)</h3>
+          <ChartInfoLamp info="Comparação entre horas estimadas (Original Estimate) e horas reais trabalhadas (Completed Work). Mostra a acurácia das estimativas do time." />
+          
+          {/* KPIs de Estimativa */}
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-4">
+            <div className="bg-ds-background/50 p-3 rounded-lg text-center">
+              <p className="text-ds-text text-xs">Tasks Analisadas</p>
+              <p className="text-xl font-bold text-ds-light-text">{estimateKpis.totalTasks}</p>
+            </div>
+            <div className="bg-ds-background/50 p-3 rounded-lg text-center">
+              <p className="text-ds-text text-xs">Total Estimado</p>
+              <p className="text-xl font-bold text-blue-400">{estimateKpis.totalEstimate}h</p>
+            </div>
+            <div className="bg-ds-background/50 p-3 rounded-lg text-center">
+              <p className="text-ds-text text-xs">Trabalho Realizado</p>
+              <p className="text-xl font-bold text-ds-green">{estimateKpis.totalCompleted}h</p>
+            </div>
+            <div className="bg-ds-background/50 p-3 rounded-lg text-center">
+              <p className="text-ds-text text-xs">Restante</p>
+              <p className="text-xl font-bold text-orange-400">{estimateKpis.totalRemaining}h</p>
+            </div>
+            <div className="bg-ds-background/50 p-3 rounded-lg text-center">
+              <p className="text-ds-text text-xs">Acurácia</p>
+              <p className={`text-xl font-bold ${estimateKpis.accuracy >= 80 && estimateKpis.accuracy <= 120 ? 'text-green-400' : 'text-yellow-400'}`}>{estimateKpis.accuracy}%</p>
+            </div>
+            <div className="bg-ds-background/50 p-3 rounded-lg text-center">
+              <p className="text-ds-text text-xs">Variação</p>
+              <p className={`text-xl font-bold ${estimateKpis.variance >= 0 ? 'text-red-400' : 'text-green-400'}`}>{estimateKpis.variance > 0 ? '+' : ''}{estimateKpis.variance}%</p>
+            </div>
+          </div>
+          
+          <ResponsiveContainer width="100%" height={350}>
+            <BarChart data={estimateVsRealityData}>
+              <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
+              <XAxis dataKey="name" stroke={CHART_COLORS.text} tick={{ fontSize: 9 }} angle={-15} textAnchor="end" height={60} />
+              <YAxis stroke={CHART_COLORS.text} label={{ value: 'Horas', angle: -90, position: 'insideLeft', fill: CHART_COLORS.text }} />
+              <Tooltip 
+                contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }} 
+                labelStyle={{ color: '#64ffda', fontWeight: 'bold' }} 
+                itemStyle={{ color: '#e6f1ff' }}
+                formatter={(value: number, name: string) => [`${value}h`, name]}
+              />
+              <Legend />
+              <Bar dataKey="originalEstimate" name="Estimado (Original)" fill="#47C5FB" opacity={0.7} />
+              <Bar dataKey="completedWork" name="Realizado" fill="#64FFDA" />
+              <Bar dataKey="remainingWork" name="Restante" fill="#FFB86C" opacity={0.6} />
+            </BarChart>
+          </ResponsiveContainer>
+          
+          <div className="mt-3 text-xs text-ds-text">
+            <p>💡 <strong>Abaixo de 100%:</strong> Time entregou mais rápido que o estimado | <strong>Acima de 100%:</strong> Levou mais tempo que o planejado</p>
+          </div>
+        </div>
+      )}
 
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { WorkItem } from '../types';
 import { CHART_COLORS } from '../constants';
 import ChartInfoLamp from './ChartInfoLamp';
@@ -6,7 +6,7 @@ import {
   ResponsiveContainer, BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
   XAxis, YAxis, Tooltip, CartesianGrid, Legend, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis
 } from 'recharts';
-import { format, subDays, eachWeekOfInterval, endOfWeek } from 'date-fns';
+import { format, subDays, subMonths, eachWeekOfInterval, endOfWeek, eachMonthOfInterval, endOfMonth, eachYearOfInterval, endOfYear, isWithinInterval, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 interface Props { data: WorkItem[]; }
@@ -15,7 +15,11 @@ const IN_PROGRESS_STATES = ['Active', 'Ativo', 'Em Progresso', 'Para Desenvolver
 
 const TEAM_COLORS = ['#64FFDA', '#47C5FB', '#F6E05E', '#B794F4', '#F56565', '#ED8936', '#68D391', '#FC8181', '#63B3ED', '#D6BCFA'];
 
+type ThroughputGroupMode = 'weekly' | 'biweekly' | 'monthly' | 'yearly';
+
 const ExecutiveHomeDashboard: React.FC<Props> = ({ data }) => {
+  const [throughputGroupMode, setThroughputGroupMode] = useState<ThroughputGroupMode>('weekly');
+
   // Health Score per team
   const teamHealth = useMemo(() => {
     const teams: Record<string, WorkItem[]> = {};
@@ -74,21 +78,72 @@ const ExecutiveHomeDashboard: React.FC<Props> = ({ data }) => {
     };
   }, [data]);
 
-  // Throughput trend (weekly, last 8 weeks)
-  const weeklyTrend = useMemo(() => {
+  // Throughput trend (configurable period)
+  const throughputTrend = useMemo(() => {
     const now = new Date();
-    const start = subDays(now, 56);
-    const weeks = eachWeekOfInterval({ start, end: now }, { weekStartsOn: 1 });
-    return weeks.map(weekStart => {
-      const wEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
-      const completedInWeek = data.filter(item => {
-        if (!COMPLETED_STATES.includes(item.state)) return false;
-        const closed = item.closedDate ? new Date(item.closedDate as string) : null;
-        return closed && closed >= weekStart && closed <= wEnd;
-      }).length;
-      return { week: format(weekStart, 'dd/MM', { locale: ptBR }), throughput: completedInWeek };
-    });
-  }, [data]);
+    
+    if (throughputGroupMode === 'weekly') {
+      const start = subDays(now, 56);
+      const weeks = eachWeekOfInterval({ start, end: now }, { weekStartsOn: 1 });
+      return weeks.map(weekStart => {
+        const wEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
+        const completedInWeek = data.filter(item => {
+          if (!COMPLETED_STATES.includes(item.state)) return false;
+          const closed = item.closedDate ? new Date(item.closedDate as string) : null;
+          return closed && closed >= weekStart && closed <= wEnd;
+        }).length;
+        return { period: format(weekStart, 'dd/MM', { locale: ptBR }), throughput: completedInWeek };
+      });
+    }
+
+    if (throughputGroupMode === 'biweekly') {
+      const start = subMonths(now, 6);
+      const periods: { start: Date; end: Date }[] = [];
+      let cursor = new Date(start);
+      while (cursor < now) {
+        const periodEnd = addDays(cursor, 13);
+        periods.push({ start: new Date(cursor), end: periodEnd > now ? now : periodEnd });
+        cursor = addDays(cursor, 14);
+      }
+      return periods.map(({ start, end }) => {
+        const completedInPeriod = data.filter(item => {
+          if (!COMPLETED_STATES.includes(item.state)) return false;
+          const closed = item.closedDate ? new Date(item.closedDate as string) : null;
+          return closed && isWithinInterval(closed, { start, end });
+        }).length;
+        return { period: `${format(start, 'dd/MM')}-${format(end, 'dd/MM')}`, throughput: completedInPeriod };
+      });
+    }
+
+    if (throughputGroupMode === 'monthly') {
+      const start = subMonths(now, 12);
+      const months = eachMonthOfInterval({ start, end: now });
+      return months.map(monthStart => {
+        const monthEnd = endOfMonth(monthStart);
+        const completedInMonth = data.filter(item => {
+          if (!COMPLETED_STATES.includes(item.state)) return false;
+          const closed = item.closedDate ? new Date(item.closedDate as string) : null;
+          return closed && isWithinInterval(closed, { start: monthStart, end: monthEnd });
+        }).length;
+        return { period: format(monthStart, 'MMM/yy', { locale: ptBR }), throughput: completedInMonth };
+      });
+    }
+
+    // yearly
+    const start = subMonths(now, 36);
+    try {
+      const years = eachYearOfInterval({ start, end: now });
+      return years.map(yearStart => {
+        const yearEnd = endOfYear(yearStart);
+        const completedInYear = data.filter(item => {
+          if (!COMPLETED_STATES.includes(item.state)) return false;
+          const closed = item.closedDate ? new Date(item.closedDate as string) : null;
+          return closed && isWithinInterval(closed, { start: yearStart, end: yearEnd });
+        }).length;
+        return { period: format(yearStart, 'yyyy'), throughput: completedInYear };
+      });
+    } catch { return []; }
+  }, [data, throughputGroupMode]);
 
   // Type distribution
   const typeDistribution = useMemo(() => {
@@ -142,14 +197,35 @@ const ExecutiveHomeDashboard: React.FC<Props> = ({ data }) => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Weekly Throughput Trend */}
+        {/* Throughput Trend */}
         <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
-          <h3 className="text-ds-light-text font-bold text-lg mb-4">📈 Throughput Semanal (últimas 8 semanas)</h3>
-          <ChartInfoLamp info="Tendência semanal de itens concluídos nas últimas 8 semanas. Permite identificar aceleração ou desaceleração das entregas." />
+          <h3 className="text-ds-light-text font-bold text-lg mb-4">📈 Throughput
+            {throughputGroupMode === 'weekly' && ' Semanal'}
+            {throughputGroupMode === 'biweekly' && ' Quinzenal'}
+            {throughputGroupMode === 'monthly' && ' Mensal'}
+            {throughputGroupMode === 'yearly' && ' Anual'}
+          </h3>
+          <ChartInfoLamp info="Tendência de itens concluídos no período selecionado. Permite identificar aceleração ou desaceleração das entregas." />
+          <div className="flex items-center gap-2 mb-4">
+            {[
+              { value: 'weekly' as ThroughputGroupMode, label: 'Semanal' },
+              { value: 'biweekly' as ThroughputGroupMode, label: 'Quinzenal' },
+              { value: 'monthly' as ThroughputGroupMode, label: 'Mensal' },
+              { value: 'yearly' as ThroughputGroupMode, label: 'Anual' },
+            ].map(opt => (
+              <button
+                key={opt.value}
+                onClick={() => setThroughputGroupMode(opt.value)}
+                className={`px-3 py-1.5 text-xs rounded-md font-medium transition-colors ${throughputGroupMode === opt.value ? 'bg-ds-green text-ds-dark-blue' : 'bg-ds-muted/20 text-ds-text hover:bg-ds-muted/40'}`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
           <ResponsiveContainer width="100%" height={250}>
-            <LineChart data={weeklyTrend}>
+            <LineChart data={throughputTrend}>
               <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
-              <XAxis dataKey="week" stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} />
+              <XAxis dataKey="period" stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} />
               <YAxis stroke={CHART_COLORS.text} />
               <Tooltip contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }} labelStyle={{ color: '#64ffda', fontWeight: 'bold' }} itemStyle={{ color: '#e6f1ff' }} />
               <Line type="monotone" dataKey="throughput" name="Itens Concluídos" stroke="#64FFDA" strokeWidth={2} dot={{ r: 4 }} />

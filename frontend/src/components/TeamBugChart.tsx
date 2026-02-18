@@ -140,7 +140,7 @@ const TeamBugChart: React.FC<TeamBugChartProps> = ({ data }) => {
     <>
       <ItemListModal data={modalData} onClose={() => setModalData(null)} />
       <ResponsiveContainer width="100%" height={300}>
-        <BarChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+        <BarChart data={chartData} margin={{ top: 30, right: 30, left: 20, bottom: 5 }}>
           <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
           <XAxis dataKey="name" stroke={CHART_COLORS.text} />
           <YAxis stroke={CHART_COLORS.text} />

@@ -7,14 +7,15 @@ import {
   XAxis, YAxis, Tooltip, CartesianGrid, Legend, Cell,
   ScatterChart, Scatter, ZAxis, ReferenceLine
 } from 'recharts';
-import { format, subWeeks, subMonths, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachWeekOfInterval, eachMonthOfInterval, differenceInDays, isWithinInterval, addDays } from 'date-fns';
+import { format, subWeeks, subMonths, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachWeekOfInterval, eachMonthOfInterval, differenceInDays, isWithinInterval, addDays, getYear, eachYearOfInterval, startOfYear, endOfYear } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 interface CycleTimeAnalyticsDashboardProps {
   data: WorkItem[];
 }
 
-type PeriodType = 'weekly' | 'biweekly' | 'monthly' | 'quarterly' | 'semiannual' | 'annual' | 'specific-month' | 'custom';
+type PeriodType = 'weekly' | 'biweekly' | 'monthly' | 'quarterly' | 'semiannual' | 'annual' | 'specific-month' | 'specific-year' | 'custom';
+type HistoryGroupMode = 'weekly' | 'biweekly' | 'monthly' | 'yearly';
 
 const COMPLETED_STATES = ['Done', 'Concluído', 'Closed', 'Fechado', 'Finished', 'Resolved', 'Pronto'];
 
@@ -22,8 +23,20 @@ const CycleTimeAnalyticsDashboard: React.FC<CycleTimeAnalyticsDashboardProps> = 
   const [periodType, setPeriodType] = useState<PeriodType>('monthly');
   const [selectedTeam, setSelectedTeam] = useState<string>('all');
   const [selectedMonth, setSelectedMonth] = useState<string>('');
+  const [historyGroupMode, setHistoryGroupMode] = useState<HistoryGroupMode>('monthly');
   const [customStart, setCustomStart] = useState<string>('');
   const [customEnd, setCustomEnd] = useState<string>('');
+  const [selectedYear, setSelectedYear] = useState<number>(0); // 0 = todos os anos
+
+  // Anos disponíveis para seleção (2021 até o ano atual)
+  const availableYears = useMemo(() => {
+    const currentYear = new Date().getFullYear();
+    const years: number[] = [0]; // 0 = Todos
+    for (let y = 2021; y <= currentYear; y++) {
+      years.push(y);
+    }
+    return years;
+  }, []);
 
   const teams = useMemo(() => {
     return [...new Set(data.map(i => i.team).filter(Boolean) as string[])].sort();
@@ -41,14 +54,26 @@ const CycleTimeAnalyticsDashboard: React.FC<CycleTimeAnalyticsDashboardProps> = 
     return months;
   }, []);
 
-  // Filter completed items
+  // Filter completed items - com fallback para cycleTime
   const completedItems = useMemo(() => {
     return data.filter(item => {
       if (!COMPLETED_STATES.includes(item.state)) return false;
       if (!item.closedDate) return false;
       if (selectedTeam !== 'all' && item.team !== selectedTeam) return false;
-      if (item.cycleTime === null || item.cycleTime === undefined) return false;
+      // Aceita se tem cycleTime ou se tem createdDate para calcular
+      const hasCycleTime = item.cycleTime != null;
+      const canCalculate = item.createdDate != null;
+      if (!hasCycleTime && !canCalculate) return false;
       return true;
+    }).map(item => {
+      // Calcular cycleTime se não existir
+      if (item.cycleTime == null && item.createdDate && item.closedDate) {
+        const created = new Date(item.createdDate);
+        const closed = new Date(item.closedDate);
+        const ct = Math.ceil((closed.getTime() - created.getTime()) / (1000 * 60 * 60 * 24));
+        return { ...item, cycleTime: ct >= 0 && ct < 1000 ? ct : 0 };
+      }
+      return item;
     });
   }, [data, selectedTeam]);
 
@@ -61,6 +86,17 @@ const CycleTimeAnalyticsDashboard: React.FC<CycleTimeAnalyticsDashboardProps> = 
       const end = endOfMonth(new Date(year, month - 1));
       return { start, end };
     }
+    if (periodType === 'specific-year') {
+      if (selectedYear === 0) {
+        // Todos os anos: de 2021 até agora
+        const start = new Date(2021, 0, 1);
+        const end = now;
+        return { start, end };
+      }
+      const start = startOfYear(new Date(selectedYear, 0, 1));
+      const end = endOfYear(new Date(selectedYear, 0, 1));
+      return { start, end };
+    }
     if (periodType === 'custom' && customStart && customEnd) {
       return { start: new Date(customStart), end: new Date(customEnd) };
     }
@@ -70,7 +106,7 @@ const CycleTimeAnalyticsDashboard: React.FC<CycleTimeAnalyticsDashboardProps> = 
     if (periodType === 'semiannual') return { start: subMonths(now, 18), end: now };
     if (periodType === 'annual') return { start: subMonths(now, 24), end: now };
     return { start: subMonths(now, 12), end: now };
-  }, [periodType, selectedMonth, customStart, customEnd]);
+  }, [periodType, selectedMonth, selectedYear, customStart, customEnd]);
 
   // Filter by date range
   const filteredItems = useMemo(() => {
@@ -286,6 +322,127 @@ const CycleTimeAnalyticsDashboard: React.FC<CycleTimeAnalyticsDashboardProps> = 
     return getWeeks();
   }, [filteredItems, dateRange, periodType]);
 
+  // History Comparative Trend Data (respects global period filter)
+  const historyTrendData = useMemo(() => {
+    // Filter by selected period/dateRange
+    const allCompleted = data.filter(item => {
+      if (!COMPLETED_STATES.includes(item.state)) return false;
+      if (!item.closedDate) return false;
+      if (selectedTeam !== 'all' && item.team !== selectedTeam) return false;
+      // Apply date range filter
+      const closedDate = new Date(item.closedDate);
+      return isWithinInterval(closedDate, { start: dateRange.start, end: dateRange.end });
+    });
+    
+    if (allCompleted.length === 0) return [];
+
+    // Helper function to calculate cycle time with fallback
+    const getCycleTime = (item: typeof data[0]) => {
+      if (item.cycleTime != null) return item.cycleTime as number;
+      if (item.createdDate && item.closedDate) {
+        const created = new Date(item.createdDate);
+        const closed = new Date(item.closedDate);
+        const ct = Math.ceil((closed.getTime() - created.getTime()) / (1000 * 60 * 60 * 24));
+        return ct >= 0 && ct < 1000 ? ct : null;
+      }
+      return null;
+    };
+
+    if (historyGroupMode === 'weekly') {
+      try {
+        const weeks = eachWeekOfInterval({ start: dateRange.start, end: dateRange.end }, { weekStartsOn: 1 });
+        return weeks.map((weekStart) => {
+          const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
+          const itemsInWeek = allCompleted.filter(i => {
+            const d = new Date(i.closedDate!);
+            return isWithinInterval(d, { start: weekStart, end: weekEnd });
+          });
+          const cycleTimes = itemsInWeek.map(getCycleTime).filter((ct): ct is number => ct !== null);
+          const leadTimes = itemsInWeek.filter(i => i.leadTime != null).map(i => i.leadTime as number);
+          return {
+            label: format(weekStart, 'dd/MM'),
+            cycleTime: cycleTimes.length > 0 ? Math.round((cycleTimes.reduce((a, b) => a + b, 0) / cycleTimes.length) * 10) / 10 : null,
+            leadTime: leadTimes.length > 0 ? Math.round((leadTimes.reduce((a, b) => a + b, 0) / leadTimes.length) * 10) / 10 : null,
+            count: itemsInWeek.length,
+          };
+        }).filter(w => w.count > 0);
+      } catch { return []; }
+    }
+
+    if (historyGroupMode === 'biweekly') {
+      try {
+        const periods: { start: Date; end: Date }[] = [];
+        let cursor = new Date(dateRange.start);
+        while (cursor < dateRange.end) {
+          const periodEnd = addDays(cursor, 13);
+          periods.push({ start: new Date(cursor), end: periodEnd > dateRange.end ? dateRange.end : periodEnd });
+          cursor = addDays(cursor, 14);
+        }
+        return periods.map(({ start, end }) => {
+          const itemsInPeriod = allCompleted.filter(i => {
+            const d = new Date(i.closedDate!);
+            return isWithinInterval(d, { start, end });
+          });
+          const cycleTimes = itemsInPeriod.map(getCycleTime).filter((ct): ct is number => ct !== null);
+          const leadTimes = itemsInPeriod.filter(i => i.leadTime != null).map(i => i.leadTime as number);
+          return {
+            label: `${format(start, 'dd/MM')}-${format(end, 'dd/MM')}`,
+            cycleTime: cycleTimes.length > 0 ? Math.round((cycleTimes.reduce((a, b) => a + b, 0) / cycleTimes.length) * 10) / 10 : null,
+            leadTime: leadTimes.length > 0 ? Math.round((leadTimes.reduce((a, b) => a + b, 0) / leadTimes.length) * 10) / 10 : null,
+            count: itemsInPeriod.length,
+          };
+        }).filter(p => p.count > 0);
+      } catch { return []; }
+    }
+
+    if (historyGroupMode === 'yearly') {
+      // Get years from dateRange
+      const startYear = dateRange.start.getFullYear();
+      const endYear = dateRange.end.getFullYear();
+      
+      const years: Date[] = [];
+      for (let year = startYear; year <= endYear; year++) {
+        years.push(new Date(year, 0, 1));
+      }
+      
+      return years.map((yearStart) => {
+        const yearEnd = endOfYear(yearStart);
+        const itemsInYear = allCompleted.filter(i => {
+          const d = new Date(i.closedDate!);
+          return isWithinInterval(d, { start: yearStart, end: yearEnd });
+        });
+        const cycleTimes = itemsInYear.map(getCycleTime).filter((ct): ct is number => ct !== null);
+        const leadTimes = itemsInYear.filter(i => i.leadTime != null).map(i => i.leadTime as number);
+        return {
+          label: format(yearStart, 'yyyy'),
+          cycleTime: cycleTimes.length > 0 ? Math.round((cycleTimes.reduce((a, b) => a + b, 0) / cycleTimes.length) * 10) / 10 : null,
+          leadTime: leadTimes.length > 0 ? Math.round((leadTimes.reduce((a, b) => a + b, 0) / leadTimes.length) * 10) / 10 : null,
+          count: itemsInYear.length,
+        };
+      }).filter(y => y.count > 0);
+    }
+
+    // Monthly (default)
+    try {
+      const months = eachMonthOfInterval({ start: dateRange.start, end: dateRange.end });
+      return months.map((monthStart) => {
+        const monthEnd = endOfMonth(monthStart);
+        const itemsInMonth = allCompleted.filter(i => {
+          const d = new Date(i.closedDate!);
+          return isWithinInterval(d, { start: monthStart, end: monthEnd });
+        });
+        const cycleTimes = itemsInMonth.map(getCycleTime).filter((ct): ct is number => ct !== null);
+        const leadTimes = itemsInMonth.filter(i => i.leadTime != null).map(i => i.leadTime as number);
+        return {
+          label: format(monthStart, 'MMM/yy', { locale: ptBR }),
+          cycleTime: cycleTimes.length > 0 ? Math.round((cycleTimes.reduce((a, b) => a + b, 0) / cycleTimes.length) * 10) / 10 : null,
+          leadTime: leadTimes.length > 0 ? Math.round((leadTimes.reduce((a, b) => a + b, 0) / leadTimes.length) * 10) / 10 : null,
+          count: itemsInMonth.length,
+        };
+      }).filter(m => m.count > 0);
+    } catch { return []; }
+  }, [data, selectedTeam, historyGroupMode, dateRange]);
+
   // Team ranking
   const teamRanking = useMemo(() => {
     const teamMap: Record<string, number[]> = {};
@@ -368,6 +525,7 @@ const CycleTimeAnalyticsDashboard: React.FC<CycleTimeAnalyticsDashboardProps> = 
                 { value: 'semiannual', label: 'Últ. 3 Semestres' },
                 { value: 'annual', label: 'Últ. 2 Anos' },
                 { value: 'specific-month', label: 'Mês Específico' },
+                { value: 'specific-year', label: 'Ano Específico' },
                 { value: 'custom', label: 'Personalizado' },
               ].map(opt => (
                 <button
@@ -392,6 +550,21 @@ const CycleTimeAnalyticsDashboard: React.FC<CycleTimeAnalyticsDashboardProps> = 
                 <option value="">Selecione...</option>
                 {lastMonths.map(m => (
                   <option key={m.value} value={m.value}>{m.label}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {periodType === 'specific-year' && (
+            <div>
+              <label className="text-ds-text text-sm mb-1 block">Ano:</label>
+              <select
+                value={selectedYear}
+                onChange={e => setSelectedYear(Number(e.target.value))}
+                className="bg-ds-navy border border-ds-border text-ds-light-text text-sm rounded-md p-2"
+              >
+                {availableYears.map(y => (
+                  <option key={y} value={y}>{y === 0 ? 'Todos os Anos' : y}</option>
                 ))}
               </select>
             </div>
@@ -424,7 +597,7 @@ const CycleTimeAnalyticsDashboard: React.FC<CycleTimeAnalyticsDashboardProps> = 
             </select>
           </div>
 
-          {(periodType === 'specific-month' || periodType === 'custom') && (
+          {(periodType === 'specific-month' || periodType === 'specific-year' || periodType === 'custom') && (
             <div className="flex items-end h-full">
               <span className="text-ds-green text-xs">📅 {format(dateRange.start, 'dd/MM/yyyy')} a {format(dateRange.end, 'dd/MM/yyyy')}</span>
             </div>
@@ -476,9 +649,12 @@ const CycleTimeAnalyticsDashboard: React.FC<CycleTimeAnalyticsDashboardProps> = 
           <p className="text-ds-text text-xs">Lead Time Médio</p>
           <p className="text-2xl font-bold text-blue-400">{metrics.avgLeadTime} <span className="text-sm">dias</span></p>
         </div>
-        <div className="bg-ds-navy p-4 rounded-lg border border-ds-border text-center">
+        <div 
+          className="bg-ds-navy p-4 rounded-lg border border-ds-border text-center cursor-help"
+          title="Min: menor cycle time registrado (itens resolvidos no mesmo dia = menos de 1 dia). Max: maior cycle time no período selecionado."
+        >
           <p className="text-ds-text text-xs">Min / Max</p>
-          <p className="text-2xl font-bold text-ds-light-text">{metrics.min} / {metrics.max}</p>
+          <p className="text-2xl font-bold text-ds-light-text">{metrics.min === 0 ? '<1' : metrics.min} / {metrics.max} <span className="text-sm">dias</span></p>
         </div>
       </div>
 
@@ -498,47 +674,42 @@ const CycleTimeAnalyticsDashboard: React.FC<CycleTimeAnalyticsDashboardProps> = 
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Trend Chart */}
-        <div className="lg:col-span-2 bg-ds-navy p-4 rounded-lg border border-ds-border">
-          <h3 className="text-ds-light-text font-bold text-lg mb-4">
-            Tendência: Cycle Time vs Lead Time
-          </h3>
-          <ChartInfoLamp info="Evolução do cycle time e lead time médios por período, com linhas de referência SLA (P85 e P95). Ajuda a identificar tendências de melhora ou piora no fluxo." />
-          <ResponsiveContainer width="100%" height={350}>
-            <LineChart data={trendData}>
-              <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
-              <XAxis dataKey="label" stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} />
-              <YAxis stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} />
-              <Tooltip contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }} labelStyle={{ color: '#64ffda', fontWeight: 'bold' }} itemStyle={{ color: '#e6f1ff' }} />
-              <Legend />
-              <Line type="monotone" dataKey="cycleTime" name="Cycle Time (dias)" stroke={CHART_COLORS.primary} strokeWidth={2} dot={{ r: 4 }} />
-              <Line type="monotone" dataKey="leadTime" name="Lead Time (dias)" stroke="#60A5FA" strokeWidth={2} dot={{ r: 4 }} />
-              <ReferenceLine y={metrics.p85} stroke="#FFB86C" strokeDasharray="5 5" label={{ value: `SLA P85: ${metrics.p85}d`, position: 'insideTopRight', fill: '#FFB86C', fontSize: 11 }} />
-              <ReferenceLine y={metrics.p95} stroke="#F56565" strokeDasharray="5 5" label={{ value: `P95: ${metrics.p95}d`, position: 'insideBottomRight', fill: '#F56565', fontSize: 11 }} />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-
         {/* Histórico Comparativo: Cycle vs Lead Time */}
         <div className="lg:col-span-2 bg-ds-navy p-4 rounded-lg border border-ds-border">
           <h3 className="text-ds-light-text font-bold text-lg mb-4">
             📊 Histórico Comparativo: Cycle Time vs Lead Time
           </h3>
           <ChartInfoLamp info="Comparação visual entre Cycle Time e Lead Time por período. Barras agrupadas facilitam a identificação de padrões e comparação direta entre as métricas ao longo do tempo." />
+          <div className="flex items-center gap-2 mb-4">
+            {[
+              { value: 'weekly' as HistoryGroupMode, label: 'Semanal' },
+              { value: 'biweekly' as HistoryGroupMode, label: 'Quinzenal' },
+              { value: 'monthly' as HistoryGroupMode, label: 'Mensal' },
+              { value: 'yearly' as HistoryGroupMode, label: 'Anual' },
+            ].map(opt => (
+              <button
+                key={opt.value}
+                onClick={() => setHistoryGroupMode(opt.value)}
+                className={`px-3 py-1.5 text-xs rounded-md font-medium transition-colors ${historyGroupMode === opt.value ? 'bg-ds-green text-ds-dark-blue' : 'bg-ds-muted/20 text-ds-text hover:bg-ds-muted/40'}`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
           <ResponsiveContainer width="100%" height={350}>
-            <BarChart data={trendData}>
+            <BarChart data={historyTrendData}>
               <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
               <XAxis dataKey="label" stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} angle={-45} textAnchor="end" height={80} />
               <YAxis stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} label={{ value: 'Dias', angle: -90, position: 'insideLeft', style: { fill: CHART_COLORS.text } }} />
               <Tooltip contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }} labelStyle={{ color: '#64ffda', fontWeight: 'bold' }} itemStyle={{ color: '#e6f1ff' }} />
               <Legend />
-              <Bar dataKey="cycleTime" name="Cycle Time (dias)" fill={CHART_COLORS.primary} radius={[4, 4, 0, 0]} />
-              <Bar dataKey="leadTime" name="Lead Time (dias)" fill="#60A5FA" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="cycleTime" name="Cycle Time (dias)" fill={CHART_COLORS.primary} radius={[4, 4, 0, 0]} label={{ position: 'top', fill: '#64FFDA', fontSize: 9 }} />
+              <Bar dataKey="leadTime" name="Lead Time (dias)" fill="#60A5FA" radius={[4, 4, 0, 0]} label={{ position: 'top', fill: '#60A5FA', fontSize: 9 }} />
               <ReferenceLine y={metrics.avg} stroke="#FFB86C" strokeDasharray="3 3" label={{ value: `Média CT: ${metrics.avg}d`, position: 'right', fill: '#FFB86C', fontSize: 10 }} />
             </BarChart>
           </ResponsiveContainer>
           <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
-            {trendData.slice(0, 8).map((item, idx) => (
+            {historyTrendData.slice(0, 8).map((item, idx) => (
               <div key={idx} className="bg-ds-bg/50 p-2 rounded">
                 <p className="text-ds-text font-semibold">{item.label}</p>
                 <p className="text-ds-green">CT: {item.cycleTime !== null ? `${item.cycleTime}d` : 'N/A'}</p>

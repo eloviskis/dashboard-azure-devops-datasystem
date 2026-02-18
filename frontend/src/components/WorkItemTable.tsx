@@ -221,8 +221,8 @@ const WorkItemTable: React.FC<WorkItemTableProps> = ({ data }) => {
                       }}
                     />
                     <Legend formatter={(value: string) => value === 'nivel1' ? 'CR Nível 1' : 'CR Nível 2'} />
-                    <Bar dataKey="nivel1" fill="#22c55e" radius={[0, 4, 4, 0]} name="nivel1" />
-                    <Bar dataKey="nivel2" fill="#3b82f6" radius={[0, 4, 4, 0]} name="nivel2" />
+                    <Bar dataKey="nivel1" fill="#22c55e" radius={[0, 4, 4, 0]} name="nivel1" label={{ position: 'right', fill: '#22c55e', fontSize: 9 }} />
+                    <Bar dataKey="nivel2" fill="#3b82f6" radius={[0, 4, 4, 0]} name="nivel2" label={{ position: 'right', fill: '#3b82f6', fontSize: 9 }} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
