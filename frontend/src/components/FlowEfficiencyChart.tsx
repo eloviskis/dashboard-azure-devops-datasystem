@@ -116,8 +116,8 @@ const FlowEfficiencyChart: React.FC<FlowEfficiencyChartProps> = ({ data }) => {
             <YAxis type="category" dataKey="team" stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} width={110} />
             <Tooltip contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }} labelStyle={{ color: '#64ffda', fontWeight: 'bold' }} itemStyle={{ color: '#e6f1ff' }} />
             <Legend />
-            <Bar dataKey="activeTime" name="Tempo Ativo (dias)" stackId="a" fill="#64FFDA" radius={[0, 0, 0, 0]} label={{ position: 'inside', fill: '#0a192f', fontSize: 10, fontWeight: 'bold' }} />
-            <Bar dataKey="waitTime" name="Tempo em Espera (dias)" stackId="a" fill="#F56565" fillOpacity={0.6} radius={[0, 4, 4, 0]} label={{ position: 'inside', fill: '#fff', fontSize: 10, fontWeight: 'bold' }} />
+            <Bar dataKey="activeTime" name="Tempo Ativo (dias)" stackId="a" fill="#64FFDA" radius={[0, 0, 0, 0]} label={{ position: 'inside', fill: '#0a192f', fontSize: 10, fontWeight: 'bold', formatter: (value: number) => value.toFixed(1) }} />
+            <Bar dataKey="waitTime" name="Tempo em Espera (dias)" stackId="a" fill="#F56565" fillOpacity={0.6} radius={[0, 4, 4, 0]} label={{ position: 'inside', fill: '#fff', fontSize: 10, fontWeight: 'bold', formatter: (value: number) => value.toFixed(1) }} />
           </BarChart>
         </ResponsiveContainer>
         
