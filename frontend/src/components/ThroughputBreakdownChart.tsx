@@ -32,7 +32,7 @@ const ThroughputBreakdownChart: React.FC<ThroughputBreakdownChartProps> = ({ dat
 
   return (
     <ResponsiveContainer width="100%" height={350}>
-      <BarChart data={chartData} layout="vertical" margin={{ top: 5, right: 50, left: 20, bottom: 5 }}>
+      <BarChart data={chartData} layout="vertical" margin={{ top: 5, right: 70, left: 20, bottom: 5 }}>
         <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
         <XAxis type="number" stroke={CHART_COLORS.text} />
         <YAxis type="category" dataKey="name" stroke={CHART_COLORS.text} width={100} fontSize={12} />

@@ -110,7 +110,7 @@ const FlowEfficiencyChart: React.FC<FlowEfficiencyChartProps> = ({ data }) => {
       <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
         <h3 className="text-ds-light-text font-bold text-lg mb-4">Flow Efficiency por Time</h3>
         <ResponsiveContainer width="100%" height={Math.max(250, analysis.teamData.length * 45)}>
-          <BarChart data={analysis.teamData} layout="vertical" margin={{ left: 120, right: 50 }}>
+          <BarChart data={analysis.teamData} layout="vertical" margin={{ left: 120, right: 70 }}>
             <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
             <XAxis type="number" stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} domain={[0, 'auto']} unit=" dias" />
             <YAxis type="category" dataKey="team" stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} width={110} />
