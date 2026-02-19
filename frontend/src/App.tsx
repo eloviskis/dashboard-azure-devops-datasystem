@@ -381,9 +381,10 @@ const App = () => {
       case 'quality':
         const totalQualityItems = filteredWorkItems.length;
         const bugItems = filteredWorkItems.filter(i => i.type === 'Bug');
+        const issueItems = filteredWorkItems.filter(i => i.type === 'Issue');
         const defectRate = totalQualityItems > 0 ? Math.round((bugItems.length / totalQualityItems) * 1000) / 10 : 0;
-        const reincidenceItems = filteredWorkItems.filter(i => i.reincidencia && Number(i.reincidencia) > 0);
-        const reincidenceRate = bugItems.length > 0 ? Math.round((reincidenceItems.length / bugItems.length) * 1000) / 10 : 0;
+        const totalDefects = bugItems.length + issueItems.length;
+        const devDetectionRate = totalDefects > 0 ? Math.round((bugItems.length / totalDefects) * 1000) / 10 : 0;
         return (
           <>
             <SectionHeader title="Análise de Qualidade" />
@@ -392,7 +393,7 @@ const App = () => {
                 <SummaryCard title="Issues em Aberto (Prod.)" value={openIssues} />
                 <SummaryCard title="MTTR (Res. Média)" value={avgResolutionTime} unit="dias" />
                 <SummaryCard title="Taxa de Defeito" value={`${defectRate}%`} />
-                <SummaryCard title="Reincidência" value={`${reincidenceRate}%`} />
+                <SummaryCard title="Detecção em Dev" value={`${devDetectionRate}%`} />
                 <SummaryCard title="Itens Qualidade Abertos" value={openBugs + openIssues} />
             </div>
              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
