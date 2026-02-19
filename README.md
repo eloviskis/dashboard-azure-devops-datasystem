@@ -1,72 +1,99 @@
-# Dashboard de Performance DevOps com Backend Real
+# Dashboard de Performance DevOps — Data System
 
-Este projeto consiste em um frontend React (construído com Vite) e um backend Node.js (com Express e SQLite) que se conectam ao Azure DevOps para buscar, armazenar e visualizar dados de performance.
+Dashboard em tempo real para acompanhamento de performance, qualidade e entrega do time de desenvolvimento, integrado ao Azure DevOps.
+
+## Infraestrutura (Produção)
+
+| Camada | Tecnologia | URL |
+|---|---|---|
+| Frontend | React + TypeScript + Vite (Vercel) | https://devops-datasystem.vercel.app |
+| Backend | Node.js + Express (Vercel serverless) | https://backend-hazel-three-14.vercel.app |
+| Banco | PostgreSQL 16 (VPS própria) | 31.97.64.250:5433 |
+| Sync | `sync-standalone.js` rodando localmente | — |
+
+> **Importante:** o IP da VPS bloqueia conexões externas. A sincronização com o Azure DevOps **deve ser executada localmente** (máquina com acesso à rede autorizada).
 
 ## Estrutura de Pastas
 
 ```
 /
-├── backend/        # Contém o servidor Node.js/Express
-├── frontend/       # Contém a aplicação React/Vite
-└── README.md
+├── backend/
+│   ├── server.js              # API REST + startup PostgreSQL
+│   ├── sync-standalone.js     # Sync principal (40 campos, inclui DOR/identificacao)
+│   ├── sync-local.js          # Sync legado (sem todos os campos novos)
+│   ├── sync-app/              # Executável empacotado do sync
+│   └── *.js                   # Scripts de migração e verificação
+├── frontend/
+│   ├── src/
+│   │   ├── App.tsx            # Roteamento de abas e filtros globais
+│   │   ├── types.ts           # Tipos TypeScript (WorkItem, etc.)
+│   │   └── components/        # Todos os componentes de dashboard
+│   └── vite.config.ts
+└── ARQUITETURA.md
 ```
 
-## Requisitos
+## Como Rodar Localmente
 
-- Node.js (versão 18 ou superior)
-- npm (geralmente vem com o Node.js)
-- Um Personal Access Token (PAT) do Azure DevOps com permissões de leitura para Work Items.
+### Pré-requisitos
+- Node.js 18+
+- Acesso à VPS (rede autorizada) para o banco de dados
+- PAT do Azure DevOps com permissão de leitura em Work Items
 
-## Como Rodar o Projeto Localmente
+### Backend
 
-Você precisará de dois terminais abertos para rodar o backend e o frontend simultaneamente.
+```sh
+cd backend
+npm install
+# Crie .env com as variáveis (ver ARQUITETURA.md)
+npm start
+# Disponível em http://localhost:3001
+```
 
-### Passo 1: Configurar e Rodar o Backend
+### Frontend
 
-1.  **Navegue até a pasta do backend:**
-    ```sh
-    cd backend
-    ```
+```sh
+cd frontend
+npm install
+npm run dev
+# Disponível em http://localhost:5173
+```
 
-2.  **Instale as dependências:**
-    ```sh
-    npm install
-    ```
+### Sincronizar dados do Azure DevOps
 
-3.  **Configure suas credenciais:**
-    Crie um arquivo chamado `.env` na raiz da pasta `backend`. Abra este arquivo e adicione suas credenciais do Azure DevOps, substituindo os valores de exemplo:
-    ```.env
-    AZURE_ORG="sua-organizacao"
-    AZURE_PROJECT="seu-projeto"
-    AZURE_PAT="seu-personal-access-token"
-    ```
+```sh
+# Executa uma vez (recomendado para atualização manual)
+cd backend
+node sync-standalone.js --once
 
-4.  **Inicie o servidor backend:**
-    ```sh
-    npm start
-    ```
-    O servidor será iniciado em `http://localhost:3001`. Na primeira vez que rodar, ele fará a sincronização inicial dos dados do Azure DevOps, o que pode levar alguns minutos. Você verá logs no terminal indicando o progresso.
+# Executa continuamente (a cada 30 min)
+node sync-standalone.js
+```
 
-### Passo 2: Configurar e Rodar o Frontend
+> Use `sync-standalone.js` — é o único que salva **todos os 40+ campos**, incluindo `ready_date` (DOR), `identificacao` e `falha_do_processo`.
 
-1.  **Abra um novo terminal** e navegue até a pasta do frontend:
-    ```sh
-    cd frontend
-    ```
+## Deploy Manual (Vercel)
 
-2.  **Instale as dependências:**
-    ```sh
-    npm install
-    ```
+O auto-deploy via GitHub pode não disparar. Sempre fazer deploy manual após push:
 
-3.  **Inicie o servidor de desenvolvimento do frontend:**
-    ```sh
-    npm run dev
-    ```
-    O servidor de desenvolvimento Vite será iniciado, e você verá uma URL no terminal (geralmente `http://localhost:5173`).
+```sh
+# Frontend
+cd frontend
+vercel --prod
 
-### Passo 3: Acesse o Dashboard
+# Backend
+cd backend
+vercel --prod
+```
 
-Abra a URL do frontend (ex: `http://localhost:5173`) no seu navegador. O dashboard deverá carregar e buscar os dados do seu backend local.
+## Abas do Dashboard
 
-Parabéns! O ambiente completo está rodando na sua máquina.
+| Aba | Descrição |
+|---|---|
+| Visão Executiva | KPIs gerais, throughput, cycle time |
+| Análise de Ciclo | Scatter plot, histograma, lead vs cycle time |
+| Qualidade | Bugs vs Issues, MTTR, DOR, identificação da fonte, falha do processo |
+| Análise de Demanda | Backlog, aging, priorização por clientes afetados (Reincidência) |
+| Pull Requests | Métricas de PR, DORA |
+| Impedimentos | Itens bloqueados e SLA |
+| Por Cliente | Distribuição e throughput por cliente |
+| Análise PO | DOR por criador, clientes afetados, gestão de backlog |
