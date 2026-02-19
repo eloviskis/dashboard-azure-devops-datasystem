@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell, PieChart, Pie } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell, PieChart, Pie, LineChart, Line } from 'recharts';
 import { WorkItem } from '../types';
 import { CHART_COLORS } from '../constants';
 
@@ -170,82 +170,39 @@ const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data: rawData
     const totalDefects = bugs.length + issues.length;
     const detectionRate = totalDefects > 0 ? Math.round((bugs.length / totalDefects) * 1000) / 10 : 0;
     
-    // Comparação Bugs vs Issues
+    // Comparação Bugs vs Issues (contagem real)
     const bugVsIssueComparison = [
-      {
-        category: 'Bugs\n(Dev)',
-        total: bugs.length,
-        comReincidencia: 0, // Bugs não têm reincidência
-        escapeRate: 0
-      },
-      {
-        category: 'Issues\n(Produção)',
-        total: issues.length,
-        comReincidencia: issuesWithReincidencia.length,
-        escapeRate: totalDefects > 0 ? Math.round((issues.length / totalDefects) * 1000) / 10 : 0
-      }
+      { category: 'Bugs (Dev)',        total: bugs.length },
+      { category: 'Issues (Produção)', total: issues.length },
     ];
-    
-    // Por time
-    const teamRework: Record<string, { bugs: number; reincidences: number; total: number; avgBugCT: number }> = {};
+
+    // Issues ainda abertas (backlog de defeitos em produção)
+    const openIssues = issues.filter(i => !COMPLETED_STATES.includes(i.state));
+
+    // MTTR global (média de cycle time das Issues fechadas)
+    const closedIssuesWithCT = issues.filter(i => COMPLETED_STATES.includes(i.state) && i.cycleTime != null);
+    const avgIssueCT = closedIssuesWithCT.length > 0
+      ? Math.round((closedIssuesWithCT.reduce((s, i) => s + i.cycleTime!, 0) / closedIssuesWithCT.length) * 10) / 10
+      : 0;
+
+    // Tendência mensal (últimos 12 meses ou período do filtro)
+    const monthMap: Record<string, { bugs: number; issues: number }> = {};
     data.forEach(item => {
-      const team = item.team || 'Sem Time';
-      if (!teamRework[team]) teamRework[team] = { bugs: 0, reincidences: 0, total: 0, avgBugCT: 0 };
-      teamRework[team].total++;
-      if (item.type === 'Bug') teamRework[team].bugs++;
-      if (item.reincidencia && Number(item.reincidencia) > 0) teamRework[team].reincidences++;
+      if (!item.createdDate) return;
+      const d = new Date(item.createdDate);
+      if (isNaN(d.getTime())) return;
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      if (!monthMap[key]) monthMap[key] = { bugs: 0, issues: 0 };
+      if (item.type === 'Bug') monthMap[key].bugs++;
+      else if (item.type === 'Issue') monthMap[key].issues++;
     });
-
-    // Calcular CT médio de bugs por time
-    const bugCTByTeam: Record<string, number[]> = {};
-    completedBugs.forEach(bug => {
-      const team = bug.team || 'Sem Time';
-      if (!bugCTByTeam[team]) bugCTByTeam[team] = [];
-      if (bug.cycleTime != null) bugCTByTeam[team].push(bug.cycleTime);
-    });
-
-    const teamData = Object.entries(teamRework)
-      .map(([team, d]) => ({
-        team,
-        bugs: d.bugs,
-        reincidences: d.reincidences,
-        reworkRate: d.total > 0 ? Math.round((d.bugs / d.total) * 1000) / 10 : 0,
-        reincidenceRate: d.bugs > 0 ? Math.round((d.reincidences / d.bugs) * 1000) / 10 : 0,
-        avgBugCT: bugCTByTeam[team]?.length > 0 
-          ? Math.round((bugCTByTeam[team].reduce((a, b) => a + b, 0) / bugCTByTeam[team].length) * 10) / 10 
-          : 0,
-      }))
-      .filter(d => d.bugs > 0)
-      .sort((a, b) => b.reworkRate - a.reworkRate);
-
-    // Por pessoa (top reincidentes)
-    const personRework: Record<string, { reincidences: number; team: string; issues: number; totalReincidenceValue: number }> = {};
-    data.forEach(item => {
-      const person = item.assignedTo || 'Não Atribuído';
-      if (!personRework[person]) personRework[person] = { reincidences: 0, team: item.team || 'Sem Time', issues: 0, totalReincidenceValue: 0 };
-      
-      // Contar apenas Issues (onde o campo reincidência é usado)
-      if (item.type === 'Issue') {
-        personRework[person].issues++;
-        
-        // Se tem campo reincidencia preenchido
-        const reincValue = Number(item.reincidencia);
-        if (reincValue > 0) {
-          personRework[person].reincidences++;
-          personRework[person].totalReincidenceValue += reincValue;
-        }
-      }
-    });
-
-    const personData = Object.entries(personRework)
-      .filter(([_, d]) => d.issues > 0 && d.reincidences > 0)
-      .map(([person, d]) => ({ 
-        person, 
-        ...d, 
-        rate: Math.round((d.reincidences / d.issues) * 1000) / 10 
-      }))
-      .sort((a, b) => b.totalReincidenceValue - a.totalReincidenceValue)
-      .slice(0, 10);
+    const monthlyTrend = Object.entries(monthMap)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .slice(-18)
+      .map(([month, counts]) => {
+        const [year, m] = month.split('-');
+        return { month: `${m}/${year.slice(2)}`, ...counts };
+      });
 
     // MTTR por time (Mean Time To Resolve — apenas Issues fechadas com cycleTime)
     const issueCTByTeam: Record<string, number[]> = {};
@@ -290,23 +247,22 @@ const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data: rawData
       .sort((a, b) => b.value - a.value)
       .slice(0, 10);
 
+    const avgBugCT = completedBugs.filter(b => b.cycleTime).length > 0
+      ? Math.round((completedBugs.filter(b => b.cycleTime).reduce((sum, b) => sum + (b.cycleTime || 0), 0) / completedBugs.filter(b => b.cycleTime).length) * 10) / 10
+      : 0;
+
     return {
       totalBugs: bugs.length,
       totalIssues: issues.length,
       totalReincidences: totalReincidenciaValue,
-      issuesWithReincidencia: issuesWithReincidencia.length,
       detectionRate,
-      globalReworkRate: data.length > 0 ? Math.round((bugs.length / data.length) * 1000) / 10 : 0,
-      globalReincidenceRate: issues.length > 0 ? Math.round((issuesWithReincidencia.length / issues.length) * 1000) / 10 : 0,
-      avgBugCT: completedBugs.filter(b => b.cycleTime).length > 0
-        ? Math.round((completedBugs.filter(b => b.cycleTime).reduce((sum, b) => sum + (b.cycleTime || 0), 0) / completedBugs.filter(b => b.cycleTime).length) * 10) / 10
-        : 0,
-      teamData,
-      personData,
+      avgBugCT,
+      avgIssueCT,
+      openIssues: openIssues.length,
       bugVsIssueComparison,
       bugs,
       issues,
-      issuesWithReincidenciaItems: issuesWithReincidencia,
+      monthlyTrend,
       mttrByTeam,
       identPieData,
       falhaDistribution,
@@ -330,37 +286,17 @@ const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data: rawData
     });
   };
 
-  const handleShowIssuesWithReincidencia = () => {
-    setModalData({
-      title: 'Issues com Múltiplos Clientes Afetados',
-      items: analysis.issuesWithReincidenciaItems,
-      color: '#ed8936'
-    });
-  };
-
-  const handleShowPersonIssues = (person: string) => {
-    const personIssues = analysis.issues.filter(i => 
-      (i.assignedTo || 'Não Atribuído') === person &&
-      i.reincidencia && Number(i.reincidencia) > 0
-    );
-    setModalData({
-      title: `Issues com Reincidência - ${person}`,
-      items: personIssues,
-      color: '#ed8936'
-    });
-  };
-
   const handleBarClick = (category: string) => {
-    if (category === 'Bugs\n(Dev)') {
+    if (category.startsWith('Bugs')) {
       handleShowBugs();
-    } else if (category === 'Issues\n(Produção)') {
+    } else if (category.startsWith('Issues')) {
       handleShowIssues();
     }
   };
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div 
           className="bg-ds-navy p-4 rounded-lg border border-ds-border text-center cursor-pointer hover:border-yellow-400 transition-colors"
           onClick={handleShowBugs}
@@ -386,26 +322,12 @@ const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data: rawData
           </p>
           <p className="text-xs text-ds-text mt-1">Pegos em Dev</p>
         </div>
-        <div 
-          className="bg-ds-navy p-4 rounded-lg border border-ds-border text-center cursor-pointer hover:border-orange-400 transition-colors"
-          onClick={handleShowIssuesWithReincidencia}
-          title="Clique para ver detalhes"
-        >
-          <p className="text-ds-text text-xs">Issues c/ Clientes Afetados</p>
-          <p className="text-2xl font-bold text-orange-400">{analysis.issuesWithReincidencia}</p>
-          <p className="text-xs text-ds-text mt-1">Multi-cliente</p>
-        </div>
         <div className="bg-ds-navy p-4 rounded-lg border border-ds-border text-center">
-          <p className="text-ds-text text-xs">Clientes Afetados (%)</p>
-          <p className={`text-2xl font-bold ${analysis.globalReincidenceRate > 15 ? 'text-red-400' : analysis.globalReincidenceRate > 8 ? 'text-yellow-400' : 'text-green-400'}`}>
-            {String(analysis.globalReincidenceRate)}%
+          <p className="text-ds-text text-xs">Issues Abertas</p>
+          <p className={`text-2xl font-bold ${analysis.openIssues > 20 ? 'text-red-400' : analysis.openIssues > 10 ? 'text-yellow-400' : 'text-green-400'}`}>
+            {String(analysis.openIssues)}
           </p>
-          <p className="text-xs text-ds-text mt-1">Issues multi-cliente</p>
-        </div>
-        <div className="bg-ds-navy p-4 rounded-lg border border-ds-border text-center">
-          <p className="text-ds-text text-xs">CT Médio Bugs</p>
-          <p className="text-2xl font-bold text-ds-light-text">{String(analysis.avgBugCT)}</p>
-          <p className="text-xs text-ds-text mt-1">dias</p>
+          <p className="text-xs text-ds-text mt-1">Backlog prod · MTTR {String(analysis.avgIssueCT)}d</p>
         </div>
       </div>
 
@@ -413,88 +335,52 @@ const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data: rawData
       <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
         <h3 className="text-ds-light-text font-bold text-lg mb-2">Bugs (Dev) vs Issues (Produção)</h3>
         <p className="text-ds-text text-sm mb-4">
-          📊 <strong className="text-yellow-400">Bugs</strong> são erros detectados em desenvolvimento. 
-          <strong className="text-red-400"> Issues</strong> são erros que escaparam para produção. 
-          Quanto maior a taxa de detecção, melhor o processo de QA.
-          <span className="text-orange-300"> Issues com "Clientes afetados" &gt; 0 indicam problema que atinge múltiplos clientes.</span>
+          📊 <strong className="text-yellow-400">Bugs</strong> são erros detectados em desenvolvimento.
+          <strong className="text-red-400"> Issues</strong> são erros que escaparam para produção.
+          Quanto maior a taxa de detecção em Dev, melhor o processo de QA.
         </p>
-        <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={analysis.bugVsIssueComparison} margin={{ top: 30, right: 30, bottom: 20, left: 20 }}>
+        <ResponsiveContainer width="100%" height={260}>
+          <BarChart data={analysis.bugVsIssueComparison} margin={{ top: 30, right: 30, bottom: 10, left: 20 }}>
             <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
-            <XAxis dataKey="category" stroke={CHART_COLORS.text} tick={{ fontSize: 12 }} />
+            <XAxis dataKey="category" stroke={CHART_COLORS.text} tick={{ fontSize: 13, fontWeight: 600 }} />
             <YAxis stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} />
             <Tooltip content={<CustomTooltip />} />
-            <Legend />
-            <Bar 
-              dataKey="total" 
-              name="Total" 
-              fill="#64b5f6" 
-              radius={[4, 4, 0, 0]} 
+            <Bar
+              dataKey="total"
+              name="Total"
+              radius={[6, 6, 0, 0]}
               label={<CustomLabel />}
-              onClick={(data: any) => {
-                const category = data && data.category ? String(data.category) : '';
-                handleBarClick(category);
-              }}
               cursor="pointer"
-            />
-            <Bar 
-              dataKey="comReincidencia" 
-              name="Com Clientes Afetados" 
-              fill="#ed8936" 
-              radius={[4, 4, 0, 0]} 
-              label={<CustomLabel />}
-              onClick={handleShowIssuesWithReincidencia}
-              cursor="pointer"
-            />
+              onClick={(data: any) => handleBarClick(data?.category ?? '')}
+            >
+              <Cell fill="#f6ad55" />
+              <Cell fill="#f56565" />
+            </Bar>
           </BarChart>
         </ResponsiveContainer>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Taxa de retrabalho por time */}
-        <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
-          <h3 className="text-ds-light-text font-bold text-lg mb-4">Taxa de Retrabalho por Time</h3>
-          {analysis.teamData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={Math.max(200, analysis.teamData.length * 40)}>
-              <BarChart data={analysis.teamData} layout="vertical" margin={{ left: 100 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
-                <XAxis type="number" stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} unit="%" />
-                <YAxis type="category" dataKey="team" stroke={CHART_COLORS.text} tick={{ fontSize: 10 }} width={90} />
-                <Tooltip content={<CustomTooltip />} />
-                <Legend />
-                <Bar dataKey="reworkRate" name="% Bugs" fill="#f56565" radius={[0, 4, 4, 0]} />
-                <Bar dataKey="reincidenceRate" name="% Clientes Afetados" fill="#ed8936" radius={[0, 4, 4, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          ) : <p className="text-ds-text text-center py-8">Sem dados de retrabalho.</p>}
-        </div>
-
-        {/* Top reincidentes por pessoa */}
-        <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
-          <h3 className="text-ds-light-text font-bold text-lg mb-4">Top 10 — Pessoas com Issues de Múltiplos Clientes</h3>
-          {analysis.personData.length > 0 ? (
-            <div className="space-y-2">
-              {analysis.personData.map((p, idx) => (
-                <div 
-                  key={p.person} 
-                  className="flex items-center gap-3 p-2 bg-ds-bg rounded cursor-pointer hover:bg-ds-dark-blue hover:border hover:border-ds-green transition-colors"
-                  onClick={() => handleShowPersonIssues(p.person)}
-                  title="Clique para ver issues desta pessoa"
-                >
-                  <span className="text-ds-green font-bold text-sm w-6">{String(idx + 1)}º</span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-ds-light-text text-sm truncate">{String(p.person)}</p>
-                    <p className="text-ds-text text-xs">{String(p.team)}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-orange-400 font-bold">{String(p.totalReincidenceValue)} clientes total</p>
-                    <p className="text-ds-text text-xs">{String(p.reincidences)} issues ({String(p.rate)}%)</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : <p className="text-ds-text text-center py-8">Nenhuma reincidência encontrada.</p>}
-        </div>
+      {/* Tendência Mensal — Bugs vs Issues */}
+      <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
+        <h3 className="text-ds-light-text font-bold text-lg mb-1">Tendência Mensal — Bugs vs Issues</h3>
+        <p className="text-ds-text text-xs mb-3">
+          Evolução mês a mês de erros criados. Queda nas <strong className="text-red-400">Issues</strong> indica melhoria de qualidade de entrega.
+        </p>
+        {analysis.monthlyTrend.length > 0 ? (
+          <ResponsiveContainer width="100%" height={260}>
+            <LineChart data={analysis.monthlyTrend} margin={{ top: 10, right: 30, bottom: 10, left: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
+              <XAxis dataKey="month" stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} />
+              <YAxis stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} />
+              <Tooltip content={<CustomTooltip />} />
+              <Legend />
+              <Line type="monotone" dataKey="bugs" name="Bugs (Dev)" stroke="#f6ad55" strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+              <Line type="monotone" dataKey="issues" name="Issues (Produção)" stroke="#f56565" strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+            </LineChart>
+          </ResponsiveContainer>
+        ) : (
+          <p className="text-ds-text text-center py-8">Sem dados suficientes para tendência mensal.</p>
+        )}
       </div>
 
       {/* MTTR por time + Fonte de identificação */}
