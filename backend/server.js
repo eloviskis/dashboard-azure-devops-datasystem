@@ -198,6 +198,27 @@ const initDatabase = async () => {
     `;
     console.log('✅ work_items table ready');
 
+    // Garante que colunas adicionadas após criação da tabela existam (idempotente)
+    const columnsToEnsure = [
+      'ready_date TEXT', 'done_date TEXT',
+      'root_cause_task TEXT', 'root_cause_team TEXT', 'root_cause_version TEXT',
+      'dev TEXT', 'platform TEXT', 'application TEXT', 'branch_base TEXT',
+      'delivered_version TEXT', 'base_version TEXT',
+      'identificacao TEXT', 'falha_do_processo TEXT',
+      'first_activation_date TEXT',
+      'original_estimate REAL', 'remaining_work REAL', 'completed_work REAL',
+      'parent_id INTEGER'
+    ];
+    for (const colDef of columnsToEnsure) {
+      const [colName] = colDef.split(' ');
+      try {
+        await sql.unsafe(`ALTER TABLE work_items ADD COLUMN IF NOT EXISTS ${colDef}`);
+      } catch (e) {
+        // coluna já existe ou db não suporta IF NOT EXISTS — ignora
+      }
+    }
+    console.log('✅ Colunas extras verificadas/adicionadas');
+
     // Create pull_requests if not exists
     await sql`
       CREATE TABLE IF NOT EXISTS pull_requests (

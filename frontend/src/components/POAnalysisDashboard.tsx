@@ -267,6 +267,33 @@ export const POAnalysisDashboard: React.FC<Props> = ({ data }) => {
       .slice(0, 15); // Top 15
   }, [itemsComCriador]);
 
+  // Priorização por impacto: issues/bugs com maior número de clientes afetados
+  const clientesAfetadosData = useMemo(() => {
+    return data
+      .filter(item => item.reincidencia && Number(item.reincidencia) > 0)
+      .map(item => ({
+        workItemId: item.workItemId,
+        title: item.title,
+        type: item.type,
+        state: item.state,
+        assignedTo: item.assignedTo || 'Não atribuído',
+        team: item.team || 'Sem time',
+        clientes: Number(item.reincidencia),
+        causaRaiz: item.causaRaiz || item.rootCauseLegacy || '',
+        priority: item.priority,
+        createdBy: item.createdBy || '',
+      }))
+      .sort((a, b) => b.clientes - a.clientes)
+      .slice(0, 30);
+  }, [data]);
+
+  const totalClientesAfetados = useMemo(() =>
+    data.reduce((sum, item) => sum + (item.reincidencia ? Number(item.reincidencia) : 0), 0),
+    [data]
+  );
+
+  const itensPluriClientes = clientesAfetadosData.length;
+
   // Handlers de clique
   const handleCriadorClick = (chartData: any, index: number) => {
     const criadorName = chartData.name;
@@ -355,6 +382,8 @@ export const POAnalysisDashboard: React.FC<Props> = ({ data }) => {
     item.readyDate && item.readyDate !== null && String(item.readyDate).trim() !== ''
   ).length;
   const taxaDOR = totalCriados > 0 ? ((totalComDOR / totalCriados) * 100).toFixed(1) : '0';
+  // Flag para indicar que dados de DOR ainda não foram sincronizados
+  const dorSemDados = totalCriados > 0 && totalComDOR === 0;
 
   return (
     <div className="space-y-6">
@@ -378,10 +407,10 @@ export const POAnalysisDashboard: React.FC<Props> = ({ data }) => {
           <div className="text-3xl">{taxaGeralConclusao}%</div>
           <div>Do período</div>
         </div>
-        <div className="bg-teal-700 text-white p-4 rounded-lg">
+        <div className={`${dorSemDados ? 'bg-gray-700' : 'bg-teal-700'} text-white p-4 rounded-lg`}>
           <div className="text-lg font-bold">Taxa DOR (Ready)</div>
-          <div className="text-3xl">{taxaDOR}%</div>
-          <div>{totalComDOR} de {totalCriados}</div>
+          <div className="text-3xl">{dorSemDados ? '?' : `${taxaDOR}%`}</div>
+          <div className="text-xs">{dorSemDados ? '⚠️ Requer nova sincronização' : `${totalComDOR} de ${totalCriados}`}</div>
         </div>
         <div className="bg-orange-700 text-white p-4 rounded-lg">
           <div className="text-lg font-bold">Criadores Ativos</div>
@@ -531,6 +560,71 @@ export const POAnalysisDashboard: React.FC<Props> = ({ data }) => {
             ))}
           </BarChart>
         </ResponsiveContainer>
+      </div>
+
+      {/* Seção: Priorização por Impacto - Clientes Afetados */}
+      <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
+        <div className="flex items-center justify-between mb-1">
+          <div className="font-bold text-white text-lg">🔴 Priorização por Impacto — Clientes Afetados</div>
+          <div className="flex gap-3 text-sm">
+            <span className="bg-red-700 text-white px-3 py-1 rounded">{itensPluriClientes} itens afetando múltiplos clientes</span>
+            <span className="bg-orange-700 text-white px-3 py-1 rounded">{totalClientesAfetados} incidências totais</span>
+          </div>
+        </div>
+        <ChartInfoLamp info="Lista de issues e bugs com o campo 'Reincidência' preenchido, indicando quantos clientes estão enfrentando o mesmo problema. Itens com maior número de clientes afetados = maior prioridade de correção." />
+        <div className="text-xs text-ds-text mb-3">Itens com campo 'Reincidência' &gt; 0 — ordenados por maior impacto em clientes. Clique para abrir no Azure DevOps.</div>
+        {clientesAfetadosData.length === 0 ? (
+          <div className="text-center text-ds-text py-8">Nenhum item com clientes afetados (campo Reincidência não preenchido no período)</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-ds-border">
+                  <th className="text-center p-2 text-ds-light-text w-16">Clientes</th>
+                  <th className="text-left p-2 text-ds-light-text">#ID / Título</th>
+                  <th className="text-center p-2 text-ds-light-text">Tipo</th>
+                  <th className="text-left p-2 text-ds-light-text">Responsável</th>
+                  <th className="text-left p-2 text-ds-light-text">Time</th>
+                  <th className="text-left p-2 text-ds-light-text">Estado</th>
+                  <th className="text-left p-2 text-ds-light-text">Causa Raiz</th>
+                </tr>
+              </thead>
+              <tbody>
+                {clientesAfetadosData.map((item, idx) => (
+                  <tr key={item.workItemId} className={`border-b border-ds-border hover:bg-ds-dark-blue ${ idx < 3 ? 'bg-red-900/20' : idx < 8 ? 'bg-orange-900/10' : '' }`}>
+                    <td className="p-2 text-center">
+                      <span className={`font-bold text-xl ${ item.clientes >= 5 ? 'text-red-400' : item.clientes >= 3 ? 'text-orange-400' : 'text-yellow-400' }`}>
+                        {item.clientes}
+                      </span>
+                    </td>
+                    <td className="p-2">
+                      <a
+                        href={`${AZURE_DEVOPS_BASE_URL}/${item.workItemId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-ds-green hover:underline font-mono text-xs mr-2"
+                      >#{item.workItemId}</a>
+                      <span className="text-white text-xs" title={item.title}>{item.title.length > 60 ? item.title.substring(0, 60) + '…' : item.title}</span>
+                    </td>
+                    <td className="p-2 text-center">
+                      <span className={`text-xs px-2 py-0.5 rounded ${ item.type === 'Bug' ? 'bg-yellow-700 text-yellow-200' : item.type === 'Issue' ? 'bg-red-700 text-red-200' : 'bg-blue-700 text-blue-200' }`}>
+                        {item.type}
+                      </span>
+                    </td>
+                    <td className="p-2 text-ds-text text-xs">{item.assignedTo}</td>
+                    <td className="p-2 text-ds-text text-xs">{item.team}</td>
+                    <td className="p-2 text-xs">
+                      <span className="text-ds-text">{item.state}</span>
+                    </td>
+                    <td className="p-2 text-xs text-ds-text max-w-[150px] truncate" title={item.causaRaiz}>
+                      {item.causaRaiz || <span className="text-red-400">Sem causa raiz</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Gráfico: DOR (Definition of Ready) por Pessoa */}

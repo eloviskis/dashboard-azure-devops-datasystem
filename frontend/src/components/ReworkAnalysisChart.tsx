@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell, PieChart, Pie } from 'recharts';
 import { WorkItem } from '../types';
 import { CHART_COLORS } from '../constants';
 
@@ -118,7 +118,7 @@ const ItemListModal: React.FC<{ data: ModalData | null; onClose: () => void }> =
                         <span>📊 {String(item.state)}</span>
                         <span>🏢 {String(item.team || 'Sem time')}</span>
                         {item.reincidencia && Number(item.reincidencia) > 0 && (
-                          <span className="text-orange-400">🔄 Reincidência: {String(item.reincidencia)}</span>
+                          <span className="text-orange-400">� Clientes afetados: {String(item.reincidencia)}</span>
                         )}
                       </div>
                     </div>
@@ -162,7 +162,7 @@ const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data: rawData
     const issues = data.filter(i => i.type === 'Issue');
     const completedBugs = bugs.filter(i => COMPLETED_STATES.includes(i.state));
     
-    // Reincidências (apenas em Issues - erros que voltaram em produção)
+    // Issues com múltiplos clientes afetados (campo Reincidência = qtd de clientes com o mesmo problema)
     const issuesWithReincidencia = issues.filter(i => i.reincidencia && Number(i.reincidencia) > 0);
     const totalReincidenciaValue = issuesWithReincidencia.reduce((sum, i) => sum + Number(i.reincidencia || 0), 0);
     
@@ -247,6 +247,49 @@ const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data: rawData
       .sort((a, b) => b.totalReincidenceValue - a.totalReincidenceValue)
       .slice(0, 10);
 
+    // MTTR por time (Mean Time To Resolve — apenas Issues fechadas com cycleTime)
+    const issueCTByTeam: Record<string, number[]> = {};
+    issues.filter(i => COMPLETED_STATES.includes(i.state) && i.cycleTime != null).forEach(i => {
+      const team = i.team || 'Sem Time';
+      if (!issueCTByTeam[team]) issueCTByTeam[team] = [];
+      issueCTByTeam[team].push(i.cycleTime!);
+    });
+    const mttrByTeam = Object.entries(issueCTByTeam)
+      .map(([team, cts]) => ({
+        team,
+        mttr: Math.round((cts.reduce((a, b) => a + b, 0) / cts.length) * 10) / 10,
+        count: cts.length,
+      }))
+      .sort((a, b) => b.mttr - a.mttr)
+      .slice(0, 12);
+
+    // Fonte de identificação das Issues (campo identificacao)
+    const identMap: Record<string, number> = {};
+    issues.forEach(i => {
+      const k = i.identificacao?.trim() || 'Não informado';
+      identMap[k] = (identMap[k] || 0) + 1;
+    });
+    const IDENT_COLORS: Record<string, string> = {
+      'Cliente': '#f56565',
+      'Interno': '#48bb78',
+      'Não informado': '#718096',
+    };
+    const identPieData = Object.entries(identMap)
+      .map(([name, value]) => ({ name, value, fill: IDENT_COLORS[name] || '#9f7aea' }))
+      .sort((a, b) => b.value - a.value);
+
+    // Distribuição de falha do processo
+    const falhaMap: Record<string, number> = {};
+    data.forEach(i => {
+      const k = i.falhaDoProcesso?.trim() || 'Não informado';
+      falhaMap[k] = (falhaMap[k] || 0) + 1;
+    });
+    const falhaDistribution = Object.entries(falhaMap)
+      .filter(([k]) => k !== 'Não informado')
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 10);
+
     return {
       totalBugs: bugs.length,
       totalIssues: issues.length,
@@ -264,6 +307,9 @@ const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data: rawData
       bugs,
       issues,
       issuesWithReincidenciaItems: issuesWithReincidencia,
+      mttrByTeam,
+      identPieData,
+      falhaDistribution,
     };
   }, [data]);
 
@@ -286,7 +332,7 @@ const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data: rawData
 
   const handleShowIssuesWithReincidencia = () => {
     setModalData({
-      title: 'Issues com Reincidência',
+      title: 'Issues com Múltiplos Clientes Afetados',
       items: analysis.issuesWithReincidenciaItems,
       color: '#ed8936'
     });
@@ -345,16 +391,16 @@ const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data: rawData
           onClick={handleShowIssuesWithReincidencia}
           title="Clique para ver detalhes"
         >
-          <p className="text-ds-text text-xs">Issues Reincidentes</p>
+          <p className="text-ds-text text-xs">Issues c/ Clientes Afetados</p>
           <p className="text-2xl font-bold text-orange-400">{analysis.issuesWithReincidencia}</p>
-          <p className="text-xs text-ds-text mt-1">Voltaram em prod</p>
+          <p className="text-xs text-ds-text mt-1">Multi-cliente</p>
         </div>
         <div className="bg-ds-navy p-4 rounded-lg border border-ds-border text-center">
-          <p className="text-ds-text text-xs">Taxa Reincidência</p>
+          <p className="text-ds-text text-xs">Clientes Afetados (%)</p>
           <p className={`text-2xl font-bold ${analysis.globalReincidenceRate > 15 ? 'text-red-400' : analysis.globalReincidenceRate > 8 ? 'text-yellow-400' : 'text-green-400'}`}>
             {String(analysis.globalReincidenceRate)}%
           </p>
-          <p className="text-xs text-ds-text mt-1">De issues em prod</p>
+          <p className="text-xs text-ds-text mt-1">Issues multi-cliente</p>
         </div>
         <div className="bg-ds-navy p-4 rounded-lg border border-ds-border text-center">
           <p className="text-ds-text text-xs">CT Médio Bugs</p>
@@ -370,6 +416,7 @@ const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data: rawData
           📊 <strong className="text-yellow-400">Bugs</strong> são erros detectados em desenvolvimento. 
           <strong className="text-red-400"> Issues</strong> são erros que escaparam para produção. 
           Quanto maior a taxa de detecção, melhor o processo de QA.
+          <span className="text-orange-300"> Issues com "Clientes afetados" &gt; 0 indicam problema que atinge múltiplos clientes.</span>
         </p>
         <ResponsiveContainer width="100%" height={300}>
           <BarChart data={analysis.bugVsIssueComparison} margin={{ top: 30, right: 30, bottom: 20, left: 20 }}>
@@ -392,7 +439,7 @@ const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data: rawData
             />
             <Bar 
               dataKey="comReincidencia" 
-              name="Com Reincidência" 
+              name="Com Clientes Afetados" 
               fill="#ed8936" 
               radius={[4, 4, 0, 0]} 
               label={<CustomLabel />}
@@ -416,7 +463,7 @@ const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data: rawData
                 <Tooltip content={<CustomTooltip />} />
                 <Legend />
                 <Bar dataKey="reworkRate" name="% Bugs" fill="#f56565" radius={[0, 4, 4, 0]} />
-                <Bar dataKey="reincidenceRate" name="% Reincidência" fill="#ed8936" radius={[0, 4, 4, 0]} />
+                <Bar dataKey="reincidenceRate" name="% Clientes Afetados" fill="#ed8936" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           ) : <p className="text-ds-text text-center py-8">Sem dados de retrabalho.</p>}
@@ -424,7 +471,7 @@ const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data: rawData
 
         {/* Top reincidentes por pessoa */}
         <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
-          <h3 className="text-ds-light-text font-bold text-lg mb-4">Top 10 — Pessoas com Reincidência</h3>
+          <h3 className="text-ds-light-text font-bold text-lg mb-4">Top 10 — Pessoas com Issues de Múltiplos Clientes</h3>
           {analysis.personData.length > 0 ? (
             <div className="space-y-2">
               {analysis.personData.map((p, idx) => (
@@ -440,7 +487,7 @@ const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data: rawData
                     <p className="text-ds-text text-xs">{String(p.team)}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-orange-400 font-bold">{String(p.totalReincidenceValue)} reincidências</p>
+                    <p className="text-orange-400 font-bold">{String(p.totalReincidenceValue)} clientes total</p>
                     <p className="text-ds-text text-xs">{String(p.reincidences)} issues ({String(p.rate)}%)</p>
                   </div>
                 </div>
@@ -449,6 +496,124 @@ const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data: rawData
           ) : <p className="text-ds-text text-center py-8">Nenhuma reincidência encontrada.</p>}
         </div>
       </div>
+
+      {/* MTTR por time + Fonte de identificação */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+        {/* MTTR por Time */}
+        <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
+          <h3 className="text-ds-light-text font-bold text-lg mb-1">MTTR por Time (Issues)</h3>
+          <p className="text-ds-text text-xs mb-3">
+            Mean Time To Resolve — tempo médio (em dias) para fechar Issues em produção. Menor = mais ágil.
+          </p>
+          {analysis.mttrByTeam.length > 0 ? (
+            <ResponsiveContainer width="100%" height={Math.max(180, analysis.mttrByTeam.length * 36)}>
+              <BarChart data={analysis.mttrByTeam} layout="vertical" margin={{ left: 110, right: 40 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
+                <XAxis type="number" stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} unit=" d" />
+                <YAxis type="category" dataKey="team" stroke={CHART_COLORS.text} tick={{ fontSize: 10 }} width={105} />
+                <Tooltip
+                  content={({ active, payload, label }: any) => {
+                    if (!active || !payload?.length) return null;
+                    const d = payload[0].payload;
+                    return (
+                      <div style={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }}>
+                        <p style={{ color: '#64ffda', fontWeight: 'bold' }}>{String(label)}</p>
+                        <p>MTTR: <strong>{String(d.mttr)} dias</strong></p>
+                        <p style={{ color: '#a0aec0', fontSize: '12px' }}>{String(d.count)} issues resolvidas</p>
+                      </div>
+                    );
+                  }}
+                />
+                <Bar dataKey="mttr" name="MTTR (dias)" radius={[0, 4, 4, 0]}>
+                  {analysis.mttrByTeam.map((entry, index) => (
+                    <Cell key={index} fill={entry.mttr > 14 ? '#f56565' : entry.mttr > 7 ? '#f6ad55' : '#48bb78'} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <p className="text-ds-text text-center py-8">Sem Issues resolvidas com cycle time registrado.</p>
+          )}
+        </div>
+
+        {/* Fonte de Identificação das Issues */}
+        <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
+          <h3 className="text-ds-light-text font-bold text-lg mb-1">Fonte de Identificação das Issues</h3>
+          <p className="text-ds-text text-xs mb-3">
+            Quem detectou o problema — <span className="text-red-400 font-semibold">Cliente</span> indica falha no processo de QA interno.
+          </p>
+          {analysis.identPieData.length > 0 && analysis.identPieData.some(d => d.name !== 'Não informado') ? (
+            <div className="flex items-center gap-4">
+              <ResponsiveContainer width="55%" height={200}>
+                <PieChart>
+                  <Pie
+                    data={analysis.identPieData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={50}
+                    outerRadius={80}
+                    paddingAngle={3}
+                    dataKey="value"
+                    label={({ name, percent }: any) => `${String(name)} ${Math.round(percent * 100)}%`}
+                    labelLine={false}
+                  >
+                    {analysis.identPieData.map((entry, index) => (
+                      <Cell key={index} fill={entry.fill} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    content={({ active, payload }: any) => {
+                      if (!active || !payload?.length) return null;
+                      const d = payload[0].payload;
+                      return (
+                        <div style={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }}>
+                          <p style={{ color: d.fill, fontWeight: 'bold' }}>{String(d.name)}</p>
+                          <p>{String(d.value)} issues</p>
+                        </div>
+                      );
+                    }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="flex-1 space-y-2">
+                {analysis.identPieData.map((entry) => {
+                  const total = analysis.identPieData.reduce((s, d) => s + d.value, 0);
+                  const pct = total > 0 ? Math.round((entry.value / total) * 1000) / 10 : 0;
+                  return (
+                    <div key={entry.name} className="flex items-center gap-2">
+                      <span style={{ backgroundColor: entry.fill }} className="inline-block w-3 h-3 rounded-full shrink-0" />
+                      <span className="text-ds-light-text text-sm truncate flex-1">{String(entry.name)}</span>
+                      <span className="text-ds-text text-sm font-semibold">{String(entry.value)} ({String(pct)}%)</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <p className="text-ds-text text-center py-8">Campo "Identificação" não preenchido no período.</p>
+          )}
+        </div>
+      </div>
+
+      {/* Distribuição de Falha do Processo */}
+      {analysis.falhaDistribution.length > 0 && (
+        <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
+          <h3 className="text-ds-light-text font-bold text-lg mb-1">Distribuição — Falha do Processo</h3>
+          <p className="text-ds-text text-xs mb-3">
+            Causas raiz de processo que originaram Bugs e Issues. Priorize as categorias com maior frequência para melhorias no fluxo.
+          </p>
+          <ResponsiveContainer width="100%" height={Math.max(180, analysis.falhaDistribution.length * 38)}>
+            <BarChart data={analysis.falhaDistribution} layout="vertical" margin={{ left: 180, right: 50 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
+              <XAxis type="number" stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} />
+              <YAxis type="category" dataKey="name" stroke={CHART_COLORS.text} tick={{ fontSize: 10 }} width={175} />
+              <Tooltip content={<CustomTooltip />} />
+              <Bar dataKey="value" name="Ocorrências" fill="#9f7aea" radius={[0, 4, 4, 0]} label={{ position: 'right', fill: '#e6f1ff', fontSize: 11 }} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
 
       {/* Modal de detalhes */}
       <ItemListModal data={modalData} onClose={() => setModalData(null)} />
