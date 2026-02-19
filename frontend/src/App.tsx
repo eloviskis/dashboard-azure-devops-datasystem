@@ -60,6 +60,7 @@ import ReworkAnalysisChart from './components/ReworkAnalysisChart.tsx';
 import StoryPointsVsCycleTimeChart from './components/StoryPointsVsCycleTimeChart.tsx';
 import MetasDashboard from './components/MetasDashboard.tsx';
 import DocumentationDashboard from './components/DocumentationDashboard.tsx';
+import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 
 // Import Types
 import { WorkItem, WorkItemFilters } from './types.ts';
@@ -739,7 +740,9 @@ const App = () => {
         />
 
         <main className="mt-6">
-            {renderContent()}
+            <ErrorBoundary name={`Dashboard-${activeTab}`}>
+              {renderContent()}
+            </ErrorBoundary>
         </main>
       </div>
       )}

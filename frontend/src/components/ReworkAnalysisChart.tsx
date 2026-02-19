@@ -263,7 +263,7 @@ const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data: rawData
       bugVsIssueComparison,
       bugs,
       issues,
-      issuesWithReincidencia,
+      issuesWithReincidenciaItems: issuesWithReincidencia,
     };
   }, [data]);
 
@@ -287,7 +287,7 @@ const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data: rawData
   const handleShowIssuesWithReincidencia = () => {
     setModalData({
       title: 'Issues com Reincidência',
-      items: analysis.issuesWithReincidencia,
+      items: analysis.issuesWithReincidenciaItems,
       color: '#ed8936'
     });
   };
@@ -346,7 +346,7 @@ const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data: rawData
           title="Clique para ver detalhes"
         >
           <p className="text-ds-text text-xs">Issues Reincidentes</p>
-          <p className="text-2xl font-bold text-orange-400">{String(analysis.issuesWithReincidencia)}</p>
+          <p className="text-2xl font-bold text-orange-400">{analysis.issuesWithReincidencia}</p>
           <p className="text-xs text-ds-text mt-1">Voltaram em prod</p>
         </div>
         <div className="bg-ds-navy p-4 rounded-lg border border-ds-border text-center">
