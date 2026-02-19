@@ -309,7 +309,7 @@ const BacklogAnalysisDashboard: React.FC<Props> = ({ data }) => {
           <h3 className="text-xl font-bold text-white mb-4">📊 Vazão por Time</h3>
           <ChartInfoLamp info="Throughput de cada time no período selecionado. Clique nas barras para ver a lista de itens concluídos pelo time." />
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={teamMetrics} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
+            <BarChart data={teamMetrics.map(({ items, ...rest }) => rest)} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
               <XAxis 
                 dataKey="team" 
@@ -342,7 +342,7 @@ const BacklogAnalysisDashboard: React.FC<Props> = ({ data }) => {
           <h3 className="text-xl font-bold text-white mb-4">⏱️ Cycle Time vs Lead Time</h3>
           <ChartInfoLamp info="Comparativo de Cycle Time e Lead Time por time. Clique nos pontos para ver os itens. Diferença grande indica tempo de espera no backlog." />
           <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={teamMetrics} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
+            <LineChart data={teamMetrics.map(({ items, ...rest }) => rest)} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
               <XAxis 
                 dataKey="team" 
@@ -391,7 +391,7 @@ const BacklogAnalysisDashboard: React.FC<Props> = ({ data }) => {
           <h3 className="text-xl font-bold text-white mb-4">🏷️ Itens Concluídos por Tipo</h3>
           <ChartInfoLamp info="Total de itens concluídos agrupados por tipo de work item. Clique para ver os itens de cada tipo." />
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={typeMetrics} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
+            <BarChart data={typeMetrics.map(({ items, ...rest }) => rest)} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
               <XAxis 
                 dataKey="type" 

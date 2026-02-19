@@ -338,7 +338,7 @@ const ImpedimentosDashboard: React.FC<Props> = ({ data }) => {
               <h3 className="text-xl font-bold text-white mb-4">👥 Impedimentos por Time</h3>
               <ChartInfoLamp info="Distribuição de impedimentos por time. Clique nas barras para ver a lista de itens impedidos de cada equipe." />
               <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={impedimentosPorTime} margin={{ top: 20, right: 30, left: 20, bottom: 80 }}>
+                <BarChart data={impedimentosPorTime.map(({ items, ...rest }) => rest)} margin={{ top: 20, right: 30, left: 20, bottom: 80 }}>
                   <XAxis 
                     dataKey="team" 
                     angle={-45} 
@@ -375,7 +375,7 @@ const ImpedimentosDashboard: React.FC<Props> = ({ data }) => {
               <ResponsiveContainer width="100%" height={300}>
                 <PieChart>
                   <Pie
-                    data={impedimentosPorTipo}
+                    data={impedimentosPorTipo.map(({ items, ...rest }) => rest)}
                     dataKey="count"
                     nameKey="type"
                     cx="50%"
@@ -403,7 +403,7 @@ const ImpedimentosDashboard: React.FC<Props> = ({ data }) => {
             <h3 className="text-xl font-bold text-white mb-4">⏱️ Distribuição por Tempo Parado</h3>
             <ChartInfoLamp info="Distribuição dos impedimentos por faixa de tempo parado (0-3d, 4-7d, 8-14d, 15-30d, 30d+). Muitos itens na faixa alta indica problemas sistêmicos." />
             <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={impedimentosPorTempoParado} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+              <BarChart data={impedimentosPorTempoParado.map(({ items, ...rest }) => rest)} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
                 <XAxis 
                   dataKey="name" 
                   tick={{ fill: '#fff', fontSize: 12 }}
