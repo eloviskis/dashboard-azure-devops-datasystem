@@ -116,8 +116,11 @@ const ItemListModal: React.FC<{ data: ModalData | null; onClose: () => void }> =
                       <div className="flex gap-4 mt-1 text-xs text-ds-text flex-wrap">
                         <span>👤 {String(item.assignedTo || 'Não atribuído')}</span>
                         <span>📊 {String(item.state)}</span>
-                        <span>🏢 {String(item.team || 'Sem time')}</span>
-                        {item.reincidencia && Number(item.reincidencia) > 0 && (
+                        <span>🏢 {String(item.team || 'Sem time')}</span>                        {item.identificacao ? (
+                          <span className="text-purple-400">🔍 Identificação: {String(item.identificacao)}</span>
+                        ) : (
+                          <span className="text-yellow-500">⚠️ Identificação: não informada</span>
+                        )}                        {item.reincidencia && Number(item.reincidencia) > 0 && (
                           <span className="text-orange-400">� Clientes afetados: {String(item.reincidencia)}</span>
                         )}
                       </div>
@@ -286,6 +289,14 @@ const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data: rawData
     });
   };
 
+  const handleIdentClick = (name: string, fill: string) => {
+    const filtered = analysis.issues.filter(i => {
+      const k = i.identificacao?.trim() || 'Não informado';
+      return k === name;
+    });
+    setModalData({ title: `Fonte: ${name}`, items: filtered, color: fill });
+  };
+
   const handleBarClick = (category: string) => {
     if (category.startsWith('Bugs')) {
       handleShowBugs();
@@ -429,8 +440,14 @@ const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data: rawData
           <p className="text-ds-text text-xs mb-3">
             Quem detectou o problema — <span className="text-red-400 font-semibold">Cliente</span> indica falha no processo de QA interno.
           </p>
-          {analysis.identPieData.length > 0 && analysis.identPieData.some(d => d.name !== 'Não informado') ? (
-            <div className="flex items-center gap-4">
+          {analysis.identPieData.length > 0 ? (
+            <div className="flex flex-col gap-2">
+              {analysis.identPieData.every(d => d.name === 'Não informado') && (
+                <p className="text-yellow-400 text-xs">
+                  ⚠️ 100% sem preenchimento — clique no gráfico para ver quais itens precisam de atenção.
+                </p>
+              )}
+              <div className="flex items-center gap-4">
               <ResponsiveContainer width="55%" height={200}>
                 <PieChart>
                   <Pie
@@ -443,6 +460,8 @@ const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data: rawData
                     dataKey="value"
                     label={({ name, percent }: any) => `${String(name)} ${Math.round(percent * 100)}%`}
                     labelLine={false}
+                    cursor="pointer"
+                    onClick={(entry: any) => handleIdentClick(String(entry.name), String(entry.fill))}
                   >
                     {analysis.identPieData.map((entry, index) => (
                       <Cell key={index} fill={entry.fill} />
@@ -455,7 +474,7 @@ const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data: rawData
                       return (
                         <div style={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }}>
                           <p style={{ color: d.fill, fontWeight: 'bold' }}>{String(d.name)}</p>
-                          <p>{String(d.value)} issues</p>
+                          <p>{String(d.value)} issues — <span style={{ color: '#64ffda', fontSize: 11 }}>clique para ver</span></p>
                         </div>
                       );
                     }}
@@ -467,7 +486,12 @@ const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data: rawData
                   const total = analysis.identPieData.reduce((s, d) => s + d.value, 0);
                   const pct = total > 0 ? Math.round((entry.value / total) * 1000) / 10 : 0;
                   return (
-                    <div key={entry.name} className="flex items-center gap-2">
+                    <div
+                      key={entry.name}
+                      className="flex items-center gap-2 cursor-pointer hover:bg-ds-dark-blue rounded px-1 py-1 transition-colors"
+                      onClick={() => handleIdentClick(entry.name, entry.fill)}
+                      title="Clique para ver os itens"
+                    >
                       <span style={{ backgroundColor: entry.fill }} className="inline-block w-3 h-3 rounded-full shrink-0" />
                       <span className="text-ds-light-text text-sm truncate flex-1">{String(entry.name)}</span>
                       <span className="text-ds-text text-sm font-semibold">{String(entry.value)} ({String(pct)}%)</span>
@@ -476,6 +500,7 @@ const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data: rawData
                 })}
               </div>
             </div>
+          </div>
           ) : (
             <p className="text-ds-text text-center py-8">Campo "Identificação" não preenchido no período.</p>
           )}
