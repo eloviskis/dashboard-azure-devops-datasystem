@@ -883,7 +883,6 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
                         <th className="text-left pb-2 font-medium">Pessoa</th>
                         <th className="text-right pb-2 font-medium">Entregues</th>
                         <th className="text-right pb-2 font-medium">CT Médio</th>
-                        <th className="text-right pb-2 font-medium">SP</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -909,7 +908,6 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
                             </td>
                             <td className="text-right text-ds-green font-bold py-2">{met?.delivered ?? 0}</td>
                             <td className="text-right text-ds-text py-2">{fmtCT(met?.avgCycleTime)}</td>
-                            <td className="text-right text-ds-text py-2">{met?.storyPoints ?? 0}</td>
                           </tr>
                         );
                       })}
