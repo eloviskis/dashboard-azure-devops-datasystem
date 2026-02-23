@@ -1,7 +1,12 @@
 # Registro de Incidentes — Dashboard Azure DevOps
 
-> Documento criado para registrar incidentes, causas raiz e lições aprendidas.
-> Consulte sempre antes de fazer mudanças no backend/frontend.
+> **⛔ LEIA ESTE DOCUMENTO INTEIRO antes de fazer qualquer mudança no backend ou frontend.**
+>
+> Já derrubamos a aplicação **2 vezes** por não seguir as regras.
+> A seção [REGRAS PERMANENTES](#-regras-permanentes--o-que-nunca-fazer) no final deste documento
+> tem tudo que você precisa saber para não repetir os mesmos erros.
+>
+> Veja também: [REGRAS_DE_DEPLOY.md](REGRAS_DE_DEPLOY.md) — guia rápido de deploy.
 
 ---
 
@@ -64,17 +69,16 @@
    # Esperado: Status 204, Header Access-Control-Allow-Origin presente
    ```
 
-5. **Deploy do backend:**
+5. **Deploy correto (atualizado após Incidente #2):**
    ```powershell
-   cd backend
-   vercel --prod --yes
-   ```
+   # MÉTODO RECOMENDADO: git push (auto-deploy)
+   git push origin main
 
-6. **Deploy do frontend:**
-   ```powershell
-   cd frontend
-   vercel --prod --yes
+   # OU via script (usa API, não CLI):
+   .\deploy.ps1 -Target backend
+   .\deploy.ps1 -Target frontend
    ```
+   > ⚠️ **NÃO use `cd backend && vercel --prod`** — isso quebra com rootDirectory (ver Incidente #2).
 
 ### Commits relacionados
 
@@ -191,6 +195,8 @@ Invoke-WebRequest "https://backend-hazel-three-14.vercel.app/api/auth/login" `
 | Commit | Descrição |
 |---|---|
 | `5a18fce` | Fix: remove backend/ do .vercelignore + deploy.ps1 via API |
+| `a5645e5` | Documentação do Incidente #2 neste arquivo |
+| `514536d` | REGRAS_DE_DEPLOY.md + avisos no README.md e DEPLOY.md |
 
 ### Configuração Vercel (via API, permanente)
 
@@ -198,6 +204,97 @@ Invoke-WebRequest "https://backend-hazel-three-14.vercel.app/api/auth/login" `
 |---|---|---|
 | frontend | `frontend` | `prj_urke5XjJu9wNs0aaE2np0dzc4HEv` |
 | backend | `backend` | `prj_kLEwrUAJ4W58UW86xoYQoZYZlgd2` |
+
+---
+
+## ⛔ REGRAS PERMANENTES — O QUE NUNCA FAZER
+
+> Estas regras existem porque já derrubamos a aplicação quebrando cada uma delas.
+> Cada regra tem um incidente associado acima com a explicação completa.
+
+---
+
+### 🚫 PROIBIDO (causa queda imediata)
+
+| # | Regra | O que acontece se violar | Incidente |
+|---|---|---|---|
+| 1 | **NUNCA** adicione `backend/` ou `frontend/` no `.vercelignore` | Vercel deleta os arquivos ANTES de aplicar rootDirectory → build vazio → NOT_FOUND | #2 |
+| 2 | **NUNCA** coloque `headers` nas rotas do `backend/vercel.json` | Conflita com `dest` → 404 em todas as rotas → CORS quebra | #1 |
+| 3 | **NUNCA** use `process.exit()` no `backend/server.js` | Mata o cold start → nenhuma rota funciona (inclusive CORS) | #1 |
+| 4 | **NUNCA** use hook do React sem importar | `useEffect is not defined` → tela branca no frontend inteiro | #1 |
+| 5 | **NUNCA** use `cd backend && vercel --prod` | Bug do CLI duplica o path → `backend/backend` não existe → erro | #2 |
+| 6 | **NUNCA** remova o `rootDirectory` dos projetos Vercel | Auto-deploys passam a buildar da raiz → `vite: command not found` | #2 |
+
+---
+
+### ✅ COMO FAZER DEPLOY (o jeito certo)
+
+```powershell
+# MÉTODO 1: Git push (RECOMENDADO — auto-deploy do GitHub)
+git add .
+git commit -m "sua mensagem"
+git push origin main
+
+# MÉTODO 2: Script manual (usa Vercel API, NÃO o CLI)
+.\deploy.ps1                     # Deploy ambos
+.\deploy.ps1 -Target backend     # Só backend
+.\deploy.ps1 -Target frontend    # Só frontend
+.\deploy.ps1 -Target all -Wait   # Deploy e aguardar resultado
+```
+
+---
+
+### 🔍 VERIFICAÇÃO PÓS-DEPLOY
+
+```powershell
+# 1. Backend CORS funcionando?
+Invoke-WebRequest "https://backend-hazel-three-14.vercel.app/api/auth/login" `
+  -Method OPTIONS -UseBasicParsing `
+  -Headers @{
+    Origin="https://devops-datasystem.vercel.app"
+    "Access-Control-Request-Method"="POST"
+    "Access-Control-Request-Headers"="content-type"
+  }
+# Esperado: Status 204
+
+# 2. Frontend carrega?
+Invoke-WebRequest "https://devops-datasystem.vercel.app" -UseBasicParsing
+# Esperado: Status 200
+```
+
+---
+
+### 🚨 SINAIS DE PROBLEMA
+
+| Sinal | Significado | Causa provável |
+|---|---|---|
+| Deploy "Ready" em **<8 segundos** | Build vazio, nada foi compilado | `.vercelignore` apagando arquivos ou rootDirectory ausente |
+| `vite: command not found` | Build rodou na raiz do repo | rootDirectory do frontend não configurado |
+| `NOT_FOUND` em todas as rotas | `server.js` não foi incluído no build | `.vercelignore` removendo `backend/` ou rootDirectory ausente |
+| `useEffect is not defined` | Import faltando no React | Adicionar hook ao `import` do React |
+| `CORS blocked` no navegador | Headers CORS faltando | Verificar `setCorsHeaders()` no server.js |
+| `backend/backend does not exist` | Bug do Vercel CLI | Não usar CLI para deploy — usar `git push` ou `deploy.ps1` |
+
+---
+
+### 📁 ARQUIVOS QUE NÃO DEVEM SER ALTERADOS SEM CUIDADO
+
+| Arquivo | Motivo |
+|---|---|
+| `.vercelignore` | Afeta AMBOS os projetos. **Nunca** listar `backend/` ou `frontend/` |
+| `backend/vercel.json` | Formato simples obrigatório: só `src` + `dest`, sem `headers` |
+| `backend/server.js` (linhas 27-58) | 3 camadas de CORS — não remover nenhuma |
+| `frontend/vercel.json` | Config do Vite SPA com rewrites |
+| `deploy.ps1` | Script de deploy via API — substitui CLI quebrado |
+
+---
+
+### ⚙️ CONFIGURAÇÃO VERCEL (permanente, via API)
+
+| Projeto | rootDirectory | projectId | URL produção |
+|---|---|---|---|
+| frontend | `frontend` | `prj_urke5XjJu9wNs0aaE2np0dzc4HEv` | https://devops-datasystem.vercel.app |
+| backend | `backend` | `prj_kLEwrUAJ4W58UW86xoYQoZYZlgd2` | https://backend-hazel-three-14.vercel.app |
 
 ---
 
