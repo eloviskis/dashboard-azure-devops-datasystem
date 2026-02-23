@@ -10,28 +10,32 @@ require('dotenv').config();
 // Database driver: PostgreSQL (pg) with connection pooling
 const { Pool } = require('pg');
 
-// JWT Secret
+// JWT Secret (warn but don't crash — CORS must always work)
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
-  console.error('\u274c FATAL: JWT_SECRET environment variable is required. Set it in .env or Vercel env vars.');
-  process.exit(1);
+  console.error('⚠️ WARNING: JWT_SECRET not set. Auth endpoints will fail, but CORS/health will still work.');
 }
 
 const app = express();
 
-// CORS - handle preflight (OPTIONS) explicitly for Vercel serverless
-app.use((req, res, next) => {
-  const allowedOrigins = [
-    'https://dashboard-azure-devops-datasystem.vercel.app',
-    'https://dashboard-azure-devops-datasystem-git-main-eloviskis.vercel.app',
-    'https://devops-datasystem.vercel.app',
-    'http://localhost:5173',
-    'http://localhost:3000',
-    'http://31.97.64.250',
-    'https://31.97.64.250'
-  ];
+// ═══════════════════════════════════════════════════════════════════════════════
+// CORS — MUST be the very first middleware. Handles preflight (OPTIONS) and
+// sets headers on EVERY response so the browser never blocks requests.
+// This runs before any other middleware, route handler, or error.
+// ═══════════════════════════════════════════════════════════════════════════════
+const ALLOWED_ORIGINS = [
+  'https://dashboard-azure-devops-datasystem.vercel.app',
+  'https://dashboard-azure-devops-datasystem-git-main-eloviskis.vercel.app',
+  'https://devops-datasystem.vercel.app',
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'http://31.97.64.250',
+  'https://31.97.64.250'
+];
+
+function setCorsHeaders(req, res) {
   const origin = req.headers.origin;
-  if (allowedOrigins.includes(origin) || (origin && origin.endsWith('.vercel.app'))) {
+  if (origin && (ALLOWED_ORIGINS.includes(origin) || origin.endsWith('.vercel.app'))) {
     res.setHeader('Access-Control-Allow-Origin', origin);
   } else {
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -40,26 +44,20 @@ app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With, Content-Type, Authorization, Accept');
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Max-Age', '86400');
+}
 
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
+// Preflight: return 204 immediately — never let it reach other middleware
+app.options('*', (req, res) => {
+  setCorsHeaders(req, res);
+  res.status(204).end();
+});
+
+// All other requests: set CORS headers before anything else
+app.use((req, res, next) => {
+  setCorsHeaders(req, res);
   next();
 });
 
-app.use(cors({
-  origin: [
-    'https://dashboard-azure-devops-datasystem.vercel.app',
-    'https://dashboard-azure-devops-datasystem-git-main-eloviskis.vercel.app',
-    /\.vercel\.app$/,
-    'https://devops-datasystem.vercel.app',
-    'http://localhost:5173',
-    'http://localhost:3000',
-    'http://31.97.64.250',
-    'https://31.97.64.250'
-  ],
-  credentials: true
-}));
 app.use(express.json());
 
 // PostgreSQL setup for VPS database
@@ -1366,6 +1364,16 @@ if (isConfigured()) {
   });
   console.log('⏰ Scheduled sync every 30 minutes');
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Global error handler — always include CORS headers even on 500 errors
+// Must be AFTER all route definitions for Express to use it as error middleware
+// ═══════════════════════════════════════════════════════════════════════════════
+app.use((err, req, res, _next) => {
+  setCorsHeaders(req, res);
+  console.error('Unhandled error:', err);
+  res.status(500).json({ error: 'Internal Server Error' });
+});
 
 // Start server
 const PORT = process.env.PORT || 3001;
