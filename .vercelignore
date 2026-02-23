@@ -1,4 +1,8 @@
-backend/
+# NÃO remover backend/ ou frontend/ aqui!
+# Cada projeto Vercel tem rootDirectory configurado, que já isola os arquivos.
+# Remover backend/ aqui QUEBRA o deploy do backend (Vercel apaga os arquivos
+# ANTES de aplicar rootDirectory).
+
 node_modules/
 *.db
 *.sqlite
@@ -6,3 +10,11 @@ node_modules/
 .env
 .env.*
 !.env.example
+deploy.ps1
+.vercel-backup/
+INCIDENTES.md
+ARQUITETURA.md
+DEPLOY.md
+REQUISITOS_AZURE_INFRA.txt
+VERCEL_VPS_SETUP.md
+test-db-connection.js
