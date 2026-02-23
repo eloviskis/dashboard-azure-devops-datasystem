@@ -4,7 +4,7 @@ import {
   LineChart, Line, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   Cell, LabelList
 } from 'recharts';
-import { format, subMonths, startOfMonth, endOfMonth, isWithinInterval, eachMonthOfInterval } from 'date-fns';
+import { format, subMonths, startOfMonth, endOfMonth, isWithinInterval, eachMonthOfInterval, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { WorkItem } from '../types';
 import ChartInfoLamp from './ChartInfoLamp';
@@ -173,6 +173,12 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
   const [selectedTeam, setSelectedTeam] = useState<string>('__all__');
   const [selectedSeniority, setSelectedSeniority] = useState<string>('__all__');
   const [historyMonths, setHistoryMonths] = useState<number>(6);
+  const [customStart, setCustomStart] = useState<string>(
+    () => format(subMonths(new Date(), 5), 'yyyy-MM-dd')
+  );
+  const [customEnd, setCustomEnd] = useState<string>(
+    () => format(new Date(), 'yyyy-MM-dd')
+  );
   const [activePersons, setActivePersons] = useState<Set<string>>(new Set());
   const [selectedPerson, setSelectedPerson] = useState<string | null>(null);
 
@@ -241,10 +247,14 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
 
   // ── meses para análise histórica
   const months = useMemo(() => {
-    const end = new Date();
-    const start = subMonths(end, historyMonths - 1);
+    const end = historyMonths === 0 && customEnd
+      ? new Date(customEnd + 'T23:59:59')
+      : new Date();
+    const start = historyMonths === 0 && customStart
+      ? new Date(customStart)
+      : subMonths(end, historyMonths - 1);
     return eachMonthOfInterval({ start: startOfMonth(start), end: endOfMonth(end) });
-  }, [historyMonths]);
+  }, [historyMonths, customStart, customEnd]);
 
   // ── configuração dos membros (com seniority e cor)
   const memberConfigs = useMemo((): MemberConfig[] => {
@@ -264,16 +274,24 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
   );
 
   // ── itens do período completo de análise
-  const periodStart = useMemo(() => startOfMonth(subMonths(new Date(), historyMonths - 1)), [historyMonths]);
+  const periodStart = useMemo(() => {
+    if (historyMonths === 0 && customStart) return startOfMonth(new Date(customStart));
+    return startOfMonth(subMonths(new Date(), historyMonths - 1));
+  }, [historyMonths, customStart]);
+
+  const periodEnd = useMemo(() => {
+    if (historyMonths === 0 && customEnd) return endOfMonth(new Date(customEnd));
+    return new Date();
+  }, [historyMonths, customEnd]);
 
   const periodItems = useMemo(() =>
     teamItems.filter(item => {
       const date = item.closedDate
         ? new Date(item.closedDate as string)
         : new Date(item.changedDate || item.createdDate || '');
-      return date >= periodStart;
+      return date >= periodStart && date <= periodEnd;
     }),
-    [teamItems, periodStart]
+    [teamItems, periodStart, periodEnd]
   );
 
   // ── métricas por pessoa no período
@@ -487,7 +505,7 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
           </select>
         </div>
 
-        <div>
+        <div className="flex flex-col gap-1">
           <label htmlFor="tc-months" className="block text-ds-text text-xs mb-1">Período de análise</label>
           <select
             id="tc-months"
@@ -495,10 +513,41 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
             onChange={e => setHistoryMonths(Number(e.target.value))}
             className="bg-ds-dark-blue border border-ds-border text-ds-light-text text-sm rounded-md p-2"
           >
-            {[3, 6, 9, 12].map(n => (
-              <option key={n} value={n}>Últimos {n} meses</option>
-            ))}
+            <option value={1}>Último mês</option>
+            <option value={2}>Últimos 2 meses</option>
+            <option value={3}>Últimos 3 meses</option>
+            <option value={6}>Últimos 6 meses</option>
+            <option value={9}>Últimos 9 meses</option>
+            <option value={12}>Últimos 12 meses</option>
+            <option value={18}>Últimos 18 meses</option>
+            <option value={24}>Últimos 24 meses</option>
+            <option value={36}>Últimos 36 meses</option>
+            <option value={0}>📅 Período personalizado</option>
           </select>
+          {historyMonths === 0 && (
+            <div className="flex items-center gap-2 mt-1">
+              <div className="flex flex-col gap-0.5">
+                <label htmlFor="tc-custom-start" className="text-ds-text text-xs">De</label>
+                <input
+                  id="tc-custom-start"
+                  type="date"
+                  value={customStart}
+                  onChange={e => setCustomStart(e.target.value)}
+                  className="bg-ds-dark-blue border border-ds-border text-ds-light-text text-xs rounded-md p-1.5"
+                />
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <label htmlFor="tc-custom-end" className="text-ds-text text-xs">Até</label>
+                <input
+                  id="tc-custom-end"
+                  type="date"
+                  value={customEnd}
+                  onChange={e => setCustomEnd(e.target.value)}
+                  className="bg-ds-dark-blue border border-ds-border text-ds-light-text text-xs rounded-md p-1.5"
+                />
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="ml-auto flex flex-col items-end gap-1">

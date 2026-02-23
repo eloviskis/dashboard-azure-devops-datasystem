@@ -33,7 +33,7 @@ const ALL_TABS = [
   { id: 'tags',                label: 'Análise de Tags' },
   { id: 'clients',             label: 'Análise por Cliente' },
   { id: 'scrum-ctc',           label: 'Scrum (CTC/Franquia)' },
-  { id: 'team-comparison',     label: 'Comparativo de Pessoas' },
+  { id: 'team-comparison',     label: 'Pessoas & Senioridade' },
   { id: 'item-list',           label: 'Lista de Itens' },
   { id: 'documentation',       label: '📖 Documentação' },
 ];

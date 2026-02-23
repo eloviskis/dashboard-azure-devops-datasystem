@@ -97,7 +97,7 @@ const DEFAULT_TAB_CONFIG = [
   // 👥 5. Visões Específicas
   { id: 'clients', label: 'Análise por Cliente', visible: true },
   { id: 'scrum-ctc', label: 'Scrum (CTC/Franquia)', visible: true },
-  { id: 'team-comparison', label: '👥 Comparativo de Pessoas', visible: true },
+  { id: 'team-comparison', label: '👥 Pessoas & Senioridade', visible: true },
   // 📋 6. Operacional / Dados Brutos
   { id: 'item-list', label: 'Lista de Itens', visible: true },
   // 📚 7. Suporte e Governança
@@ -639,7 +639,7 @@ const App = () => {
       case 'team-comparison':
         return (
           <>
-            <SectionHeader title="Comparativo de Pessoas & Senioridade" />
+            <SectionHeader title="Pessoas & Senioridade" />
             <TeamComparisonDashboard data={workItems} />
           </>
         );
