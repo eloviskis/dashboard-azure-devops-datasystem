@@ -12,10 +12,13 @@ import { useAuth } from '../contexts/AuthContext';
 
 // ─── tipos ───────────────────────────────────────────────────────────────────
 type Seniority = 'Estagiário' | 'Júnior' | 'Pleno' | 'Sênior' | 'Tech Lead' | 'Gestor';
+type Role = 'DEV' | 'QA' | 'P.O.' | 'Outros';
 
 interface MemberConfig {
   name: string;
   seniority: Seniority;
+  role: Role;
+  active: boolean;
   color?: string;
 }
 
@@ -23,8 +26,17 @@ interface SeniorityConfigMap {
   [name: string]: Seniority;
 }
 
+interface RoleConfigMap {
+  [name: string]: Role;
+}
+
+interface ActiveConfigMap {
+  [name: string]: boolean;
+}
+
 // ─── constantes ──────────────────────────────────────────────────────────────
 const SENIORITY_OPTIONS: Seniority[] = ['Estagiário', 'Júnior', 'Pleno', 'Sênior', 'Tech Lead', 'Gestor'];
+const ROLE_OPTIONS: Role[] = ['DEV', 'QA', 'P.O.', 'Outros'];
 
 const SENIORITY_COLORS: Record<Seniority, string> = {
   'Estagiário': '#a0aec0',
@@ -53,6 +65,8 @@ const COMPLETED_STATES = ['Done','Concluído','Closed','Fechado','Finished','Res
 
 const STORAGE_KEY = 'tc_seniority_config_v2';
 const SETTINGS_KEY = 'seniority_config';
+const ROLE_KEY = 'tc_role_config_v1';
+const ACTIVE_KEY = 'tc_active_config_v1';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 const loadLocalConfig = (): SeniorityConfigMap => {
@@ -61,6 +75,16 @@ const loadLocalConfig = (): SeniorityConfigMap => {
 const saveLocalConfig = (cfg: SeniorityConfigMap) => {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg));
 };
+
+const loadRoleConfig = (): RoleConfigMap => {
+  try { return JSON.parse(localStorage.getItem(ROLE_KEY) || '{}'); } catch { return {}; }
+};
+const saveRoleConfig = (cfg: RoleConfigMap) => localStorage.setItem(ROLE_KEY, JSON.stringify(cfg));
+
+const loadActiveConfig = (): ActiveConfigMap => {
+  try { return JSON.parse(localStorage.getItem(ACTIVE_KEY) || '{}'); } catch { return {}; }
+};
+const saveActiveConfig = (cfg: ActiveConfigMap) => localStorage.setItem(ACTIVE_KEY, JSON.stringify(cfg));
 
 const abbrev = (name: string) =>
   name.split(' ').filter(Boolean).map(p => p[0]).join('').toUpperCase().slice(0, 2);
@@ -85,18 +109,31 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 interface ConfigModalProps {
   members: string[];
   config: SeniorityConfigMap;
-  onSave: (cfg: SeniorityConfigMap) => void;
+  roleConfig: RoleConfigMap;
+  onSave: (cfg: SeniorityConfigMap, roleCfg: RoleConfigMap) => void;
   onClose: () => void;
 }
 
-const ConfigModal: React.FC<ConfigModalProps> = ({ members, config, onSave, onClose }) => {
+const ROLE_COLORS: Record<Role, string> = {
+  'DEV':    '#47C5FB',
+  'QA':     '#68d391',
+  'P.O.':   '#f6ad55',
+  'Outros': '#a0aec0',
+};
+
+const ConfigModal: React.FC<ConfigModalProps> = ({ members, config, roleConfig, onSave, onClose }) => {
   const [local, setLocal] = useState<SeniorityConfigMap>({ ...config });
+  const [localRole, setLocalRole] = useState<RoleConfigMap>({ ...roleConfig });
 
   const handleChange = (name: string, value: Seniority) => {
     setLocal(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleSave = () => { onSave(local); onClose(); };
+  const handleRoleChange = (name: string, value: Role) => {
+    setLocalRole(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleSave = () => { onSave(local, localRole); onClose(); };
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50" onClick={onClose}>
@@ -106,8 +143,8 @@ const ConfigModal: React.FC<ConfigModalProps> = ({ members, config, onSave, onCl
       >
         <div className="flex items-center justify-between p-5 border-b border-ds-border">
           <div>
-            <h2 className="text-white font-bold text-lg">⚙️ Configurar Senioridade</h2>
-            <p className="text-ds-text text-xs mt-0.5">Classifique cada membro da equipe para o comparativo</p>
+            <h2 className="text-white font-bold text-lg">⚙️ Classificar Equipe</h2>
+            <p className="text-ds-text text-xs mt-0.5">Defina senioridade e cargo de cada membro</p>
           </div>
           <button onClick={onClose} className="text-ds-text hover:text-white text-2xl leading-none">×</button>
         </div>
@@ -116,6 +153,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({ members, config, onSave, onCl
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {members.map(name => {
               const current = local[name] ?? 'Pleno';
+              const currentRole = localRole[name] ?? 'DEV';
               return (
                 <div key={name} className="bg-ds-dark-blue border border-ds-border rounded-lg p-3 flex items-center gap-3">
                   <div
@@ -136,6 +174,18 @@ const ConfigModal: React.FC<ConfigModalProps> = ({ members, config, onSave, onCl
                     >
                       {SENIORITY_OPTIONS.map(s => (
                         <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                    <label htmlFor={`role-${name}`} className="sr-only">Cargo de {name}</label>
+                    <select
+                      id={`role-${name}`}
+                      value={currentRole}
+                      onChange={e => handleRoleChange(name, e.target.value as Role)}
+                      className="mt-1 w-full bg-ds-navy border border-ds-border text-ds-light-text text-xs rounded-md px-2 py-1"
+                      style={{ borderColor: ROLE_COLORS[currentRole] + '60' }}
+                    >
+                      {ROLE_OPTIONS.map(r => (
+                        <option key={r} value={r}>{r}</option>
                       ))}
                     </select>
                   </div>
@@ -238,12 +288,16 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
   const API_URL = import.meta.env.VITE_API_URL || 'https://backend-hazel-three-14.vercel.app';
 
   const [seniorityConfig, setSeniorityConfig] = useState<SeniorityConfigMap>(loadLocalConfig);
+  const [roleConfig, setRoleConfig] = useState<RoleConfigMap>(loadRoleConfig);
+  const [activeConfig, setActiveConfig] = useState<ActiveConfigMap>(loadActiveConfig);
   const [configMeta, setConfigMeta] = useState<{ updatedBy?: string; updatedAt?: string } | null>(null);
   const [configLoading, setConfigLoading] = useState(true);
   const [configSaving, setConfigSaving] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
   const [selectedTeam, setSelectedTeam] = useState<string>('__all__');
   const [selectedSeniority, setSelectedSeniority] = useState<string>('__all__');
+  const [selectedRole, setSelectedRole] = useState<string>('__all__');
+  const [showOnlyActive, setShowOnlyActive] = useState<boolean>(false);
   const [historyMonths, setHistoryMonths] = useState<number>(6);
   const [customStart, setCustomStart] = useState<string>(
     () => format(subMonths(new Date(), 5), 'yyyy-MM-dd')
@@ -299,9 +353,11 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
   );
 
   // ── salvar config (admin: banco + localStorage; outro: apenas localStorage)
-  const handleSaveConfig = useCallback(async (cfg: SeniorityConfigMap) => {
+  const handleSaveConfig = useCallback(async (cfg: SeniorityConfigMap, roleCfg: RoleConfigMap) => {
     setSeniorityConfig(cfg);
     saveLocalConfig(cfg);
+    setRoleConfig(roleCfg);
+    saveRoleConfig(roleCfg);
     if (!isAdmin) return;
     setConfigSaving(true);
     try {
@@ -329,21 +385,37 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
     return eachMonthOfInterval({ start: startOfMonth(start), end: endOfMonth(end) });
   }, [historyMonths, customStart, customEnd]);
 
-  // ── configuração dos membros (com seniority e cor)
+  // ── configuração dos membros (com seniority, role, active e cor)
   const memberConfigs = useMemo((): MemberConfig[] => {
     return allMembers.map((name, idx) => ({
       name,
       seniority: seniorityConfig[name] ?? 'Pleno',
+      role: roleConfig[name] ?? 'DEV',
+      active: activeConfig[name] !== false,
       color: PERSON_PALETTE[idx % PERSON_PALETTE.length],
     }));
-  }, [allMembers, seniorityConfig]);
+  }, [allMembers, seniorityConfig, roleConfig, activeConfig]);
 
-  // ── membros filtrados por senioridade
-  const filteredMembers = useMemo(() =>
-    selectedSeniority === '__all__'
-      ? memberConfigs
-      : memberConfigs.filter(m => m.seniority === selectedSeniority),
-    [memberConfigs, selectedSeniority]
+  // ── membros filtrados por senioridade, cargo e status
+  const filteredMembers = useMemo(() => {
+    let result = memberConfigs;
+    if (selectedSeniority !== '__all__') result = result.filter(m => m.seniority === selectedSeniority);
+    if (selectedRole !== '__all__') result = result.filter(m => m.role === selectedRole);
+    return result;
+  }, [memberConfigs, selectedSeniority, selectedRole]);
+
+  // ── apenas membros ativos (usados em gráficos e métricas agregadas)
+  // sempre exclui inativos dos cálculos; o filtro "Somente Ativos" restringe
+  // adicionalmente o que aparece nos cards individuais
+  const activeFilteredMembers = useMemo(() =>
+    filteredMembers.filter(m => m.active),
+    [filteredMembers]
+  );
+
+  // ── membros exibidos nos cards (respeita o filtro de status da barra)
+  const displayedMembers = useMemo(() =>
+    showOnlyActive ? filteredMembers.filter(m => m.active) : filteredMembers,
+    [filteredMembers, showOnlyActive]
   );
 
   // ── itens do período completo de análise
@@ -416,7 +488,7 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
 
   // ── dados para gráfico de throughput
   const throughputChartData = useMemo(() =>
-    filteredMembers
+    activeFilteredMembers
       .map(m => ({
         name: m.name.split(' ')[0],
         fullName: m.name,
@@ -427,12 +499,12 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
         Bugs: personMetrics[m.name]?.bugs ?? 0,
       }))
       .sort((a, b) => b.Entregues - a.Entregues),
-    [filteredMembers, personMetrics]
+    [activeFilteredMembers, personMetrics]
   );
 
   // ── dados para gráfico de cycle time
   const cycleTimeChartData = useMemo(() =>
-    filteredMembers
+    activeFilteredMembers
       .map(m => ({
         name: m.name.split(' ')[0],
         fullName: m.name,
@@ -444,15 +516,15 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
       }))
       .filter(d => d['Cycle Time Médio'] != null)
       .sort((a, b) => (a['Cycle Time Médio'] as number) - (b['Cycle Time Médio'] as number)),
-    [filteredMembers, personMetrics]
+    [activeFilteredMembers, personMetrics]
   );
 
   // ── dados para linha histórica (top 8 pessoas por entrega)
   const top8 = useMemo(() =>
-    [...filteredMembers]
+    [...activeFilteredMembers]
       .sort((a, b) => (personMetrics[b.name]?.delivered ?? 0) - (personMetrics[a.name]?.delivered ?? 0))
       .slice(0, 8),
-    [filteredMembers, personMetrics]
+    [activeFilteredMembers, personMetrics]
   );
 
   const lineChartData = useMemo(() =>
@@ -469,10 +541,10 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
 
   // ── dados radar (top 6 comparativos)
   const radarTop6 = useMemo(() =>
-    [...filteredMembers]
+    [...activeFilteredMembers]
       .sort((a, b) => (personMetrics[b.name]?.delivered ?? 0) - (personMetrics[a.name]?.delivered ?? 0))
       .slice(0, 6),
-    [filteredMembers, personMetrics]
+    [activeFilteredMembers, personMetrics]
   );
 
   const maxDelivered = useMemo(() =>
@@ -510,7 +582,7 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
   const seniorityStats = useMemo(() => {
     const groups: Record<string, { delivered: number[]; ct: number[]; sp: number[] }> = {};
     SENIORITY_OPTIONS.forEach(s => { groups[s] = { delivered: [], ct: [], sp: [] }; });
-    filteredMembers.forEach(m => {
+    activeFilteredMembers.forEach(m => {
       const met = personMetrics[m.name];
       if (!met) return;
       groups[m.seniority].delivered.push(met.delivered);
@@ -530,7 +602,17 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
         totalSP: g.sp.reduce((a, b) => a + b, 0),
       };
     }).filter(Boolean);
-  }, [filteredMembers, personMetrics]);
+  }, [activeFilteredMembers, personMetrics]);
+
+  // ── toggle ativo/inativo de um membro
+  const toggleActive = useCallback((name: string) => {
+    setActiveConfig(prev => {
+      const isCurrentlyActive = prev[name] !== false;
+      const updated = { ...prev, [name]: !isCurrentlyActive };
+      saveActiveConfig(updated);
+      return updated;
+    });
+  }, []);
 
   // ── toggle visibilidade de linhas no gráfico de tendência
   const togglePerson = (name: string) => {
@@ -542,7 +624,7 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
   };
   const isLineVisible = (name: string) => activePersons.size === 0 || activePersons.has(name);
 
-  const hasData = filteredMembers.length > 0;
+  const hasData = displayedMembers.length > 0;
 
   return (
     <div className="space-y-6">
@@ -575,6 +657,34 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
             {SENIORITY_OPTIONS.map(s => (
               <option key={s} value={s}>{s}</option>
             ))}
+          </select>
+        </div>
+
+        <div>
+          <label htmlFor="tc-role" className="block text-ds-text text-xs mb-1">Cargo</label>
+          <select
+            id="tc-role"
+            value={selectedRole}
+            onChange={e => setSelectedRole(e.target.value)}
+            className="bg-ds-dark-blue border border-ds-border text-ds-light-text text-sm rounded-md p-2"
+          >
+            <option value="__all__">Todos</option>
+            {ROLE_OPTIONS.map(r => (
+              <option key={r} value={r}>{r}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label htmlFor="tc-status" className="block text-ds-text text-xs mb-1">Status</label>
+          <select
+            id="tc-status"
+            value={showOnlyActive ? 'active' : '__all__'}
+            onChange={e => setShowOnlyActive(e.target.value === 'active')}
+            className="bg-ds-dark-blue border border-ds-border text-ds-light-text text-sm rounded-md p-2"
+          >
+            <option value="__all__">Todos</option>
+            <option value="active">Somente Ativos</option>
           </select>
         </div>
 
@@ -633,7 +743,7 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
               {configSaving ? (
                 <><span className="animate-spin">⏳</span> Salvando...</>
               ) : (
-                <>⚙️ Classificar Senioridade</>
+                <>⚙️ Classificar</>
               )}
             </button>
           )}
@@ -736,7 +846,7 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
             {/* legenda de senioridades */}
             <div className="flex flex-wrap gap-3 mt-3 justify-center">
               {SENIORITY_OPTIONS.map(s => {
-                const has = filteredMembers.some(m => m.seniority === s);
+                const has = activeFilteredMembers.some(m => m.seniority === s);
                 if (!has) return null;
                 return (
                   <div key={s} className="flex items-center gap-1.5 text-xs">
@@ -922,20 +1032,26 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
           <div>
             <h3 className="text-ds-light-text font-bold text-sm mb-3">👤 Detalhamento Individual</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {filteredMembers
+              {displayedMembers
                 .sort((a, b) => (personMetrics[b.name]?.delivered ?? 0) - (personMetrics[a.name]?.delivered ?? 0))
                 .map((mc, i) => {
                   const met = personMetrics[mc.name];
                   const color = PERSON_PALETTE[i % PERSON_PALETTE.length];
                   const isSelected = selectedPerson === mc.name;
+                  const isInactive = !mc.active;
 
                   return (
                     <div
                       key={mc.name}
-                      className="bg-ds-navy border rounded-xl p-4 cursor-pointer transition-all hover:scale-[1.01]"
+                      className={`border rounded-xl p-4 cursor-pointer transition-all hover:scale-[1.01] ${
+                        isInactive ? 'bg-red-950/30' : 'bg-ds-navy'
+                      }`}
                       style={{
-                        borderColor: isSelected ? SENIORITY_COLORS[mc.seniority] : '#303C55',
-                        boxShadow: isSelected ? `0 0 0 1px ${SENIORITY_COLORS[mc.seniority]}60` : undefined,
+                        borderColor: isInactive ? '#ef4444' : (isSelected ? SENIORITY_COLORS[mc.seniority] : '#303C55'),
+                        boxShadow: isInactive
+                          ? '0 0 0 1px #ef444440'
+                          : (isSelected ? `0 0 0 1px ${SENIORITY_COLORS[mc.seniority]}60` : undefined),
+                        opacity: isInactive ? 0.75 : 1,
                       }}
                       onClick={() => {
                         const met = personMetrics[mc.name];
@@ -944,25 +1060,48 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
                       }}
                     >
                       {/* header do card */}
-                      <div className="flex items-center gap-3 mb-3">
+                      <div className="flex items-start gap-3 mb-3">
                         <div
                           className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shrink-0"
                           style={{
-                            backgroundColor: SENIORITY_COLORS[mc.seniority] + '33',
-                            color: SENIORITY_COLORS[mc.seniority],
-                            border: `2px solid ${SENIORITY_COLORS[mc.seniority]}60`,
+                            backgroundColor: isInactive ? '#ef444433' : SENIORITY_COLORS[mc.seniority] + '33',
+                            color: isInactive ? '#ef4444' : SENIORITY_COLORS[mc.seniority],
+                            border: `2px solid ${ isInactive ? '#ef444460' : SENIORITY_COLORS[mc.seniority] + '60'}`,
                           }}
                         >
                           {abbrev(mc.name)}
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-white font-semibold text-sm truncate">{mc.name}</p>
-                          <span
-                            className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${SENIORITY_BG[mc.seniority]}`}
-                          >
-                            {mc.seniority}
-                          </span>
+                          <div className="flex items-center gap-1 flex-wrap mt-0.5">
+                            <span
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${SENIORITY_BG[mc.seniority]}`}
+                            >
+                              {mc.seniority}
+                            </span>
+                            <span
+                              className="text-[10px] font-bold px-2 py-0.5 rounded-full border"
+                              style={{
+                                backgroundColor: ROLE_COLORS[mc.role] + '22',
+                                color: ROLE_COLORS[mc.role],
+                                borderColor: ROLE_COLORS[mc.role] + '60',
+                              }}
+                            >
+                              {mc.role}
+                            </span>
+                          </div>
                         </div>
+                        <button
+                          onClick={e => { e.stopPropagation(); toggleActive(mc.name); }}
+                          className={`text-[10px] px-2 py-1 rounded-full border font-semibold transition-all shrink-0 ${
+                            isInactive
+                              ? 'bg-red-500/20 border-red-500/50 text-red-400 hover:bg-green-500/20 hover:border-green-500/50 hover:text-green-400'
+                              : 'bg-green-500/20 border-green-500/40 text-green-400 hover:bg-red-500/20 hover:border-red-500/40 hover:text-red-400'
+                          }`}
+                          title={isInactive ? 'Clique para ativar' : 'Clique para desativar'}
+                        >
+                          {isInactive ? 'Inativo' : 'Ativo'}
+                        </button>
                       </div>
 
                       {/* métricas */}
@@ -1033,6 +1172,7 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
         <ConfigModal
           members={allMembers}
           config={seniorityConfig}
+          roleConfig={roleConfig}
           onSave={handleSaveConfig}
           onClose={() => setShowConfig(false)}
         />
