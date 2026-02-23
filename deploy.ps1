@@ -56,7 +56,7 @@ if (-not (Test-Path $authFile)) {
 $token = (Get-Content $authFile | ConvertFrom-Json).token
 $headers = @{ Authorization = "Bearer $token" }
 
-function Deploy-VercelProject {
+function Invoke-VercelDeploy {
     param([string]$Name)
 
     $proj = $Projects[$Name]
@@ -155,11 +155,11 @@ Write-Host "Usa Vercel API (respeita rootDirectory configurado)`n" -ForegroundCo
 $results = @{}
 
 if ($Target -in @('backend', 'all')) {
-    $results['backend'] = (Deploy-VercelProject 'backend').success
+    $results['backend'] = (Invoke-VercelDeploy 'backend').success
 }
 
 if ($Target -in @('frontend', 'all')) {
-    $results['frontend'] = (Deploy-VercelProject 'frontend').success
+    $results['frontend'] = (Invoke-VercelDeploy 'frontend').success
 }
 
 if ($Wait -and $results.ContainsKey('backend') -and $results['backend']) {

@@ -74,7 +74,7 @@ const ItemListModal: React.FC<{ data: ModalData | null; onClose: () => void }> =
                   >
                     <div className="flex items-start gap-3">
                       <span 
-                        className="text-xs font-mono px-2 py-1 rounded flex-shrink-0 bg-red-600 text-white"
+                        className="text-xs font-mono px-2 py-1 rounded shrink-0 bg-red-600 text-white"
                       >
                         #{item.workItemId}
                       </span>
@@ -294,12 +294,12 @@ const ImpedimentosDashboard: React.FC<Props> = ({ data }) => {
 
       {/* Cards de métricas */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-gradient-to-br from-red-600 to-red-800 text-white p-6 rounded-lg shadow-lg">
+        <div className="bg-linear-to-br from-red-600 to-red-800 text-white p-6 rounded-lg shadow-lg">
           <div className="text-sm opacity-90 mb-2">🚫 Total de Impedimentos</div>
           <div className="text-4xl font-bold">{impedimentos.length}</div>
           <div className="text-xs opacity-75 mt-2">Itens bloqueados</div>
         </div>
-        <div className="bg-gradient-to-br from-orange-600 to-orange-800 text-white p-6 rounded-lg shadow-lg">
+        <div className="bg-linear-to-br from-orange-600 to-orange-800 text-white p-6 rounded-lg shadow-lg">
           <div className="text-sm opacity-90 mb-2">⏱️ Tempo Médio Parado</div>
           <div className="text-4xl font-bold">
             {impedimentos.length > 0 
@@ -309,12 +309,12 @@ const ImpedimentosDashboard: React.FC<Props> = ({ data }) => {
           </div>
           <div className="text-xs opacity-75 mt-2">dias</div>
         </div>
-        <div className="bg-gradient-to-br from-yellow-600 to-yellow-800 text-white p-6 rounded-lg shadow-lg">
+        <div className="bg-linear-to-br from-yellow-600 to-yellow-800 text-white p-6 rounded-lg shadow-lg">
           <div className="text-sm opacity-90 mb-2">👥 Times Afetados</div>
           <div className="text-4xl font-bold">{impedimentosPorTime.length}</div>
           <div className="text-xs opacity-75 mt-2">equipes com impedimentos</div>
         </div>
-        <div className="bg-gradient-to-br from-purple-600 to-purple-800 text-white p-6 rounded-lg shadow-lg">
+        <div className="bg-linear-to-br from-purple-600 to-purple-800 text-white p-6 rounded-lg shadow-lg">
           <div className="text-sm opacity-90 mb-2">🔥 Mais Crítico</div>
           <div className="text-4xl font-bold">
             {top10MaisAntigos.length > 0 ? top10MaisAntigos[0].daysStopped : 0}
@@ -324,7 +324,7 @@ const ImpedimentosDashboard: React.FC<Props> = ({ data }) => {
       </div>
 
       {impedimentos.length === 0 ? (
-        <div className="bg-gradient-to-br from-green-600 to-green-800 text-white p-12 rounded-lg text-center">
+        <div className="bg-linear-to-br from-green-600 to-green-800 text-white p-12 rounded-lg text-center">
           <div className="text-6xl mb-4">🎉</div>
           <div className="text-2xl font-bold mb-2">Nenhum Impedimento Detectado!</div>
           <div className="text-lg opacity-90">Todos os itens estão fluindo normalmente</div>
@@ -428,7 +428,7 @@ const ImpedimentosDashboard: React.FC<Props> = ({ data }) => {
           </div>
 
           {/* Top 10 Impedimentos Mais Antigos */}
-          <div className="bg-gradient-to-br from-red-900 to-red-950 p-6 rounded-lg border-2 border-red-500">
+          <div className="bg-linear-to-br from-red-900 to-red-950 p-6 rounded-lg border-2 border-red-500">
             <div className="flex items-center gap-3 mb-6">
               <div className="text-4xl">🚨</div>
               <div>
@@ -445,7 +445,7 @@ const ImpedimentosDashboard: React.FC<Props> = ({ data }) => {
                   className="bg-ds-navy rounded-lg p-4 border border-red-500 hover:border-red-300 transition-all hover:shadow-lg hover:shadow-red-500/20"
                 >
                   <div className="flex items-start gap-4">
-                    <div className="flex-shrink-0">
+                    <div className="shrink-0">
                       <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg ${
                         index === 0 ? 'bg-red-600' : index === 1 ? 'bg-orange-600' : index === 2 ? 'bg-yellow-600' : 'bg-gray-600'
                       }`}>

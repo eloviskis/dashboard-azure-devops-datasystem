@@ -275,27 +275,27 @@ const BacklogAnalysisDashboard: React.FC<Props> = ({ data }) => {
     <div className="space-y-6">
       {/* Cards de Métricas Gerais */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-        <div className="bg-gradient-to-br from-blue-600 to-blue-800 text-white p-6 rounded-lg shadow-lg">
+        <div className="bg-linear-to-br from-blue-600 to-blue-800 text-white p-6 rounded-lg shadow-lg">
           <div className="text-sm opacity-90 mb-2">Vazão Total (Período)</div>
           <div className="text-4xl font-bold">{overallMetrics.totalThroughput}</div>
           <div className="text-xs opacity-75 mt-2">Itens concluídos</div>
         </div>
-        <div className="bg-gradient-to-br from-green-600 to-green-800 text-white p-6 rounded-lg shadow-lg">
+        <div className="bg-linear-to-br from-green-600 to-green-800 text-white p-6 rounded-lg shadow-lg">
           <div className="text-sm opacity-90 mb-2">Cycle Time Médio</div>
           <div className="text-4xl font-bold">{overallMetrics.avgCycleTime}</div>
           <div className="text-xs opacity-75 mt-2">dias</div>
         </div>
-        <div className="bg-gradient-to-br from-purple-600 to-purple-800 text-white p-6 rounded-lg shadow-lg">
+        <div className="bg-linear-to-br from-purple-600 to-purple-800 text-white p-6 rounded-lg shadow-lg">
           <div className="text-sm opacity-90 mb-2">Lead Time Médio</div>
           <div className="text-4xl font-bold">{overallMetrics.avgLeadTime}</div>
           <div className="text-xs opacity-75 mt-2">dias</div>
         </div>
-        <div className="bg-gradient-to-br from-orange-600 to-orange-800 text-white p-6 rounded-lg shadow-lg">
+        <div className="bg-linear-to-br from-orange-600 to-orange-800 text-white p-6 rounded-lg shadow-lg">
           <div className="text-sm opacity-90 mb-2">Times Ativos</div>
           <div className="text-4xl font-bold">{overallMetrics.teamsCount}</div>
           <div className="text-xs opacity-75 mt-2">equipes</div>
         </div>
-        <div className="bg-gradient-to-br from-pink-600 to-pink-800 text-white p-6 rounded-lg shadow-lg">
+        <div className="bg-linear-to-br from-pink-600 to-pink-800 text-white p-6 rounded-lg shadow-lg">
           <div className="text-sm opacity-90 mb-2">Tipos de Work Item</div>
           <div className="text-4xl font-bold">{overallMetrics.typesCount}</div>
           <div className="text-xs opacity-75 mt-2">categorias</div>
@@ -439,7 +439,7 @@ const BacklogAnalysisDashboard: React.FC<Props> = ({ data }) => {
       </div>
 
       {/* Recomendações de Backlog */}
-      <div className="bg-gradient-to-br from-ds-navy to-ds-dark-blue p-6 rounded-lg border-2 border-ds-green shadow-xl">
+      <div className="bg-linear-to-br from-ds-navy to-ds-dark-blue p-6 rounded-lg border-2 border-ds-green shadow-xl">
         <div className="flex items-center gap-3 mb-6">
           <div className="text-4xl">📋</div>
           <div>

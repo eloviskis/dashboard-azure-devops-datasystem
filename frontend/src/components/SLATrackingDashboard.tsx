@@ -193,7 +193,7 @@ const SLATrackingDashboard: React.FC<Props> = ({ data }) => {
                         #{item.workItemId}
                       </a>
                     </td>
-                    <td className="px-3 py-2 text-ds-light-text max-w-[250px] truncate">{item.title}</td>
+                    <td className="px-3 py-2 text-ds-light-text max-w-62.5 truncate">{item.title}</td>
                     <td className="px-3 py-2">{item.type}</td>
                     <td className="px-3 py-2">{item.team}</td>
                     <td className="px-3 py-2">{item.assignedTo || '-'}</td>

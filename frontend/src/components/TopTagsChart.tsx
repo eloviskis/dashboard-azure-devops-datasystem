@@ -51,7 +51,7 @@ const ItemListModal: React.FC<{ data: ModalData | null; onClose: () => void }> =
                 className="bg-ds-dark-blue border border-ds-border rounded-lg p-3 hover:border-ds-green transition-colors"
               >
                 <div className="flex items-start gap-3">
-                  <span className="text-xs font-mono px-2 py-1 rounded bg-blue-600 text-white flex-shrink-0">
+                  <span className="text-xs font-mono px-2 py-1 rounded bg-blue-600 text-white shrink-0">
                     #{item.workItemId}
                   </span>
                   <div className="flex-1 min-w-0">

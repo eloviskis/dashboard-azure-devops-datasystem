@@ -394,11 +394,11 @@ const App = () => {
             
             {/* Seção de Itens Envelhecidos e WIP Limits */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
-              <div className="h-[500px]">
+              <div className="h-125">
                 <ChartInfoLamp info="Mostra os itens mais antigos em progresso, ajudando a identificar trabalho estagnado que pode precisar de atenção ou repriorização." />
                 <AgingItemsCard workItems={filteredWorkItems} />
               </div>
-              <div className="h-[500px]">
+              <div className="h-125">
                 <ChartInfoLamp info="Exibe os limites de trabalho em progresso (WIP) por coluna, time e pessoa. WIP alto pode indicar sobrecarga e multitasking excessivo." />
                 <WIPLimits workItems={filteredWorkItems} />
               </div>

@@ -622,7 +622,7 @@ export const RootCauseDashboard: React.FC<Props> = ({ data }) => {
         <div className="font-bold mb-2">P0 por Área/Causa Raiz ({issuesP0.length} total)</div>
         <ChartInfoLamp info="Issues P0 (críticas) agrupadas por causa raiz. Identifica as áreas mais críticas que precisam de ação preventiva." />
         {p0CausaChart.length === 0 ? (
-          <div className="flex items-center justify-center h-[180px] text-ds-text text-center">
+          <div className="flex items-center justify-center h-45 text-ds-text text-center">
             <div>
               <div className="text-4xl mb-2">📊</div>
               <div className="text-sm">Não há Issues com prioridade P0 neste período</div>
@@ -723,7 +723,7 @@ export const RootCauseDashboard: React.FC<Props> = ({ data }) => {
           <div className="font-bold mb-2">Correções por Time Causa Raiz</div>
           <ChartInfoLamp info="Qual time introduziu o bug originalmente. Ajuda a identificar padrões de qualidade por equipe." />
           {rootCauseTeamChart.length === 0 || (rootCauseTeamChart.length === 1 && rootCauseTeamChart[0].name === '(não informado)') ? (
-            <div className="flex items-center justify-center h-[200px] text-ds-text text-center">
+            <div className="flex items-center justify-center h-50 text-ds-text text-center">
               <div>
                 <div className="text-4xl mb-2">📊</div>
                 <div className="text-sm">Sem dados de Time Causa Raiz</div>
@@ -750,7 +750,7 @@ export const RootCauseDashboard: React.FC<Props> = ({ data }) => {
           <div className="font-bold mb-2">Correções por Complexidade</div>
           <ChartInfoLamp info="Distribuição de bugs por nível de complexidade (Baixa, Média, Alta)." />
           {complexityChart.length === 0 || (complexityChart.length === 1 && complexityChart[0].name === '(não informado)') ? (
-            <div className="flex items-center justify-center h-[200px] text-ds-text text-center">
+            <div className="flex items-center justify-center h-50 text-ds-text text-center">
               <div>
                 <div className="text-4xl mb-2">📊</div>
                 <div className="text-sm">Sem dados de Complexidade</div>
@@ -787,7 +787,7 @@ export const RootCauseDashboard: React.FC<Props> = ({ data }) => {
           <div className="font-bold mb-2">Correções por Squad</div>
           <ChartInfoLamp info="Distribuição de bugs por squad/área de negócio." />
           {squadChart.length === 0 || (squadChart.length === 1 && squadChart[0].name === '(não informado)') ? (
-            <div className="flex items-center justify-center h-[200px] text-ds-text text-center">
+            <div className="flex items-center justify-center h-50 text-ds-text text-center">
               <div>
                 <div className="text-4xl mb-2">📊</div>
                 <div className="text-sm">Sem dados de Squad</div>
@@ -814,7 +814,7 @@ export const RootCauseDashboard: React.FC<Props> = ({ data }) => {
           <div className="font-bold mb-2">Correções por Plataforma</div>
           <ChartInfoLamp info="Distribuição de bugs por plataforma tecnológica (WPF, Web, Mobile, etc)." />
           {platformChart.length === 0 || (platformChart.length === 1 && platformChart[0].name === '(não informado)') ? (
-            <div className="flex items-center justify-center h-[200px] text-ds-text text-center">
+            <div className="flex items-center justify-center h-50 text-ds-text text-center">
               <div>
                 <div className="text-4xl mb-2">📊</div>
                 <div className="text-sm">Sem dados de Plataforma</div>
@@ -851,7 +851,7 @@ export const RootCauseDashboard: React.FC<Props> = ({ data }) => {
           <div className="font-bold mb-2">Correções por Desenvolvedor (DEV)</div>
           <ChartInfoLamp info="Desenvolvedor que trabalhou na correção. Ajuda a balancear carga de trabalho e identificar especialistas." />
           {devChart.length === 0 || (devChart.length === 1 && devChart[0].name === '(não informado)') ? (
-            <div className="flex items-center justify-center h-[200px] text-ds-text text-center">
+            <div className="flex items-center justify-center h-50 text-ds-text text-center">
               <div>
                 <div className="text-4xl mb-2">📊</div>
                 <div className="text-sm">Sem dados de Desenvolvedor</div>
@@ -878,7 +878,7 @@ export const RootCauseDashboard: React.FC<Props> = ({ data }) => {
           <div className="font-bold mb-2">Correções por Reincidência</div>
           <ChartInfoLamp info="Quantas vezes o mesmo problema ocorreu. Alta reincidência indica necessidade de solução definitiva." />
           {reincidenciaChart.length === 0 || (reincidenciaChart.length === 1 && reincidenciaChart[0].name === '(não informado)') ? (
-            <div className="flex items-center justify-center h-[200px] text-ds-text text-center">
+            <div className="flex items-center justify-center h-50 text-ds-text text-center">
               <div>
                 <div className="text-4xl mb-2">📊</div>
                 <div className="text-sm">Sem dados de Reincidência</div>
@@ -905,7 +905,7 @@ export const RootCauseDashboard: React.FC<Props> = ({ data }) => {
           <div className="font-bold mb-2">Raiz do Problema por Tipo (Campo Novo)</div>
           <ChartInfoLamp info="Campo novo de causa raiz (Custom.Raizdoproblema). Classificação mais precisa do problema encontrado." />
           {causaRaizChart.length === 0 || (causaRaizChart.length === 1 && causaRaizChart[0].name === '(não informado)') ? (
-            <div className="flex items-center justify-center h-[200px] text-ds-text text-center">
+            <div className="flex items-center justify-center h-50 text-ds-text text-center">
               <div>
                 <div className="text-4xl mb-2">📊</div>
                 <div className="text-sm">Sem dados de Raiz do Problema (Campo Novo)</div>
@@ -932,7 +932,7 @@ export const RootCauseDashboard: React.FC<Props> = ({ data }) => {
           <div className="font-bold mb-2">Quem Identificou o Problema</div>
           <ChartInfoLamp info="Como o problema foi identificado: Cliente, Interno, Monitoramento, Parceiro ou Testes automatizados." />
           {identificacaoChart.length === 0 || (identificacaoChart.length === 1 && identificacaoChart[0].name === '(não informado)') ? (
-            <div className="flex items-center justify-center h-[200px] text-ds-text text-center">
+            <div className="flex items-center justify-center h-50 text-ds-text text-center">
               <div>
                 <div className="text-4xl mb-2">📊</div>
                 <div className="text-sm">Sem dados de Identificação</div>
@@ -959,7 +959,7 @@ export const RootCauseDashboard: React.FC<Props> = ({ data }) => {
           <div className="font-bold mb-2">Falha do Processo</div>
           <ChartInfoLamp info="Por que o problema não foi detectado antes: falta de testes, code review, análise de impacto, etc." />
           {falhaDoProcessoChart.length === 0 || (falhaDoProcessoChart.length === 1 && falhaDoProcessoChart[0].name === '(não informado)') ? (
-            <div className="flex items-center justify-center h-[200px] text-ds-text text-center">
+            <div className="flex items-center justify-center h-50 text-ds-text text-center">
               <div>
                 <div className="text-4xl mb-2">📊</div>
                 <div className="text-sm">Sem dados de Falha do Processo</div>
@@ -986,7 +986,7 @@ export const RootCauseDashboard: React.FC<Props> = ({ data }) => {
           <div className="font-bold mb-2">Correções por Tipo de Cliente</div>
           <ChartInfoLamp info="Distribuição de correções por tipo/nível de SLA do cliente. Ajuda a identificar clientes com maior volume de problemas." />
           {tipoClienteChart.length === 0 || (tipoClienteChart.length === 1 && tipoClienteChart[0].name === '(não informado)') ? (
-            <div className="flex items-center justify-center h-[200px] text-ds-text text-center">
+            <div className="flex items-center justify-center h-50 text-ds-text text-center">
               <div>
                 <div className="text-4xl mb-2">📊</div>
                 <div className="text-sm">Sem dados de Tipo de Cliente</div>
