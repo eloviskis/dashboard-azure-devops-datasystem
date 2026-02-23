@@ -18,6 +18,35 @@ if (!JWT_SECRET) {
 }
 
 const app = express();
+
+// CORS - handle preflight (OPTIONS) explicitly for Vercel serverless
+app.use((req, res, next) => {
+  const allowedOrigins = [
+    'https://dashboard-azure-devops-datasystem.vercel.app',
+    'https://dashboard-azure-devops-datasystem-git-main-eloviskis.vercel.app',
+    'https://devops-datasystem.vercel.app',
+    'http://localhost:5173',
+    'http://localhost:3000',
+    'http://31.97.64.250',
+    'https://31.97.64.250'
+  ];
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin) || (origin && origin.endsWith('.vercel.app'))) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  } else {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  }
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With, Content-Type, Authorization, Accept');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Max-Age', '86400');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  next();
+});
+
 app.use(cors({
   origin: [
     'https://dashboard-azure-devops-datasystem.vercel.app',
