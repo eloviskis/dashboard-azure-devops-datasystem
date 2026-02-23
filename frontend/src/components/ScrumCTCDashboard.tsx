@@ -500,8 +500,8 @@ const ScrumCTCDashboard: React.FC<ScrumCTCDashboardProps> = ({ data }) => {
       <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
         <div className="flex flex-wrap items-end gap-4">
           <div>
-            <label className="text-ds-text text-sm mb-1 block">Time Scrum:</label>
-            <select value={selectedScrumTeam} onChange={e => setSelectedScrumTeam(e.target.value)}
+            <label htmlFor="scrum-team" className="text-ds-text text-sm mb-1 block">Time Scrum:</label>
+            <select id="scrum-team" value={selectedScrumTeam} onChange={e => setSelectedScrumTeam(e.target.value)}
               className="bg-ds-navy border border-ds-border text-ds-light-text text-sm rounded-md p-2">
               <option value="__ctc__">CTC (Franquia)</option>
               <option value="__all__">Todos os Times</option>
@@ -509,8 +509,8 @@ const ScrumCTCDashboard: React.FC<ScrumCTCDashboardProps> = ({ data }) => {
             </select>
           </div>
           <div>
-            <label className="text-ds-text text-sm mb-1 block">Duração do Sprint:</label>
-            <select value={sprintDuration} onChange={e => setSprintDuration(Number(e.target.value))}
+            <label htmlFor="sprint-duration" className="text-ds-text text-sm mb-1 block">Duração do Sprint:</label>
+            <select id="sprint-duration" value={sprintDuration} onChange={e => setSprintDuration(Number(e.target.value))}
               className="bg-ds-navy border border-ds-border text-ds-light-text text-sm rounded-md p-2">
               <option value={1}>1 semana</option>
               <option value={2}>2 semanas</option>
@@ -519,8 +519,8 @@ const ScrumCTCDashboard: React.FC<ScrumCTCDashboardProps> = ({ data }) => {
             </select>
           </div>
           <div>
-            <label className="text-ds-text text-sm mb-1 block">Histórico (sprints):</label>
-            <select value={sprintHistory} onChange={e => setSprintHistory(Number(e.target.value))}
+            <label htmlFor="sprint-history" className="text-ds-text text-sm mb-1 block">Histórico (sprints):</label>
+            <select id="sprint-history" value={sprintHistory} onChange={e => setSprintHistory(Number(e.target.value))}
               className="bg-ds-navy border border-ds-border text-ds-light-text text-sm rounded-md p-2">
               {[4, 5, 6, 7, 8, 9, 10, 11, 12].map(n => (
                 <option key={n} value={n}>{n} sprints</option>
@@ -528,16 +528,16 @@ const ScrumCTCDashboard: React.FC<ScrumCTCDashboardProps> = ({ data }) => {
             </select>
           </div>
           <div>
-            <label className="text-ds-text text-sm mb-1 block">Membro:</label>
-            <select value={filterMember} onChange={e => setFilterMember(e.target.value)}
+            <label htmlFor="scrum-filter-member" className="text-ds-text text-sm mb-1 block">Membro:</label>
+            <select id="scrum-filter-member" value={filterMember} onChange={e => setFilterMember(e.target.value)}
               className="bg-ds-navy border border-ds-border text-ds-light-text text-sm rounded-md p-2">
               <option value="all">Todos</option>
               {members.map(m => <option key={m} value={m}>{m}</option>)}
             </select>
           </div>
           <div>
-            <label className="text-ds-text text-sm mb-1 block">Tipo de Item:</label>
-            <select value={filterType} onChange={e => setFilterType(e.target.value)}
+            <label htmlFor="scrum-filter-type" className="text-ds-text text-sm mb-1 block">Tipo de Item:</label>
+            <select id="scrum-filter-type" value={filterType} onChange={e => setFilterType(e.target.value)}
               className="bg-ds-navy border border-ds-border text-ds-light-text text-sm rounded-md p-2">
               <option value="all">Todos</option>
               {types.map(t => <option key={t} value={t}>{t}</option>)}
@@ -691,9 +691,9 @@ const ScrumCTCDashboard: React.FC<ScrumCTCDashboardProps> = ({ data }) => {
                 formatter={(value: number, name: string) => [`${value}h`, name]}
               />
               <Legend />
-              <Bar dataKey="originalEstimate" name="Estimado (Original)" fill="#47C5FB" opacity={0.7} />
-              <Bar dataKey="completedWork" name="Realizado" fill="#64FFDA" />
-              <Bar dataKey="remainingWork" name="Restante" fill="#FFB86C" opacity={0.6} />
+              <Bar dataKey="originalEstimate" name="Estimado (Original)" fill="#47C5FB" opacity={0.7} label={{ position: 'top', fill: '#47C5FB', fontSize: 9, formatter: (v: number) => v > 0 ? `${v}h` : '' }} />
+              <Bar dataKey="completedWork" name="Realizado" fill="#64FFDA" label={{ position: 'top', fill: '#64FFDA', fontSize: 9, formatter: (v: number) => v > 0 ? `${v}h` : '' }} />
+              <Bar dataKey="remainingWork" name="Restante" fill="#FFB86C" opacity={0.6} label={{ position: 'top', fill: '#FFB86C', fontSize: 9, formatter: (v: number) => v > 0 ? `${v}h` : '' }} />
             </BarChart>
           </ResponsiveContainer>
           
@@ -710,13 +710,13 @@ const ScrumCTCDashboard: React.FC<ScrumCTCDashboardProps> = ({ data }) => {
           <h3 className="text-ds-light-text font-bold text-lg mb-4">👤 Story Points por Membro</h3>
           <ChartInfoLamp info="Distribuição de story points por membro do time: entregues vs. total atribuído. Ajuda a identificar distribuição de carga." />
           <ResponsiveContainer width="100%" height={Math.max(300, spByMember.length * 35)}>
-            <BarChart data={spByMember} layout="vertical" margin={{ left: 100 }}>
+            <BarChart data={spByMember} layout="vertical" margin={{ left: 100, right: 60 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
               <XAxis type="number" stroke={CHART_COLORS.text} />
               <YAxis type="category" dataKey="name" tick={{ fill: '#CCD6F6', fontSize: 11 }} width={100} />
               <Tooltip contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }} labelStyle={{ color: '#64ffda', fontWeight: 'bold' }} itemStyle={{ color: '#e6f1ff' }} />
               <Legend />
-              <Bar dataKey="delivered" name="Entregues" fill="#64FFDA" />
+              <Bar dataKey="delivered" name="Entregues" fill="#64FFDA" label={{ position: 'right', fill: '#64FFDA', fontSize: 11, fontWeight: 'bold' }} />
               <Bar dataKey="total" name="Total" fill="#47C5FB" opacity={0.4} />
             </BarChart>
           </ResponsiveContainer>

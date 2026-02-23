@@ -731,11 +731,11 @@ export const RootCauseDashboard: React.FC<Props> = ({ data }) => {
             </div>
           ) : (
             <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={rootCauseTeamChart.slice(0, 10)} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+              <BarChart data={rootCauseTeamChart.slice(0, 10)} layout="vertical" margin={{ top: 5, right: 60, left: 20, bottom: 5 }}>
                 <XAxis type="number" tick={{ fill: '#FFD600', fontSize: 12 }} axisLine={false} />
                 <YAxis type="category" dataKey="name" tick={{ fill: '#fff', fontSize: 11 }} width={120} axisLine={false} />
                 <Tooltip formatter={(value: number) => [`${value} issues (clique)`, 'Qtd']} contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', color: '#fff' }} />
-                <Bar dataKey="value" radius={[0, 8, 8, 0]} cursor="pointer" onClick={(data, index) => handleRootCauseTeamClick(data, index)}>
+                <Bar dataKey="value" radius={[0, 8, 8, 0]} cursor="pointer" label={{ position: 'right', fill: '#FFD600', fontSize: 11, fontWeight: 'bold' }} onClick={(data, index) => handleRootCauseTeamClick(data, index)}>
                   {rootCauseTeamChart.slice(0, 10).map((entry, idx) => (
                     <Cell key={`cell-${entry.name}`} fill={COLORS[idx % COLORS.length]} />
                   ))}
@@ -795,11 +795,11 @@ export const RootCauseDashboard: React.FC<Props> = ({ data }) => {
             </div>
           ) : (
             <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={squadChart.slice(0, 10)} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+              <BarChart data={squadChart.slice(0, 10)} layout="vertical" margin={{ top: 5, right: 60, left: 20, bottom: 5 }}>
                 <XAxis type="number" tick={{ fill: '#FFD600', fontSize: 12 }} axisLine={false} />
                 <YAxis type="category" dataKey="name" tick={{ fill: '#fff', fontSize: 11 }} width={120} axisLine={false} />
                 <Tooltip formatter={(value: number) => [`${value} issues (clique)`, 'Qtd']} contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', color: '#fff' }} />
-                <Bar dataKey="value" radius={[0, 8, 8, 0]} cursor="pointer" onClick={(data, index) => handleSquadClick(data, index)}>
+                <Bar dataKey="value" radius={[0, 8, 8, 0]} cursor="pointer" label={{ position: 'right', fill: '#FFD600', fontSize: 11, fontWeight: 'bold' }} onClick={(data, index) => handleSquadClick(data, index)}>
                   {squadChart.slice(0, 10).map((entry, idx) => (
                     <Cell key={`cell-${entry.name}`} fill={COLORS[idx % COLORS.length]} />
                   ))}
@@ -859,11 +859,11 @@ export const RootCauseDashboard: React.FC<Props> = ({ data }) => {
             </div>
           ) : (
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={devChart.slice(0, 10)} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+              <BarChart data={devChart.slice(0, 10)} layout="vertical" margin={{ top: 5, right: 60, left: 20, bottom: 5 }}>
                 <XAxis type="number" tick={{ fill: '#FFD600', fontSize: 12 }} axisLine={false} />
                 <YAxis type="category" dataKey="name" tick={{ fill: '#fff', fontSize: 11 }} width={150} axisLine={false} />
                 <Tooltip formatter={(value: number) => [`${value} issues (clique)`, 'Qtd']} contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', color: '#fff' }} />
-                <Bar dataKey="value" radius={[0, 8, 8, 0]} cursor="pointer" onClick={(data, index) => handleDevClick(data, index)}>
+                <Bar dataKey="value" radius={[0, 8, 8, 0]} cursor="pointer" label={{ position: 'right', fill: '#FFD600', fontSize: 11, fontWeight: 'bold' }} onClick={(data, index) => handleDevClick(data, index)}>
                   {devChart.slice(0, 10).map((entry, idx) => (
                     <Cell key={`cell-${entry.name}`} fill={COLORS[idx % COLORS.length]} />
                   ))}
@@ -890,7 +890,7 @@ export const RootCauseDashboard: React.FC<Props> = ({ data }) => {
                 <XAxis dataKey="name" tick={{ fill: '#fff', fontSize: 12 }} />
                 <YAxis tick={{ fill: '#fff', fontSize: 12 }} />
                 <Tooltip formatter={(value: number) => [`${value} issues (clique)`, 'Qtd']} contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', color: '#fff' }} />
-                <Bar dataKey="value" radius={[4, 4, 0, 0]} cursor="pointer" onClick={(data, index) => handleReincidenciaClick(data, index)}>
+                <Bar dataKey="value" radius={[4, 4, 0, 0]} cursor="pointer" label={{ position: 'top', fill: '#FFD600', fontSize: 11, fontWeight: 'bold' }} onClick={(data, index) => handleReincidenciaClick(data, index)}>
                   {reincidenciaChart.map((entry, idx) => (
                     <Cell key={`cell-${entry.name}`} fill={entry.name === '(não informado)' ? '#666' : COLORS[idx % COLORS.length]} />
                   ))}
@@ -913,11 +913,11 @@ export const RootCauseDashboard: React.FC<Props> = ({ data }) => {
             </div>
           ) : (
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={causaRaizChart.slice(0, 10)} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+              <BarChart data={causaRaizChart.slice(0, 10)} layout="vertical" margin={{ top: 5, right: 60, left: 20, bottom: 5 }}>
                 <XAxis type="number" tick={{ fill: '#FFD600', fontSize: 12 }} axisLine={false} />
                 <YAxis type="category" dataKey="name" tick={{ fill: '#fff', fontSize: 11 }} width={150} axisLine={false} />
                 <Tooltip formatter={(value: number) => [`${value} issues (clique)`, 'Qtd']} contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', color: '#fff' }} />
-                <Bar dataKey="value" radius={[0, 8, 8, 0]} cursor="pointer" onClick={(data, index) => handleCausaRaizClick(data, index)}>
+                <Bar dataKey="value" radius={[0, 8, 8, 0]} cursor="pointer" label={{ position: 'right', fill: '#FFD600', fontSize: 11, fontWeight: 'bold' }} onClick={(data, index) => handleCausaRaizClick(data, index)}>
                   {causaRaizChart.slice(0, 10).map((entry, idx) => (
                     <Cell key={`cell-${entry.name}`} fill={entry.name === '(não informado)' ? '#666' : COLORS[idx % COLORS.length]} />
                   ))}
@@ -944,7 +944,7 @@ export const RootCauseDashboard: React.FC<Props> = ({ data }) => {
                 <XAxis dataKey="name" tick={{ fill: '#fff', fontSize: 11 }} />
                 <YAxis tick={{ fill: '#fff', fontSize: 12 }} />
                 <Tooltip formatter={(value: number) => [`${value} issues (clique)`, 'Qtd']} contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', color: '#fff' }} />
-                <Bar dataKey="value" radius={[4, 4, 0, 0]} cursor="pointer" onClick={(data, index) => handleIdentificacaoClick(data, index)}>
+                <Bar dataKey="value" radius={[4, 4, 0, 0]} cursor="pointer" label={{ position: 'top', fill: '#FFD600', fontSize: 11, fontWeight: 'bold' }} onClick={(data, index) => handleIdentificacaoClick(data, index)}>
                   {identificacaoChart.map((entry, idx) => (
                     <Cell key={`cell-${entry.name}`} fill={entry.name === '(não informado)' ? '#666' : COLORS[idx % COLORS.length]} />
                   ))}
@@ -967,11 +967,11 @@ export const RootCauseDashboard: React.FC<Props> = ({ data }) => {
             </div>
           ) : (
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={falhaDoProcessoChart.slice(0, 10)} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+              <BarChart data={falhaDoProcessoChart.slice(0, 10)} layout="vertical" margin={{ top: 5, right: 60, left: 20, bottom: 5 }}>
                 <XAxis type="number" tick={{ fill: '#FFD600', fontSize: 12 }} axisLine={false} />
                 <YAxis type="category" dataKey="name" tick={{ fill: '#fff', fontSize: 9 }} width={180} axisLine={false} />
                 <Tooltip formatter={(value: number) => [`${value} issues (clique)`, 'Qtd']} contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', color: '#fff' }} />
-                <Bar dataKey="value" radius={[0, 8, 8, 0]} cursor="pointer" onClick={(data, index) => handleFalhaDoProcessoClick(data, index)}>
+                <Bar dataKey="value" radius={[0, 8, 8, 0]} cursor="pointer" label={{ position: 'right', fill: '#FFD600', fontSize: 11, fontWeight: 'bold' }} onClick={(data, index) => handleFalhaDoProcessoClick(data, index)}>
                   {falhaDoProcessoChart.slice(0, 10).map((entry, idx) => (
                     <Cell key={`cell-${entry.name}`} fill={entry.name === '(não informado)' ? '#666' : COLORS[idx % COLORS.length]} />
                   ))}
@@ -998,7 +998,7 @@ export const RootCauseDashboard: React.FC<Props> = ({ data }) => {
                 <XAxis dataKey="name" tick={{ fill: '#fff', fontSize: 10 }} interval={0} angle={-15} textAnchor="end" height={60} />
                 <YAxis tick={{ fill: '#fff', fontSize: 12 }} />
                 <Tooltip formatter={(value: number) => [`${value} issues (clique)`, 'Qtd']} contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', color: '#fff' }} />
-                <Bar dataKey="value" radius={[4, 4, 0, 0]} cursor="pointer" onClick={(data, index) => handleTipoClienteClick(data, index)}>
+                <Bar dataKey="value" radius={[4, 4, 0, 0]} cursor="pointer" label={{ position: 'top', fill: '#FFD600', fontSize: 11, fontWeight: 'bold' }} onClick={(data, index) => handleTipoClienteClick(data, index)}>
                   {tipoClienteChart.slice(0, 10).map((entry, idx) => (
                     <Cell key={`cell-${entry.name}`} fill={entry.name === '(não informado)' ? '#666' : COLORS[idx % COLORS.length]} />
                   ))}

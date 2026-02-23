@@ -158,8 +158,8 @@ const DORAMetricsDashboard: React.FC<Props> = ({ data }) => {
             <YAxis stroke={CHART_COLORS.text} />
             <Tooltip contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }} labelStyle={{ color: '#64ffda', fontWeight: 'bold' }} itemStyle={{ color: '#e6f1ff' }} />
             <Legend />
-            <Bar dataKey="pbi" name="Features/PBI" stackId="a" fill="#64FFDA" />
-            <Bar dataKey="bugs" name="Bugs" stackId="a" fill="#F56565" />
+            <Bar dataKey="pbi" name="Features/PBI" stackId="a" fill="#64FFDA" label={{ position: 'inside', fill: '#0a192f', fontSize: 10, fontWeight: 'bold', formatter: (v: number) => v > 0 ? v : '' }} />
+            <Bar dataKey="bugs" name="Bugs" stackId="a" fill="#F56565" label={{ position: 'top', fill: '#F56565', fontSize: 10, fontWeight: 'bold', formatter: (v: number) => v > 0 ? v : '' }} />
             <ReferenceLine y={doraKPIs.deployFreq.value} stroke="#FFB86C" strokeDasharray="5 5" label={{ value: `Média: ${doraKPIs.deployFreq.value}`, position: 'insideTopRight', fill: '#FFB86C', fontSize: 11 }} />
           </BarChart>
         </ResponsiveContainer>
@@ -213,7 +213,7 @@ const DORAMetricsDashboard: React.FC<Props> = ({ data }) => {
               <YAxis stroke={CHART_COLORS.text} />
               <Tooltip contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }} labelStyle={{ color: '#64ffda', fontWeight: 'bold' }} itemStyle={{ color: '#e6f1ff' }}
                 formatter={(value: number) => [`${value} dias`]} />
-              <Bar dataKey="mttr" name="MTTR (dias)" fill="#F6E05E">
+              <Bar dataKey="mttr" name="MTTR (dias)" fill="#F6E05E" label={{ position: 'top', fill: '#F6E05E', fontSize: 11, fontWeight: 'bold', formatter: (v: number) => `${v}d` }}>
                 {mttr.map((entry, i) => (
                   <Cell key={i} fill={entry.mttr <= 3 ? '#64FFDA' : entry.mttr <= 7 ? '#F6E05E' : '#F56565'} />
                 ))}

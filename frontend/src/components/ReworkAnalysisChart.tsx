@@ -422,7 +422,7 @@ const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data: rawData
                     );
                   }}
                 />
-                <Bar dataKey="mttr" name="MTTR (dias)" radius={[0, 4, 4, 0]}>
+                <Bar dataKey="mttr" name="MTTR (dias)" radius={[0, 4, 4, 0]} label={{ position: 'right', fill: '#e6f1ff', fontSize: 11, fontWeight: 'bold', formatter: (v: number) => `${v}d` }}>
                   {analysis.mttrByTeam.map((entry, index) => (
                     <Cell key={index} fill={entry.mttr > 14 ? '#f56565' : entry.mttr > 7 ? '#f6ad55' : '#48bb78'} />
                   ))}

@@ -292,6 +292,7 @@ const PullRequestsDashboard: React.FC = () => {
 
           {periodType === 'specific-month' && (
             <select value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)}
+              title="Selecione o mês"
               className="bg-ds-navy border border-ds-border text-ds-light-text text-sm rounded-md p-2">
               <option value="">Selecione o mês...</option>
               {lastMonths.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
@@ -301,13 +302,13 @@ const PullRequestsDashboard: React.FC = () => {
           {periodType === 'custom' && (
             <div className="flex gap-2 items-end">
               <div>
-                <label className="block text-ds-text text-sm mb-1">De:</label>
-                <input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)}
+                <label htmlFor="pr-custom-start" className="block text-ds-text text-sm mb-1">De:</label>
+                <input id="pr-custom-start" type="date" value={customStart} onChange={e => setCustomStart(e.target.value)}
                   className="bg-ds-navy border border-ds-border text-ds-light-text text-sm rounded-md p-2" />
               </div>
               <div>
-                <label className="block text-ds-text text-sm mb-1">Até:</label>
-                <input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)}
+                <label htmlFor="pr-custom-end" className="block text-ds-text text-sm mb-1">Até:</label>
+                <input id="pr-custom-end" type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)}
                   className="bg-ds-navy border border-ds-border text-ds-light-text text-sm rounded-md p-2" />
               </div>
             </div>
@@ -316,8 +317,8 @@ const PullRequestsDashboard: React.FC = () => {
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div>
-            <label className="block text-ds-text text-sm mb-1">Status:</label>
-            <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
+            <label htmlFor="pr-filter-status" className="block text-ds-text text-sm mb-1">Status:</label>
+            <select id="pr-filter-status" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
               className="bg-ds-navy border border-ds-border text-ds-light-text text-sm rounded-md p-2 w-full">
               <option value="all">Todos</option>
               <option value="active">Ativos</option>
@@ -326,16 +327,16 @@ const PullRequestsDashboard: React.FC = () => {
             </select>
           </div>
           <div>
-            <label className="block text-ds-text text-sm mb-1">Repositório:</label>
-            <select value={filterRepo} onChange={e => setFilterRepo(e.target.value)}
+            <label htmlFor="pr-filter-repo" className="block text-ds-text text-sm mb-1">Repositório:</label>
+            <select id="pr-filter-repo" value={filterRepo} onChange={e => setFilterRepo(e.target.value)}
               className="bg-ds-navy border border-ds-border text-ds-light-text text-sm rounded-md p-2 w-full">
               <option value="all">Todos</option>
               {repos.map(r => <option key={r} value={r}>{r}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-ds-text text-sm mb-1">Autor:</label>
-            <select value={filterAuthor} onChange={e => setFilterAuthor(e.target.value)}
+            <label htmlFor="pr-filter-author" className="block text-ds-text text-sm mb-1">Autor:</label>
+            <select id="pr-filter-author" value={filterAuthor} onChange={e => setFilterAuthor(e.target.value)}
               className="bg-ds-navy border border-ds-border text-ds-light-text text-sm rounded-md p-2 w-full">
               <option value="all">Todos</option>
               {authors.map(a => <option key={a} value={a}>{a}</option>)}
@@ -460,12 +461,12 @@ const PullRequestsDashboard: React.FC = () => {
           <h3 className="text-ds-light-text font-semibold mb-4">Top Autores de PRs</h3>
           <ChartInfoLamp info="Ranking dos desenvolvedores que mais criaram PRs no período. Ajuda a identificar os maiores contribuidores de código." />
           <ResponsiveContainer width="100%" height={Math.max(300, topAuthors.length * 30)}>
-            <BarChart data={topAuthors} layout="vertical" margin={{ left: 100 }}>
+            <BarChart data={topAuthors} layout="vertical" margin={{ left: 100, right: 50 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#233554" />
               <XAxis type="number" tick={{ fill: '#8892B0', fontSize: 12 }} />
               <YAxis type="category" dataKey="name" tick={{ fill: '#CCD6F6', fontSize: 11 }} width={100} />
               <Tooltip contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }} labelStyle={{ color: '#64ffda', fontWeight: 'bold' }} itemStyle={{ color: '#e6f1ff' }} />
-              <Bar dataKey="count" name="PRs" fill="#64FFDA">
+              <Bar dataKey="count" name="PRs" fill="#64FFDA" label={{ position: 'right', fill: '#CCD6F6', fontSize: 11, fontWeight: 'bold' }}>
                 {topAuthors.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
               </Bar>
             </BarChart>

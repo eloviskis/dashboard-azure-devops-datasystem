@@ -93,8 +93,8 @@ const SLATrackingDashboard: React.FC<Props> = ({ data }) => {
     <div className="space-y-6">
       {/* SLA Config */}
       <div className="bg-ds-navy p-4 rounded-lg border border-ds-border flex items-center gap-4 flex-wrap">
-        <label className="text-ds-text text-sm">Meta de SLA (Cycle Time máximo):</label>
-        <select value={slaTarget} onChange={e => setSlaTarget(Number(e.target.value))}
+        <label htmlFor="sla-target" className="text-ds-text text-sm">Meta de SLA (Cycle Time máximo):</label>
+        <select id="sla-target" value={slaTarget} onChange={e => setSlaTarget(Number(e.target.value))}
           className="bg-ds-navy border border-ds-border text-ds-light-text text-sm rounded-md p-2">
           {[3, 5, 7, 10, 14, 21, 30].map(d => <option key={d} value={d}>{d} dias</option>)}
         </select>
@@ -134,13 +134,13 @@ const SLATrackingDashboard: React.FC<Props> = ({ data }) => {
           <h3 className="text-ds-light-text font-bold text-lg mb-4">📊 SLA Compliance por Time</h3>
           <ChartInfoLamp info="Percentual de itens que foram concluídos dentro da meta SLA por time. Verde ≥80%, amarelo ≥60%, vermelho <60%." />
           <ResponsiveContainer width="100%" height={Math.max(250, slaByTeam.length * 40)}>
-            <BarChart data={slaByTeam} layout="vertical" margin={{ left: 120 }}>
+            <BarChart data={slaByTeam} layout="vertical" margin={{ left: 120, right: 65 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
               <XAxis type="number" domain={[0, 100]} unit="%" stroke={CHART_COLORS.text} />
               <YAxis type="category" dataKey="team" tick={{ fill: '#CCD6F6', fontSize: 11 }} width={120} />
               <Tooltip contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }} labelStyle={{ color: '#64ffda', fontWeight: 'bold' }} itemStyle={{ color: '#e6f1ff' }}
                 formatter={(value: number) => [`${value}%`]} />
-              <Bar dataKey="pctSLA" name="% dentro SLA">
+              <Bar dataKey="pctSLA" name="% dentro SLA" label={{ position: 'right', fill: '#D8EBF5', fontSize: 11, fontWeight: 'bold', formatter: (v: number) => `${v}%` }}>
                 {slaByTeam.map((entry, i) => (
                   <Cell key={i} fill={entry.pctSLA >= 80 ? '#64FFDA' : entry.pctSLA >= 60 ? '#F6E05E' : '#F56565'} />
                 ))}

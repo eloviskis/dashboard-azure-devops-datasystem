@@ -285,11 +285,27 @@ const initDatabase = async () => {
         email TEXT UNIQUE NOT NULL,
         password TEXT NOT NULL,
         role TEXT DEFAULT 'user',
+        tab_permissions TEXT DEFAULT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `;
+    // Adiciona coluna tab_permissions se não existir (migração para bancos existentes)
+    try {
+      await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS tab_permissions TEXT DEFAULT NULL`;
+    } catch (e) { /* coluna já existe */ }
     console.log('✅ users table ready');
+
+    // Tabela de configurações globais (chave-valor)
+    await sql`
+      CREATE TABLE IF NOT EXISTS app_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_by TEXT,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `;
+    console.log('✅ app_settings table ready');
 
     // Criar usuário admin padrão se não existir
     const adminExists = await sql`SELECT id FROM users WHERE username = 'admin'`;
@@ -739,7 +755,8 @@ app.post('/api/auth/login', async (req, res) => {
         id: user.id,
         username: user.username,
         email: user.email,
-        role: user.role
+        role: user.role,
+        tab_permissions: user.tab_permissions ? JSON.parse(user.tab_permissions) : null
       }
     });
   } catch (error) {
@@ -762,8 +779,8 @@ app.get('/api/auth/validate', authenticateToken, (req, res) => {
 
 app.get('/api/users', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const users = await sql`SELECT id, username, email, role, created_at, updated_at FROM users ORDER BY created_at DESC`;
-    res.json(users);
+    const users = await sql`SELECT id, username, email, role, tab_permissions, created_at, updated_at FROM users ORDER BY created_at DESC`;
+    res.json(users.map(u => ({ ...u, tab_permissions: u.tab_permissions ? JSON.parse(u.tab_permissions) : null })));
   } catch (error) {
     console.error('❌ Error fetching users:', error);
     res.status(500).json({ error: 'Erro ao buscar usuários' });
@@ -772,7 +789,7 @@ app.get('/api/users', authenticateToken, requireAdmin, async (req, res) => {
 
 app.post('/api/users', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const { username, email, password, role = 'user' } = req.body;
+    const { username, email, password, role = 'user', tab_permissions = null } = req.body;
 
     if (!username || !email || !password) {
       return res.status(400).json({ error: 'Username, email e password são obrigatórios' });
@@ -784,9 +801,10 @@ app.post('/api/users', authenticateToken, requireAdmin, async (req, res) => {
     }
 
     const hashedPassword = bcrypt.hashSync(password, 10);
+    const tabPermsJson = tab_permissions ? JSON.stringify(tab_permissions) : null;
     const result = await sql`
-      INSERT INTO users (username, email, password, role) 
-      VALUES (${username}, ${email}, ${hashedPassword}, ${role})
+      INSERT INTO users (username, email, password, role, tab_permissions) 
+      VALUES (${username}, ${email}, ${hashedPassword}, ${role}, ${tabPermsJson})
       RETURNING id
     `;
 
@@ -794,7 +812,8 @@ app.post('/api/users', authenticateToken, requireAdmin, async (req, res) => {
       id: result[0].id,
       username,
       email,
-      role
+      role,
+      tab_permissions
     });
   } catch (error) {
     console.error('❌ Error creating user:', error);
@@ -829,6 +848,11 @@ app.put('/api/users/:id', authenticateToken, requireAdmin, async (req, res) => {
     const newEmail = email || existingUser.email;
     const newPassword = password ? bcrypt.hashSync(password, 10) : existingUser.password;
     const newRole = role || existingUser.role;
+    // tab_permissions: undefined = não alterar; null = remover restrição; array = definir permissões
+    const hasTabPerms = req.body.hasOwnProperty('tab_permissions');
+    const newTabPermsJson = hasTabPerms
+      ? (req.body.tab_permissions ? JSON.stringify(req.body.tab_permissions) : null)
+      : existingUser.tab_permissions;
 
     await sql`
       UPDATE users SET 
@@ -836,12 +860,14 @@ app.put('/api/users/:id', authenticateToken, requireAdmin, async (req, res) => {
         email = ${newEmail}, 
         password = ${newPassword}, 
         role = ${newRole},
+        tab_permissions = ${newTabPermsJson},
         updated_at = CURRENT_TIMESTAMP
       WHERE id = ${id}
     `;
 
-    const updated = await sql`SELECT id, username, email, role, created_at, updated_at FROM users WHERE id = ${id}`;
-    res.json(updated[0]);
+    const updated = await sql`SELECT id, username, email, role, tab_permissions, created_at, updated_at FROM users WHERE id = ${id}`;
+    const u = updated[0];
+    res.json({ ...u, tab_permissions: u.tab_permissions ? JSON.parse(u.tab_permissions) : null });
   } catch (error) {
     console.error('❌ Error updating user:', error);
     res.status(500).json({ error: 'Erro ao atualizar usuário' });
@@ -866,6 +892,50 @@ app.delete('/api/users/:id', authenticateToken, requireAdmin, async (req, res) =
   } catch (error) {
     console.error('❌ Error deleting user:', error);
     res.status(500).json({ error: 'Erro ao deletar usuário' });
+  }
+});
+
+// ===========================================
+// APP SETTINGS ENDPOINTS
+// ===========================================
+
+// Leitura de configuração global (qualquer usuário autenticado)
+app.get('/api/settings/:key', authenticateToken, async (req, res) => {
+  try {
+    const { key } = req.params;
+    const rows = await sql`SELECT value, updated_by, updated_at FROM app_settings WHERE key = ${key}`;
+    if (rows.length === 0) {
+      return res.json({ value: null });
+    }
+    res.json({ value: JSON.parse(rows[0].value), updated_by: rows[0].updated_by, updated_at: rows[0].updated_at });
+  } catch (error) {
+    console.error('❌ Error reading setting:', error);
+    res.status(500).json({ error: 'Erro ao ler configuração' });
+  }
+});
+
+// Escrita de configuração global (somente admin)
+app.put('/api/settings/:key', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { key } = req.params;
+    const { value } = req.body;
+    if (value === undefined) {
+      return res.status(400).json({ error: 'Campo "value" é obrigatório' });
+    }
+    const jsonValue = JSON.stringify(value);
+    const updatedBy = req.user.username;
+    await sql`
+      INSERT INTO app_settings (key, value, updated_by, updated_at)
+      VALUES (${key}, ${jsonValue}, ${updatedBy}, CURRENT_TIMESTAMP)
+      ON CONFLICT (key) DO UPDATE SET
+        value = EXCLUDED.value,
+        updated_by = EXCLUDED.updated_by,
+        updated_at = CURRENT_TIMESTAMP
+    `;
+    res.json({ success: true, key, updated_by: updatedBy });
+  } catch (error) {
+    console.error('❌ Error saving setting:', error);
+    res.status(500).json({ error: 'Erro ao salvar configuração' });
   }
 });
 

@@ -1,18 +1,28 @@
 @import "tailwindcss";
 
 @theme {
-  --color-ds-dark-blue: #0A192F;
-  --color-ds-navy: #172A45;
-  --color-ds-green: #64FFDA;
-  --color-ds-cyan: #47C5FB;
-  --color-ds-light-text: #CCD6F6;
-  --color-ds-text: #8892B0;
-  --color-ds-muted: #495670;
-  --color-ds-border: #233554;
+  /* === Data System Brand Palette ===
+   * Background header/sidebar (mais escuro): #061526
+   * Background body/surface  (cards):        #0A1E35
+   * Verde brand (logo / accents ):            #7FD320
+   * Teal/ciano (onda secundária):             #00C4B4
+   * Texto principal:                          #D8EBF5
+   * Texto secundário:                         #7A9EB8
+   * Elementos mutados / UI sutil:             #1E3A55
+   * Bordas:                                   #163050
+   */
+  --color-ds-dark-blue: #061526;
+  --color-ds-navy: #0A1E35;
+  --color-ds-green: #7FD320;
+  --color-ds-cyan: #00C4B4;
+  --color-ds-light-text: #D8EBF5;
+  --color-ds-text: #7A9EB8;
+  --color-ds-muted: #1E3A55;
+  --color-ds-border: #163050;
 }
 
 body {
-  background-color: #172A45;
+  background-color: #0A1E35;
   color: white;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -20,6 +30,41 @@ body {
 }
 
 ::-webkit-scrollbar { width: 8px; }
-::-webkit-scrollbar-track { background: #0A192F; }
-::-webkit-scrollbar-thumb { background: #233554; border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: #495670; }
+::-webkit-scrollbar-track { background: #061526; }
+::-webkit-scrollbar-thumb { background: #163050; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #1E3A55; }
+
+/* Login page */
+.login-bg {
+  background: linear-gradient(135deg, #061526 0%, #0A1E35 50%, #061526 100%);
+}
+.login-icon-bg {
+  background: linear-gradient(135deg, #7FD320, #00C4B4);
+}
+.login-card {
+  background: rgba(10, 30, 53, 0.85);
+  border: 1px solid #163050;
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+.login-input {
+  background: rgba(6, 21, 38, 0.7);
+  border: 1px solid #163050;
+  color: white;
+  transition: border-color 0.2s;
+}
+.login-input::placeholder { color: #3d6080; }
+.login-input:focus {
+  outline: none;
+  border-color: #7FD320;
+  box-shadow: 0 0 0 2px rgba(127, 211, 32, 0.15);
+}
+.login-btn {
+  background: linear-gradient(90deg, #7FD320, #00C4B4);
+  color: white;
+  font-weight: 600;
+  border-radius: 0.5rem;
+  transition: filter 0.2s;
+}
+.login-btn:hover:not(:disabled) { filter: brightness(1.1); }
+.login-btn:disabled { opacity: 0.5; cursor: not-allowed; }

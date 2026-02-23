@@ -355,7 +355,7 @@ const ImpedimentosDashboard: React.FC<Props> = ({ data }) => {
                       'Clique para detalhes'
                     ]}
                   />
-                  <Bar dataKey="count" fill="#F6416C" radius={[8, 8, 0, 0]} cursor="pointer">
+                  <Bar dataKey="count" fill="#F6416C" radius={[8, 8, 0, 0]} cursor="pointer" label={{ position: 'top', fill: '#fff', fontSize: 11, fontWeight: 'bold' }}>
                     {impedimentosPorTime.map((entry, index) => (
                       <Cell 
                         key={`cell-${index}`} 
@@ -414,7 +414,7 @@ const ImpedimentosDashboard: React.FC<Props> = ({ data }) => {
                   labelStyle={{ color: '#fff' }}
                   formatter={(value: number) => [`${value} impedimentos (clique para ver)`, 'Quantidade']}
                 />
-                <Bar dataKey="count" radius={[8, 8, 0, 0]} cursor="pointer">
+                <Bar dataKey="count" radius={[8, 8, 0, 0]} cursor="pointer" label={{ position: 'top', fill: '#fff', fontSize: 11, fontWeight: 'bold' }}>
                   {impedimentosPorTempoParado.map((entry, index) => (
                     <Cell 
                       key={`cell-${index}`} 

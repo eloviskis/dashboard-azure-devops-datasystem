@@ -1,0 +1,912 @@
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import {
+  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend,
+  LineChart, Line, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
+  Cell, LabelList
+} from 'recharts';
+import { format, subMonths, startOfMonth, endOfMonth, isWithinInterval, eachMonthOfInterval } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { WorkItem } from '../types';
+import ChartInfoLamp from './ChartInfoLamp';
+import { useAuth } from '../contexts/AuthContext';
+
+// ─── tipos ───────────────────────────────────────────────────────────────────
+type Seniority = 'Estagiário' | 'Júnior' | 'Pleno' | 'Sênior' | 'Tech Lead' | 'Gestor';
+
+interface MemberConfig {
+  name: string;
+  seniority: Seniority;
+  color?: string;
+}
+
+interface SeniorityConfigMap {
+  [name: string]: Seniority;
+}
+
+// ─── constantes ──────────────────────────────────────────────────────────────
+const SENIORITY_OPTIONS: Seniority[] = ['Estagiário', 'Júnior', 'Pleno', 'Sênior', 'Tech Lead', 'Gestor'];
+
+const SENIORITY_COLORS: Record<Seniority, string> = {
+  'Estagiário': '#a0aec0',
+  'Júnior':     '#63b3ed',
+  'Pleno':      '#68d391',
+  'Sênior':     '#f6ad55',
+  'Tech Lead':  '#fc8181',
+  'Gestor':     '#b794f4',
+};
+
+const SENIORITY_BG: Record<Seniority, string> = {
+  'Estagiário': 'bg-gray-500/20 text-gray-300 border-gray-500/40',
+  'Júnior':     'bg-blue-500/20 text-blue-300 border-blue-500/40',
+  'Pleno':      'bg-green-500/20 text-green-300 border-green-500/40',
+  'Sênior':     'bg-orange-500/20 text-orange-300 border-orange-500/40',
+  'Tech Lead':  'bg-red-500/20 text-red-300 border-red-500/40',
+  'Gestor':     'bg-purple-500/20 text-purple-300 border-purple-500/40',
+};
+
+const PERSON_PALETTE = [
+  '#64FFDA','#47C5FB','#F6E05E','#F56565','#B794F4','#FBB6CE',
+  '#ED8936','#DD6B20','#38B2AC','#4299E1','#9F7AEA','#FC8181',
+];
+
+const COMPLETED_STATES = ['Done','Concluído','Closed','Fechado','Finished','Resolved','Pronto'];
+
+const STORAGE_KEY = 'tc_seniority_config_v2';
+const SETTINGS_KEY = 'seniority_config';
+
+// ─── helpers ─────────────────────────────────────────────────────────────────
+const loadLocalConfig = (): SeniorityConfigMap => {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch { return {}; }
+};
+const saveLocalConfig = (cfg: SeniorityConfigMap) => {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg));
+};
+
+const abbrev = (name: string) =>
+  name.split(' ').filter(Boolean).map(p => p[0]).join('').toUpperCase().slice(0, 2);
+
+const fmtCT = (v: number | null | undefined) =>
+  v != null && v > 0 ? `${v.toFixed(1)}d` : '—';
+
+// ─── Tooltip customizado ────────────────────────────────────────────────────
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-ds-navy border border-ds-border rounded-lg px-3 py-2 text-xs shadow-xl min-w-35">
+      <p className="text-ds-green font-bold mb-1">{label}</p>
+      {payload.map((p: any, i: number) => (
+        <p key={i} style={{ color: p.color }}>{p.name}: <span className="font-bold text-white">{p.value}</span></p>
+      ))}
+    </div>
+  );
+};
+
+// ─── Modal de configuração de senioridade ───────────────────────────────────
+interface ConfigModalProps {
+  members: string[];
+  config: SeniorityConfigMap;
+  onSave: (cfg: SeniorityConfigMap) => void;
+  onClose: () => void;
+}
+
+const ConfigModal: React.FC<ConfigModalProps> = ({ members, config, onSave, onClose }) => {
+  const [local, setLocal] = useState<SeniorityConfigMap>({ ...config });
+
+  const handleChange = (name: string, value: Seniority) => {
+    setLocal(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleSave = () => { onSave(local); onClose(); };
+
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50" onClick={onClose}>
+      <div
+        className="bg-ds-navy border border-ds-border rounded-xl shadow-2xl w-full max-w-2xl mx-4 max-h-[85vh] flex flex-col"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between p-5 border-b border-ds-border">
+          <div>
+            <h2 className="text-white font-bold text-lg">⚙️ Configurar Senioridade</h2>
+            <p className="text-ds-text text-xs mt-0.5">Classifique cada membro da equipe para o comparativo</p>
+          </div>
+          <button onClick={onClose} className="text-ds-text hover:text-white text-2xl leading-none">×</button>
+        </div>
+
+        <div className="overflow-y-auto flex-1 p-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {members.map(name => {
+              const current = local[name] ?? 'Pleno';
+              return (
+                <div key={name} className="bg-ds-dark-blue border border-ds-border rounded-lg p-3 flex items-center gap-3">
+                  <div
+                    className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs shrink-0"
+                    style={{ backgroundColor: SENIORITY_COLORS[current] + '33', color: SENIORITY_COLORS[current], border: `1px solid ${SENIORITY_COLORS[current]}60` }}
+                  >
+                    {abbrev(name)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-white text-sm font-medium truncate">{name}</p>
+                    <label htmlFor={`sen-${name}`} className="sr-only">Senioridade de {name}</label>
+                    <select
+                      id={`sen-${name}`}
+                      value={current}
+                      onChange={e => handleChange(name, e.target.value as Seniority)}
+                      className="mt-1 w-full bg-ds-navy border border-ds-border text-ds-light-text text-xs rounded-md px-2 py-1"
+                      style={{ borderColor: SENIORITY_COLORS[current] + '60' }}
+                    >
+                      {SENIORITY_OPTIONS.map(s => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="p-4 border-t border-ds-border flex gap-3 justify-end">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-ds-text border border-ds-border rounded-lg hover:bg-ds-dark-blue transition-colors">
+            Cancelar
+          </button>
+          <button onClick={handleSave} className="px-4 py-2 text-sm bg-ds-green/20 border border-ds-green/40 text-ds-green rounded-lg hover:bg-ds-green/30 transition-colors font-semibold">
+            Salvar Configuração
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── componente principal ────────────────────────────────────────────────────
+interface Props { data: WorkItem[]; }
+
+const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
+  const { isAdmin, token } = useAuth();
+  const API_URL = import.meta.env.VITE_API_URL || 'https://backend-hazel-three-14.vercel.app';
+
+  const [seniorityConfig, setSeniorityConfig] = useState<SeniorityConfigMap>(loadLocalConfig);
+  const [configMeta, setConfigMeta] = useState<{ updatedBy?: string; updatedAt?: string } | null>(null);
+  const [configLoading, setConfigLoading] = useState(true);
+  const [configSaving, setConfigSaving] = useState(false);
+  const [showConfig, setShowConfig] = useState(false);
+  const [selectedTeam, setSelectedTeam] = useState<string>('__all__');
+  const [selectedSeniority, setSelectedSeniority] = useState<string>('__all__');
+  const [historyMonths, setHistoryMonths] = useState<number>(6);
+  const [activePersons, setActivePersons] = useState<Set<string>>(new Set());
+  const [selectedPerson, setSelectedPerson] = useState<string | null>(null);
+
+  // ── carregar config do banco ao montar
+  useEffect(() => {
+    const fetchConfig = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/settings/${SETTINGS_KEY}`, {
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.value) {
+            setSeniorityConfig(data.value);
+            saveLocalConfig(data.value); // cache local
+            setConfigMeta({ updatedBy: data.updated_by, updatedAt: data.updated_at });
+          }
+        }
+      } catch {
+        // sem conexão: usa localStorage já carregado
+      } finally {
+        setConfigLoading(false);
+      }
+    };
+    if (token) fetchConfig();
+    else setConfigLoading(false);
+  }, [token, API_URL]);
+
+  // ── times disponíveis
+  const teams = useMemo(() =>
+    ['__all__', ...[...new Set(data.map(i => i.team).filter(Boolean) as string[])].sort()],
+    [data]
+  );
+
+  // ── itens filtrados pelo time
+  const teamItems = useMemo(() =>
+    selectedTeam === '__all__' ? data : data.filter(i => i.team === selectedTeam),
+    [data, selectedTeam]
+  );
+
+  // ── membros únicos
+  const allMembers = useMemo(() =>
+    [...new Set(teamItems.map(i => i.assignedTo).filter(Boolean) as string[])].sort(),
+    [teamItems]
+  );
+
+  // ── salvar config (admin: banco + localStorage; outro: apenas localStorage)
+  const handleSaveConfig = useCallback(async (cfg: SeniorityConfigMap) => {
+    setSeniorityConfig(cfg);
+    saveLocalConfig(cfg);
+    if (!isAdmin) return;
+    setConfigSaving(true);
+    try {
+      const res = await fetch(`${API_URL}/api/settings/${SETTINGS_KEY}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ value: cfg }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setConfigMeta(prev => ({ ...prev, updatedBy: data.updated_by, updatedAt: new Date().toISOString() }));
+      }
+    } catch { /* silencioso: config já salva localmente */ }
+    finally { setConfigSaving(false); }
+  }, [isAdmin, token, API_URL]);
+
+  // ── meses para análise histórica
+  const months = useMemo(() => {
+    const end = new Date();
+    const start = subMonths(end, historyMonths - 1);
+    return eachMonthOfInterval({ start: startOfMonth(start), end: endOfMonth(end) });
+  }, [historyMonths]);
+
+  // ── configuração dos membros (com seniority e cor)
+  const memberConfigs = useMemo((): MemberConfig[] => {
+    return allMembers.map((name, idx) => ({
+      name,
+      seniority: seniorityConfig[name] ?? 'Pleno',
+      color: PERSON_PALETTE[idx % PERSON_PALETTE.length],
+    }));
+  }, [allMembers, seniorityConfig]);
+
+  // ── membros filtrados por senioridade
+  const filteredMembers = useMemo(() =>
+    selectedSeniority === '__all__'
+      ? memberConfigs
+      : memberConfigs.filter(m => m.seniority === selectedSeniority),
+    [memberConfigs, selectedSeniority]
+  );
+
+  // ── itens do período completo de análise
+  const periodStart = useMemo(() => startOfMonth(subMonths(new Date(), historyMonths - 1)), [historyMonths]);
+
+  const periodItems = useMemo(() =>
+    teamItems.filter(item => {
+      const date = item.closedDate
+        ? new Date(item.closedDate as string)
+        : new Date(item.changedDate || item.createdDate || '');
+      return date >= periodStart;
+    }),
+    [teamItems, periodStart]
+  );
+
+  // ── métricas por pessoa no período
+  const personMetrics = useMemo(() => {
+    const map: Record<string, {
+      delivered: number;
+      inProgress: number;
+      bugs: number;
+      avgCycleTime: number | null;
+      storyPoints: number;
+      items: WorkItem[];
+      byMonth: Record<string, number>;
+      byType: Record<string, number>;
+    }> = {};
+
+    filteredMembers.forEach(({ name }) => {
+      const mine = periodItems.filter(i => i.assignedTo === name);
+      const completed = mine.filter(i => COMPLETED_STATES.includes(i.state));
+      const cts = completed.map(i => i.cycleTime).filter(v => v != null && v > 0) as number[];
+      const avgCT = cts.length ? cts.reduce((a, b) => a + b, 0) / cts.length : null;
+
+      const byMonth: Record<string, number> = {};
+      months.forEach(m => { byMonth[format(m, 'MMM/yy', { locale: ptBR })] = 0; });
+      completed.forEach(item => {
+        const d = item.closedDate
+          ? new Date(item.closedDate as string)
+          : new Date(item.changedDate || item.createdDate || '');
+        const key = format(d, 'MMM/yy', { locale: ptBR });
+        if (key in byMonth) byMonth[key]++;
+      });
+
+      const byType: Record<string, number> = {};
+      mine.forEach(i => { byType[i.type] = (byType[i.type] || 0) + 1; });
+
+      map[name] = {
+        delivered: completed.length,
+        inProgress: mine.filter(i => !COMPLETED_STATES.includes(i.state)).length,
+        bugs: completed.filter(i => i.type === 'Bug').length,
+        avgCycleTime: avgCT,
+        storyPoints: mine.reduce((s, i) => s + (i.storyPoints || 0), 0),
+        items: mine,
+        byMonth,
+        byType,
+      };
+    });
+
+    return map;
+  }, [filteredMembers, periodItems, months]);
+
+  // ── dados para gráfico de throughput
+  const throughputChartData = useMemo(() =>
+    filteredMembers
+      .map(m => ({
+        name: m.name.split(' ')[0],
+        fullName: m.name,
+        seniority: m.seniority,
+        color: SENIORITY_COLORS[m.seniority],
+        Entregues: personMetrics[m.name]?.delivered ?? 0,
+        'Em Andamento': personMetrics[m.name]?.inProgress ?? 0,
+        Bugs: personMetrics[m.name]?.bugs ?? 0,
+      }))
+      .sort((a, b) => b.Entregues - a.Entregues),
+    [filteredMembers, personMetrics]
+  );
+
+  // ── dados para gráfico de cycle time
+  const cycleTimeChartData = useMemo(() =>
+    filteredMembers
+      .map(m => ({
+        name: m.name.split(' ')[0],
+        fullName: m.name,
+        seniority: m.seniority,
+        color: SENIORITY_COLORS[m.seniority],
+        'Cycle Time Médio': personMetrics[m.name]?.avgCycleTime
+          ? Math.round((personMetrics[m.name].avgCycleTime as number) * 10) / 10
+          : null,
+      }))
+      .filter(d => d['Cycle Time Médio'] != null)
+      .sort((a, b) => (a['Cycle Time Médio'] as number) - (b['Cycle Time Médio'] as number)),
+    [filteredMembers, personMetrics]
+  );
+
+  // ── dados para linha histórica (top 8 pessoas por entrega)
+  const top8 = useMemo(() =>
+    [...filteredMembers]
+      .sort((a, b) => (personMetrics[b.name]?.delivered ?? 0) - (personMetrics[a.name]?.delivered ?? 0))
+      .slice(0, 8),
+    [filteredMembers, personMetrics]
+  );
+
+  const lineChartData = useMemo(() =>
+    months.map(m => {
+      const key = format(m, 'MMM/yy', { locale: ptBR });
+      const row: Record<string, any> = { mes: key };
+      top8.forEach(mc => {
+        row[mc.name.split(' ')[0]] = personMetrics[mc.name]?.byMonth[key] ?? 0;
+      });
+      return row;
+    }),
+    [months, top8, personMetrics]
+  );
+
+  // ── dados radar (top 6 comparativos)
+  const radarTop6 = useMemo(() =>
+    [...filteredMembers]
+      .sort((a, b) => (personMetrics[b.name]?.delivered ?? 0) - (personMetrics[a.name]?.delivered ?? 0))
+      .slice(0, 6),
+    [filteredMembers, personMetrics]
+  );
+
+  const maxDelivered = useMemo(() =>
+    Math.max(1, ...radarTop6.map(m => personMetrics[m.name]?.delivered ?? 0)),
+    [radarTop6, personMetrics]
+  );
+  const maxSP = useMemo(() =>
+    Math.max(1, ...radarTop6.map(m => personMetrics[m.name]?.storyPoints ?? 0)),
+    [radarTop6, personMetrics]
+  );
+  const allCTs = useMemo(() => radarTop6.map(m => personMetrics[m.name]?.avgCycleTime ?? 0).filter(v => v > 0), [radarTop6, personMetrics]);
+  const maxCT = useMemo(() => Math.max(1, ...allCTs), [allCTs]);
+
+  const radarData = useMemo(() => [
+    { metric: 'Entregas' },
+    { metric: 'Story Points' },
+    { metric: 'Velocidade (↓CT)' },
+    { metric: 'Bugs Resolvidos' },
+    { metric: 'Em Andamento' },
+  ].map(row => {
+    const out: Record<string, any> = { metric: row.metric };
+    radarTop6.forEach(m => {
+      const met = personMetrics[m.name];
+      const firstName = m.name.split(' ')[0];
+      if (row.metric === 'Entregas')           out[firstName] = Math.round(((met?.delivered ?? 0) / maxDelivered) * 100);
+      if (row.metric === 'Story Points')       out[firstName] = Math.round(((met?.storyPoints ?? 0) / maxSP) * 100);
+      if (row.metric === 'Velocidade (↓CT)')  out[firstName] = met?.avgCycleTime ? Math.round((1 - (met.avgCycleTime / maxCT)) * 100) : 0;
+      if (row.metric === 'Bugs Resolvidos')    out[firstName] = Math.round(((met?.bugs ?? 0) / Math.max(1, maxDelivered)) * 100);
+      if (row.metric === 'Em Andamento')       out[firstName] = Math.round(((met?.inProgress ?? 0) / Math.max(1, maxDelivered)) * 100);
+    });
+    return out;
+  }), [radarTop6, personMetrics, maxDelivered, maxSP, maxCT]);
+
+  // ── médias por senioridade
+  const seniorityStats = useMemo(() => {
+    const groups: Record<string, { delivered: number[]; ct: number[]; sp: number[] }> = {};
+    SENIORITY_OPTIONS.forEach(s => { groups[s] = { delivered: [], ct: [], sp: [] }; });
+    filteredMembers.forEach(m => {
+      const met = personMetrics[m.name];
+      if (!met) return;
+      groups[m.seniority].delivered.push(met.delivered);
+      if (met.avgCycleTime) groups[m.seniority].ct.push(met.avgCycleTime);
+      groups[m.seniority].sp.push(met.storyPoints);
+    });
+    return SENIORITY_OPTIONS.map(s => {
+      const g = groups[s];
+      const count = g.delivered.length;
+      if (!count) return null;
+      const avg = (arr: number[]) => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+      return {
+        seniority: s,
+        count,
+        avgDelivered: Math.round(avg(g.delivered) * 10) / 10,
+        avgCT: g.ct.length ? Math.round(avg(g.ct) * 10) / 10 : null,
+        totalSP: g.sp.reduce((a, b) => a + b, 0),
+      };
+    }).filter(Boolean);
+  }, [filteredMembers, personMetrics]);
+
+  // ── toggle visibilidade de linhas no gráfico de tendência
+  const togglePerson = (name: string) => {
+    setActivePersons(prev => {
+      const n = new Set(prev);
+      n.has(name) ? n.delete(name) : n.add(name);
+      return n;
+    });
+  };
+  const isLineVisible = (name: string) => activePersons.size === 0 || activePersons.has(name);
+
+  const hasData = filteredMembers.length > 0;
+
+  return (
+    <div className="space-y-6">
+      {/* ── barra de filtros ── */}
+      <div className="bg-ds-navy p-4 rounded-xl border border-ds-border flex flex-wrap items-end gap-4">
+        <div>
+          <label htmlFor="tc-team" className="block text-ds-text text-xs mb-1">Time</label>
+          <select
+            id="tc-team"
+            value={selectedTeam}
+            onChange={e => setSelectedTeam(e.target.value)}
+            className="bg-ds-dark-blue border border-ds-border text-ds-light-text text-sm rounded-md p-2"
+          >
+            <option value="__all__">Todos os Times</option>
+            {teams.filter(t => t !== '__all__').map(t => (
+              <option key={t} value={t}>{t}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label htmlFor="tc-seniority" className="block text-ds-text text-xs mb-1">Senioridade</label>
+          <select
+            id="tc-seniority"
+            value={selectedSeniority}
+            onChange={e => setSelectedSeniority(e.target.value)}
+            className="bg-ds-dark-blue border border-ds-border text-ds-light-text text-sm rounded-md p-2"
+          >
+            <option value="__all__">Todas</option>
+            {SENIORITY_OPTIONS.map(s => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label htmlFor="tc-months" className="block text-ds-text text-xs mb-1">Período de análise</label>
+          <select
+            id="tc-months"
+            value={historyMonths}
+            onChange={e => setHistoryMonths(Number(e.target.value))}
+            className="bg-ds-dark-blue border border-ds-border text-ds-light-text text-sm rounded-md p-2"
+          >
+            {[3, 6, 9, 12].map(n => (
+              <option key={n} value={n}>Últimos {n} meses</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="ml-auto flex flex-col items-end gap-1">
+          {isAdmin && (
+            <button
+              onClick={() => setShowConfig(true)}
+              disabled={configSaving}
+              className="flex items-center gap-2 px-4 py-2 bg-ds-green/10 border border-ds-green/30 text-ds-green text-sm rounded-lg hover:bg-ds-green/20 transition-colors font-medium disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {configSaving ? (
+                <><span className="animate-spin">⏳</span> Salvando...</>
+              ) : (
+                <>⚙️ Classificar Senioridade</>
+              )}
+            </button>
+          )}
+          {configLoading && (
+            <span className="text-xs text-ds-text animate-pulse">Carregando configuração...</span>
+          )}
+          {!configLoading && configMeta && (
+            <span className="text-xs text-ds-text opacity-70">
+              Configurado por <span className="font-medium text-ds-light-text">{configMeta.updatedBy}</span>{' '}
+              {configMeta.updatedAt && (
+                <>em {format(new Date(configMeta.updatedAt), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}</>
+              )}
+            </span>
+          )}
+          {!configLoading && !configMeta && !isAdmin && (
+            <span className="text-xs text-ds-text opacity-50">Senioridade configurada pelo admin</span>
+          )}
+        </div>
+      </div>
+
+      {/* ── se não há dados ── */}
+      {!hasData && (
+        <div className="bg-ds-navy border border-ds-border rounded-xl p-12 text-center text-ds-text">
+          <p className="text-4xl mb-3">👥</p>
+          <p className="font-semibold text-white mb-1">Nenhum membro encontrado</p>
+          <p className="text-sm">Selecione outro time ou período com dados disponíveis.</p>
+        </div>
+      )}
+
+      {hasData && (
+        <>
+          {/* ── cards por senioridade ── */}
+          {seniorityStats.length > 0 && (
+            <div>
+              <h3 className="text-ds-light-text font-bold text-sm mb-3">📊 Médias por Senioridade — período completo</h3>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                {seniorityStats.map(s => !s ? null : (
+                  <div
+                    key={s.seniority}
+                    className="bg-ds-navy border rounded-xl p-3 cursor-pointer transition-all hover:scale-[1.02]"
+                    style={{ borderColor: SENIORITY_COLORS[s.seniority as Seniority] + '60' }}
+                    onClick={() => setSelectedSeniority(prev => prev === s.seniority ? '__all__' : s.seniority)}
+                  >
+                    <span
+                      className="text-xs font-bold px-2 py-0.5 rounded-full border"
+                      style={{
+                        backgroundColor: SENIORITY_COLORS[s.seniority as Seniority] + '22',
+                        color: SENIORITY_COLORS[s.seniority as Seniority],
+                        borderColor: SENIORITY_COLORS[s.seniority as Seniority] + '50',
+                      }}
+                    >
+                      {s.seniority}
+                    </span>
+                    <p className="text-ds-text text-xs mt-2">{s.count} pessoa{s.count > 1 ? 's' : ''}</p>
+                    <p className="text-white font-bold text-lg">{s.avgDelivered}</p>
+                    <p className="text-ds-text text-xs">entregas/mês (média)</p>
+                    {s.avgCT && (
+                      <p className="text-ds-text text-xs mt-1">CT médio: <span className="text-ds-green">{s.avgCT}d</span></p>
+                    )}
+                    <p className="text-ds-text text-xs">{s.totalSP} SP total</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ── throughput individual ── */}
+          <div className="bg-ds-navy p-4 rounded-xl border border-ds-border">
+            <ChartInfoLamp info="Quantidade de itens entregues por pessoa no período, coloridos pela senioridade. Clique em uma barra para ver detalhes." />
+            <h3 className="text-ds-light-text font-bold text-base mb-4">🏆 Itens Entregues por Pessoa</h3>
+            <ResponsiveContainer width="100%" height={320}>
+              <BarChart data={throughputChartData} margin={{ left: 0, right: 16, top: 8, bottom: 60 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#303C55" />
+                <XAxis
+                  dataKey="name"
+                  tick={{ fill: '#8892B0', fontSize: 11 }}
+                  angle={-40}
+                  textAnchor="end"
+                  interval={0}
+                />
+                <YAxis tick={{ fill: '#8892B0', fontSize: 11 }} />
+                <Tooltip content={<CustomTooltip />} />
+                <Bar dataKey="Entregues" radius={[4, 4, 0, 0]} onClick={d => setSelectedPerson(d.fullName === selectedPerson ? null : d.fullName)}>
+                  {throughputChartData.map((d, i) => (
+                    <Cell
+                      key={i}
+                      fill={d.color}
+                      opacity={selectedPerson && selectedPerson !== d.fullName ? 0.3 : 1}
+                    />
+                  ))}
+                  <LabelList dataKey="Entregues" position="top" fill="#ccd6f6" fontSize={10} />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+
+            {/* legenda de senioridades */}
+            <div className="flex flex-wrap gap-3 mt-3 justify-center">
+              {SENIORITY_OPTIONS.map(s => {
+                const has = filteredMembers.some(m => m.seniority === s);
+                if (!has) return null;
+                return (
+                  <div key={s} className="flex items-center gap-1.5 text-xs">
+                    <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: SENIORITY_COLORS[s] }} />
+                    <span className="text-ds-text">{s}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* ── cycle time individual ── */}
+          {cycleTimeChartData.length > 0 && (
+            <div className="bg-ds-navy p-4 rounded-xl border border-ds-border">
+              <ChartInfoLamp info="Cycle Time médio de cada pessoa. Quanto menor, mais rápida é a entrega. Senioridade mais alta tende a ter itens mais complexos, então compare com cautela." />
+              <h3 className="text-ds-light-text font-bold text-base mb-4">⏱️ Cycle Time Médio por Pessoa (dias)</h3>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={cycleTimeChartData} layout="vertical" margin={{ left: 80, right: 32, top: 4, bottom: 4 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#303C55" horizontal={false} />
+                  <XAxis type="number" tick={{ fill: '#8892B0', fontSize: 11 }} />
+                  <YAxis
+                    type="category"
+                    dataKey="name"
+                    tick={{ fill: '#8892B0', fontSize: 11 }}
+                    width={80}
+                  />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Bar dataKey="Cycle Time Médio" radius={[0, 4, 4, 0]}>
+                    {cycleTimeChartData.map((d, i) => (
+                      <Cell key={i} fill={d.color} />
+                    ))}
+                    <LabelList dataKey="Cycle Time Médio" position="right" fill="#ccd6f6" fontSize={10} formatter={(v: number) => `${v}d`} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {/* ── tendência histórica ── */}
+          <div className="bg-ds-navy p-4 rounded-xl border border-ds-border">
+            <ChartInfoLamp info="Evolução dos itens entregues por pessoa ao longo dos meses. Clique nos nomes abaixo para mostrar/ocultar linhas." />
+            <h3 className="text-ds-light-text font-bold text-base mb-2">📈 Tendência de Entregas Mensais</h3>
+            <p className="text-ds-text text-xs mb-4">Mostrando top {top8.length} pessoas por total de entregas. Clique para filtrar.</p>
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={lineChartData} margin={{ left: 0, right: 16, top: 8, bottom: 4 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#303C55" />
+                <XAxis dataKey="mes" tick={{ fill: '#8892B0', fontSize: 11 }} />
+                <YAxis tick={{ fill: '#8892B0', fontSize: 11 }} />
+                <Tooltip content={<CustomTooltip />} />
+                {top8.map((mc, i) => {
+                  const firstName = mc.name.split(' ')[0];
+                  return (
+                    <Line
+                      key={mc.name}
+                      type="monotone"
+                      dataKey={firstName}
+                      stroke={PERSON_PALETTE[i % PERSON_PALETTE.length]}
+                      strokeWidth={isLineVisible(mc.name) ? 2 : 0}
+                      dot={{ r: 3 }}
+                      activeDot={{ r: 5 }}
+                    />
+                  );
+                })}
+              </LineChart>
+            </ResponsiveContainer>
+
+            {/* toggles de linha */}
+            <div className="flex flex-wrap gap-2 mt-3 justify-center">
+              {top8.map((mc, i) => {
+                const firstName = mc.name.split(' ')[0];
+                const active = isLineVisible(mc.name);
+                return (
+                  <button
+                    key={mc.name}
+                    onClick={() => togglePerson(mc.name)}
+                    className="flex items-center gap-1.5 px-2 py-1 rounded-full border text-xs transition-all"
+                    style={{
+                      borderColor: PERSON_PALETTE[i % PERSON_PALETTE.length] + '60',
+                      backgroundColor: active ? PERSON_PALETTE[i % PERSON_PALETTE.length] + '22' : 'transparent',
+                      color: active ? PERSON_PALETTE[i % PERSON_PALETTE.length] : '#8892B0',
+                      opacity: active ? 1 : 0.5,
+                    }}
+                    title={mc.name}
+                  >
+                    <span
+                      className="w-2 h-2 rounded-full shrink-0"
+                      style={{ backgroundColor: PERSON_PALETTE[i % PERSON_PALETTE.length] }}
+                    />
+                    {firstName}
+                    <span
+                      className="text-xs px-1 rounded border"
+                      style={{
+                        borderColor: SENIORITY_COLORS[mc.seniority] + '60',
+                        color: SENIORITY_COLORS[mc.seniority],
+                        backgroundColor: SENIORITY_COLORS[mc.seniority] + '22',
+                      }}
+                    >
+                      {mc.seniority}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* ── radar ── */}
+          {radarTop6.length >= 2 && (
+            <div className="bg-ds-navy p-4 rounded-xl border border-ds-border">
+              <ChartInfoLamp info="Comparativo multi-dimensional dos tops 6. Valores normalizados (0–100). 'Velocidade' = inverso do cycle time (quanto maior, mais rápido)." />
+              <h3 className="text-ds-light-text font-bold text-base mb-4">🕸️ Radar Comparativo (Top 6)</h3>
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2">
+                  <ResponsiveContainer width="100%" height={340}>
+                    <RadarChart data={radarData} margin={{ top: 16, right: 40, bottom: 16, left: 40 }}>
+                      <PolarGrid stroke="#303C55" />
+                      <PolarAngleAxis dataKey="metric" tick={{ fill: '#8892B0', fontSize: 11 }} />
+                      <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fill: '#8892B0', fontSize: 9 }} />
+                      {radarTop6.map((mc, i) => (
+                        <Radar
+                          key={mc.name}
+                          name={mc.name.split(' ')[0]}
+                          dataKey={mc.name.split(' ')[0]}
+                          stroke={PERSON_PALETTE[i % PERSON_PALETTE.length]}
+                          fill={PERSON_PALETTE[i % PERSON_PALETTE.length]}
+                          fillOpacity={0.1}
+                          strokeWidth={1.5}
+                        />
+                      ))}
+                      <Legend />
+                    </RadarChart>
+                  </ResponsiveContainer>
+                </div>
+
+                {/* tabela lateral */}
+                <div className="overflow-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-ds-text border-b border-ds-border">
+                        <th className="text-left pb-2 font-medium">Pessoa</th>
+                        <th className="text-right pb-2 font-medium">Entregues</th>
+                        <th className="text-right pb-2 font-medium">CT Médio</th>
+                        <th className="text-right pb-2 font-medium">SP</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {radarTop6.map((mc, i) => {
+                        const met = personMetrics[mc.name];
+                        return (
+                          <tr key={mc.name} className="border-b border-ds-border/40">
+                            <td className="py-2 pr-2">
+                              <div className="flex items-center gap-1.5">
+                                <span
+                                  className="w-2 h-2 rounded-full shrink-0"
+                                  style={{ backgroundColor: PERSON_PALETTE[i % PERSON_PALETTE.length] }}
+                                />
+                                <span className="text-white truncate max-w-20" title={mc.name}>
+                                  {mc.name.split(' ')[0]}
+                                </span>
+                              </div>
+                              <span
+                                className={`text-[10px] px-1.5 py-0.5 rounded-full border ${SENIORITY_BG[mc.seniority]}`}
+                              >
+                                {mc.seniority}
+                              </span>
+                            </td>
+                            <td className="text-right text-ds-green font-bold py-2">{met?.delivered ?? 0}</td>
+                            <td className="text-right text-ds-text py-2">{fmtCT(met?.avgCycleTime)}</td>
+                            <td className="text-right text-ds-text py-2">{met?.storyPoints ?? 0}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── cards individuais ── */}
+          <div>
+            <h3 className="text-ds-light-text font-bold text-sm mb-3">👤 Detalhamento Individual</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {filteredMembers
+                .sort((a, b) => (personMetrics[b.name]?.delivered ?? 0) - (personMetrics[a.name]?.delivered ?? 0))
+                .map((mc, i) => {
+                  const met = personMetrics[mc.name];
+                  const color = PERSON_PALETTE[i % PERSON_PALETTE.length];
+                  const isSelected = selectedPerson === mc.name;
+
+                  return (
+                    <div
+                      key={mc.name}
+                      className="bg-ds-navy border rounded-xl p-4 cursor-pointer transition-all hover:scale-[1.01]"
+                      style={{
+                        borderColor: isSelected ? SENIORITY_COLORS[mc.seniority] : '#303C55',
+                        boxShadow: isSelected ? `0 0 0 1px ${SENIORITY_COLORS[mc.seniority]}60` : undefined,
+                      }}
+                      onClick={() => setSelectedPerson(prev => prev === mc.name ? null : mc.name)}
+                    >
+                      {/* header do card */}
+                      <div className="flex items-center gap-3 mb-3">
+                        <div
+                          className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shrink-0"
+                          style={{
+                            backgroundColor: SENIORITY_COLORS[mc.seniority] + '33',
+                            color: SENIORITY_COLORS[mc.seniority],
+                            border: `2px solid ${SENIORITY_COLORS[mc.seniority]}60`,
+                          }}
+                        >
+                          {abbrev(mc.name)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-white font-semibold text-sm truncate">{mc.name}</p>
+                          <span
+                            className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${SENIORITY_BG[mc.seniority]}`}
+                          >
+                            {mc.seniority}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* métricas */}
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div className="bg-ds-dark-blue rounded-lg p-2 text-center">
+                          <p className="text-ds-text mb-0.5">Entregues</p>
+                          <p className="text-ds-green font-bold text-xl">{met?.delivered ?? 0}</p>
+                        </div>
+                        <div className="bg-ds-dark-blue rounded-lg p-2 text-center">
+                          <p className="text-ds-text mb-0.5">Em Andamento</p>
+                          <p className="text-yellow-300 font-bold text-xl">{met?.inProgress ?? 0}</p>
+                        </div>
+                        <div className="bg-ds-dark-blue rounded-lg p-2 text-center">
+                          <p className="text-ds-text mb-0.5">CT Médio</p>
+                          <p className="text-white font-bold text-base">{fmtCT(met?.avgCycleTime)}</p>
+                        </div>
+                        <div className="bg-ds-dark-blue rounded-lg p-2 text-center">
+                          <p className="text-ds-text mb-0.5">Story Points</p>
+                          <p className="text-blue-300 font-bold text-base">{met?.storyPoints ?? 0}</p>
+                        </div>
+                      </div>
+
+                      {/* mini tipos */}
+                      {met && Object.keys(met.byType).length > 0 && (
+                        <div className="mt-3 border-t border-ds-border pt-2 flex flex-wrap gap-1">
+                          {Object.entries(met.byType)
+                            .sort((a, b) => b[1] - a[1])
+                            .slice(0, 4)
+                            .map(([type, count]) => (
+                              <span
+                                key={type}
+                                className="text-[10px] px-1.5 py-0.5 rounded bg-ds-dark-blue text-ds-text border border-ds-border"
+                              >
+                                {type.replace('Product Backlog Item', 'PBI').replace('User Story', 'US')}: {count}
+                              </span>
+                            ))}
+                        </div>
+                      )}
+
+                      {/* mini sparkline de meses */}
+                      {met && (
+                        <div className="mt-3">
+                          <ResponsiveContainer width="100%" height={40}>
+                            <LineChart data={months.map(m => {
+                              const key = format(m, 'MMM/yy', { locale: ptBR });
+                              return { x: key, v: met.byMonth[key] ?? 0 };
+                            })}>
+                              <Line
+                                type="monotone"
+                                dataKey="v"
+                                stroke={color}
+                                strokeWidth={1.5}
+                                dot={false}
+                              />
+                            </LineChart>
+                          </ResponsiveContainer>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── modal config ── */}
+      {showConfig && (
+        <ConfigModal
+          members={allMembers}
+          config={seniorityConfig}
+          onSave={handleSaveConfig}
+          onClose={() => setShowConfig(false)}
+        />
+      )}
+    </div>
+  );
+};
+
+export default TeamComparisonDashboard;

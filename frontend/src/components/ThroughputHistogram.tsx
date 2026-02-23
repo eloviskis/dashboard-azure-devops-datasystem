@@ -66,7 +66,7 @@ const ThroughputHistogram: React.FC<ThroughputHistogramProps> = ({ data }) => {
             itemStyle={{ color: '#e6f1ff' }}
           />
           <Legend />
-        <Bar dataKey="Semanas" fill={CHART_COLORS.secondary} />
+        <Bar dataKey="Semanas" fill={CHART_COLORS.secondary} label={{ position: 'top', fill: CHART_COLORS.secondary, fontSize: 11, fontWeight: 'bold' }} />
       </BarChart>
     </ResponsiveContainer>
   );

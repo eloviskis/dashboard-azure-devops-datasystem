@@ -84,9 +84,20 @@ const transformApiDataToWorkItem = (apiItem: any): WorkItem => {
 };
 
 
+// Dispara evento global quando o token expirou (401 na API)
+const handleUnauthorized = () => {
+  localStorage.removeItem('auth_token');
+  localStorage.removeItem('auth_user');
+  window.dispatchEvent(new CustomEvent('auth:expired'));
+};
+
 export const getWorkItems = async (): Promise<WorkItem[]> => {
   try {
     const response = await fetch(`${API_BASE_URL}/api/items`, { headers: getAuthHeaders() });
+    if (response.status === 401) {
+      handleUnauthorized();
+      return [];
+    }
     if (!response.ok) {
       const errorData = await response.text();
       console.error('Backend error response:', errorData);
@@ -104,6 +115,10 @@ export const getWorkItems = async (): Promise<WorkItem[]> => {
 export const getLastSyncStatus = async (): Promise<SyncStatus> => {
     try {
         const response = await fetch(`${API_BASE_URL}/api/sync/status`, { headers: getAuthHeaders() });
+        if (response.status === 401) {
+            handleUnauthorized();
+            return { syncTime: new Date().toISOString(), status: 'error' };
+        }
         if (!response.ok) {
             throw new Error('Failed to fetch sync status');
         }
@@ -122,6 +137,10 @@ export const getLastSyncStatus = async (): Promise<SyncStatus> => {
 export const getPullRequests = async (): Promise<PullRequest[]> => {
   try {
     const response = await fetch(`${API_BASE_URL}/api/pull-requests`, { headers: getAuthHeaders() });
+    if (response.status === 401) {
+      handleUnauthorized();
+      return [];
+    }
     if (!response.ok) {
       throw new Error(`Failed to fetch pull requests: ${response.status}`);
     }

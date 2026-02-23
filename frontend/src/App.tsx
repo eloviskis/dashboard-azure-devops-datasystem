@@ -60,6 +60,7 @@ import ReworkAnalysisChart from './components/ReworkAnalysisChart.tsx';
 import StoryPointsVsCycleTimeChart from './components/StoryPointsVsCycleTimeChart.tsx';
 import MetasDashboard from './components/MetasDashboard.tsx';
 import DocumentationDashboard from './components/DocumentationDashboard.tsx';
+import TeamComparisonDashboard from './components/TeamComparisonDashboard.tsx';
 import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 
 // Import Types
@@ -68,35 +69,43 @@ import { WorkItem, WorkItemFilters } from './types.ts';
 // Import Metrics
 import { calculatePerformanceMetrics, calculateQualityMetrics, COMPLETED_STATES } from './utils/metrics.ts';
 
-type Tab = 'executive' | 'team-insights' | 'cycle-analytics' | 'performance' | 'quality' | 'kanban' | 'detailed-throughput' | 'bottlenecks' | 'tags' | 'clients' | 'montecarlo' | 'item-list' | 'rootcause' | 'backlog' | 'impedimentos' | 'po-analysis' | 'pull-requests' | 'scrum-ctc' | 'dora' | 'sla' | 'metas' | 'documentation';
+type Tab = 'executive' | 'team-insights' | 'cycle-analytics' | 'performance' | 'quality' | 'kanban' | 'detailed-throughput' | 'bottlenecks' | 'tags' | 'clients' | 'montecarlo' | 'item-list' | 'rootcause' | 'backlog' | 'impedimentos' | 'po-analysis' | 'pull-requests' | 'scrum-ctc' | 'dora' | 'sla' | 'metas' | 'documentation' | 'team-comparison';
 
 const DEFAULT_TAB_CONFIG = [
+  // 🧭 1. Camada Executiva
+  { id: 'performance', label: 'Performance Geral', visible: true },
   { id: 'executive', label: 'Visão Executiva', visible: true },
   { id: 'team-insights', label: 'Insights por Time', visible: true },
-  { id: 'cycle-analytics', label: 'Cycle Time Analytics', visible: true },
-  { id: 'performance', label: 'Performance Geral', visible: true },
-  { id: 'quality', label: 'Qualidade', visible: true },
-  { id: 'clients', label: 'Análise por Cliente', visible: true },
-  { id: 'kanban', label: 'Fluxo Contínuo (Kanban)', visible: true },
-  { id: 'detailed-throughput', label: 'Vazão Detalhada', visible: true },
-  { id: 'bottlenecks', label: 'Gargalos (Estimado)', visible: true },
-  { id: 'tags', label: 'Análise de Tags', visible: true },
-  { id: 'item-list', label: 'Lista de Itens', visible: true },
-  { id: 'montecarlo', label: 'Previsão (Monte Carlo)', visible: true },
-  { id: 'rootcause', label: 'Root Cause (Issues)', visible: true },
-  { id: 'backlog', label: 'Análise de Backlog', visible: true },
-  { id: 'impedimentos', label: 'Impedimentos', visible: true },
-  { id: 'po-analysis', label: 'Análise de Demanda', visible: true },
-  { id: 'pull-requests', label: 'Pull Requests & Code Review', visible: true },
-  { id: 'scrum-ctc', label: 'Scrum (CTC/Franquia)', visible: true },
-  { id: 'dora', label: 'Indicadores DevOps', visible: true },
-  { id: 'sla', label: 'SLA Tracking', visible: true },
   { id: 'metas', label: 'Metas por Time', visible: true },
+  { id: 'sla', label: 'SLA Tracking', visible: true },
+  // 🔄 2. Fluxo e Entregas
+  { id: 'kanban', label: 'Fluxo Contínuo (Kanban)', visible: true },
+  { id: 'cycle-analytics', label: 'Cycle Time Analytics', visible: true },
+  { id: 'detailed-throughput', label: 'Vazão Detalhada', visible: true },
+  { id: 'po-analysis', label: 'Análise de Demanda', visible: true },
+  { id: 'backlog', label: 'Análise de Backlog', visible: true },
+  { id: 'montecarlo', label: 'Previsão (Monte Carlo)', visible: true },
+  // 🚧 3. Riscos e Bloqueios
+  { id: 'bottlenecks', label: 'Gargalos (Estimado)', visible: true },
+  { id: 'impedimentos', label: 'Impedimentos', visible: true },
+  // 🧠 4. Qualidade e Engenharia
+  { id: 'quality', label: 'Qualidade', visible: true },
+  { id: 'rootcause', label: 'Root Cause (Issues)', visible: true },
+  { id: 'pull-requests', label: 'Pull Requests & Code Review', visible: true },
+  { id: 'dora', label: 'Indicadores DevOps', visible: true },
+  { id: 'tags', label: 'Análise de Tags', visible: true },
+  // 👥 5. Visões Específicas
+  { id: 'clients', label: 'Análise por Cliente', visible: true },
+  { id: 'scrum-ctc', label: 'Scrum (CTC/Franquia)', visible: true },
+  { id: 'team-comparison', label: '👥 Comparativo de Pessoas', visible: true },
+  // 📋 6. Operacional / Dados Brutos
+  { id: 'item-list', label: 'Lista de Itens', visible: true },
+  // 📚 7. Suporte e Governança
   { id: 'documentation', label: '📖 Documentação', visible: true },
 ];
 
 const App = () => {
-  const { isAuthenticated, isLoading: authLoading, isAdmin } = useAuth();
+  const { isAuthenticated, isLoading: authLoading, isAdmin, user } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>(() => {
     const params = new URLSearchParams(window.location.search);
     const urlTab = params.get('tab') as Tab;
@@ -627,6 +636,13 @@ const App = () => {
             <MetasDashboard data={filteredWorkItems} periodDays={workItemFilters.period || 180} />
           </>
         );
+      case 'team-comparison':
+        return (
+          <>
+            <SectionHeader title="Comparativo de Pessoas & Senioridade" />
+            <TeamComparisonDashboard data={workItems} />
+          </>
+        );
       case 'documentation':
         return (
           <>
@@ -683,9 +699,14 @@ const App = () => {
       <div className="p-6 md:p-10">
         <div className="mb-6">
             <div className="flex border-b border-ds-border overflow-x-auto">
-                {tabsConfig.filter(t => t.visible).map(tab => (
+                {tabsConfig
+                  .filter(t => t.visible)
+                  .filter(t => !user?.tabPermissions || user.tabPermissions.includes(t.id))
+                  .map(tab => (
                   <NavButton key={tab.id} tabId={tab.id as Tab}>{tab.label}</NavButton>
                 ))}
+                {/* Engrenagem só aparece para admin */}
+                {isAdmin && (
                 <button
                   onClick={() => setIsTabsConfigOpen(true)}
                   className="py-2 px-3 text-sm font-medium whitespace-nowrap text-ds-text hover:text-ds-green transition-colors"
@@ -693,10 +714,11 @@ const App = () => {
                 >
                   ⚙️
                 </button>
+                )}
             </div>
         </div>
         
-        {activeTab !== 'cycle-analytics' && activeTab !== 'team-insights' && activeTab !== 'pull-requests' && activeTab !== 'scrum-ctc' && (
+        {activeTab !== 'cycle-analytics' && activeTab !== 'team-insights' && activeTab !== 'pull-requests' && activeTab !== 'scrum-ctc' && activeTab !== 'team-comparison' && (
         <div className="relative">
           <button
             onClick={() => setFilterBarCollapsed(!filterBarCollapsed)}

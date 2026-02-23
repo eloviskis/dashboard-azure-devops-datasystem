@@ -54,7 +54,7 @@ const CycleTimeByTagChart: React.FC<CycleTimeByTagChartProps> = ({ data }) => {
           itemStyle={{ color: '#e6f1ff' }}
           formatter={(value: number) => [`${value} dias`, 'Cycle Time Médio']}
         />
-        <Bar dataKey="value" name="Cycle Time Médio" fill={CHART_COLORS.secondary} />
+        <Bar dataKey="value" name="Cycle Time Médio" fill={CHART_COLORS.secondary} label={{ position: 'top', fill: CHART_COLORS.secondary, fontSize: 11, fontWeight: 'bold', formatter: (v: number) => `${v}d` }} />
       </BarChart>
     </ResponsiveContainer>
   );

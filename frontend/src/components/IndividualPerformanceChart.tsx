@@ -117,7 +117,7 @@ const IndividualPerformanceChart: React.FC<IndividualPerformanceChartProps> = ({
         <BarChart
           data={chartData}
           layout="vertical"
-          margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+          margin={{ top: 5, right: 60, left: 20, bottom: 5 }}
         >
           <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
           <XAxis type="number" stroke={CHART_COLORS.text} />
@@ -129,7 +129,7 @@ const IndividualPerformanceChart: React.FC<IndividualPerformanceChartProps> = ({
             itemStyle={{ color: '#e6f1ff' }}
           />
           <Legend />
-          <Bar dataKey="completed" name="Itens Concluídos" fill={CHART_COLORS.primary} cursor="pointer">
+          <Bar dataKey="completed" name="Itens Concluídos" fill={CHART_COLORS.primary} cursor="pointer" label={{ position: 'right', fill: CHART_COLORS.primary, fontSize: 11, fontWeight: 'bold' }}>
             {chartData.map((entry, index) => (
               <Cell key={`cell-${index}`} onClick={() => {
                 const items = data.filter(item => item.assignedTo === entry.name && COMPLETED_STATES.includes(item.state));

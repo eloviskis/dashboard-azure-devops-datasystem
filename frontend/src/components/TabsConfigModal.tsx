@@ -14,9 +14,27 @@ interface TabsConfigModalProps {
 }
 
 const STORAGE_KEY = 'dashboard-tabs-config';
+const CONFIG_VERSION = 'v2'; // bump para forçar reset ao novo padrão de ordem
+const VERSION_KEY = 'dashboard-tabs-config-version';
 
 export const loadTabsConfig = (defaultTabs: TabConfig[]): TabConfig[] => {
   try {
+    const savedVersion = localStorage.getItem(VERSION_KEY);
+    if (savedVersion !== CONFIG_VERSION) {
+      // Nova versão: reset para o padrão novo, preservando apenas visibilidade
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed: TabConfig[] = JSON.parse(saved);
+        const visMap: Record<string, boolean> = {};
+        parsed.forEach(t => { visMap[t.id] = t.visible; });
+        const merged = defaultTabs.map(t => ({ ...t, visible: visMap[t.id] !== undefined ? visMap[t.id] : t.visible }));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+        localStorage.setItem(VERSION_KEY, CONFIG_VERSION);
+        return merged;
+      }
+      localStorage.setItem(VERSION_KEY, CONFIG_VERSION);
+      return defaultTabs;
+    }
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       const parsed: TabConfig[] = JSON.parse(saved);
@@ -31,6 +49,7 @@ export const loadTabsConfig = (defaultTabs: TabConfig[]): TabConfig[] => {
 
 export const saveTabsConfig = (tabs: TabConfig[]) => {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(tabs));
+  localStorage.setItem(VERSION_KEY, CONFIG_VERSION);
 };
 
 const TabsConfigModal: React.FC<TabsConfigModalProps> = ({ isOpen, onClose, tabs, onSave }) => {
