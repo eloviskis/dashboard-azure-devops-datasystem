@@ -2,6 +2,25 @@
 
 Dashboard em tempo real para acompanhamento de performance, qualidade e entrega do time de desenvolvimento, integrado ao Azure DevOps.
 
+---
+
+> ## ⛔ ANTES DE MUDAR QUALQUER COISA, LEIA ISTO
+>
+> Este é um **monorepo** com `frontend/` e `backend/` deployados como projetos **separados** no Vercel.
+> Se você não seguir as regras abaixo, **vai derrubar a aplicação inteira**.
+>
+> **👉 Leia [REGRAS_DE_DEPLOY.md](REGRAS_DE_DEPLOY.md) antes de qualquer alteração.**
+>
+> Resumo rápido:
+> - `git push` deploya ambos automaticamente. Não precisa fazer deploy manual.
+> - **NUNCA** adicione `backend/` ou `frontend/` no `.vercelignore`
+> - **NUNCA** coloque `headers` no `backend/vercel.json`
+> - **NUNCA** use `process.exit()` no `backend/server.js`
+> - **SEMPRE** verifique imports do React ao adicionar hooks
+> - Se o deploy falhar, consulte [INCIDENTES.md](INCIDENTES.md)
+
+---
+
 ## Infraestrutura (Produção)
 
 | Camada | Tecnologia | URL |
@@ -71,19 +90,22 @@ node sync-standalone.js
 
 > Use `sync-standalone.js` — é o único que salva **todos os 40+ campos**, incluindo `ready_date` (DOR), `identificacao` e `falha_do_processo`.
 
-## Deploy Manual (Vercel)
+## Deploy
 
-O auto-deploy via GitHub pode não disparar. Sempre fazer deploy manual após push:
+O auto-deploy via GitHub está configurado e funciona automaticamente a cada `git push`.
 
 ```sh
-# Frontend
-cd frontend
-vercel --prod
+# Jeito certo (auto-deploy via Git)
+git push origin main
 
-# Backend
-cd backend
-vercel --prod
+# Deploy manual via API (se precisar)
+.\deploy.ps1                     # Ambos
+.\deploy.ps1 -Target backend     # Só backend
+.\deploy.ps1 -Target frontend    # Só frontend
 ```
+
+> ⚠️ **NÃO use `cd backend && vercel --prod`** — o CLI tem bug com rootDirectory em monorepos.
+> Use `git push` ou o script `deploy.ps1`.
 
 ## Abas do Dashboard
 
