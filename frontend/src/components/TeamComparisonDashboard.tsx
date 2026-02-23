@@ -693,7 +693,6 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
                     {s.avgCT && (
                       <p className="text-ds-text text-xs mt-1">CT médio: <span className="text-ds-green">{s.avgCT}d</span></p>
                     )}
-                    <p className="text-ds-text text-xs">{s.totalSP} SP total</p>
                   </div>
                 ))}
               </div>
