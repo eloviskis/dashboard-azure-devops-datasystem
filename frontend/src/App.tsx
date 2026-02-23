@@ -105,7 +105,7 @@ const DEFAULT_TAB_CONFIG = [
 ];
 
 const App = () => {
-  const { isAuthenticated, isLoading: authLoading, isAdmin, user } = useAuth();
+  const { isAuthenticated, isLoading: authLoading, isAdmin, user, token } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>(() => {
     const params = new URLSearchParams(window.location.search);
     const urlTab = params.get('tab') as Tab;
@@ -120,6 +120,29 @@ const App = () => {
   const [aiError, setAiError] = useState('');
   const [tabsConfig, setTabsConfig] = useState(() => loadTabsConfig(DEFAULT_TAB_CONFIG));
   const [isTabsConfigOpen, setIsTabsConfigOpen] = useState(false);
+
+  // ── buscar config global de abas do backend (para não-admins)
+  const GLOBAL_TABS_KEY = 'global_tabs_config';
+  const APP_API_URL = import.meta.env.VITE_API_URL || 'https://backend-hazel-three-14.vercel.app';
+
+  useEffect(() => {
+    if (!isAuthenticated || !token) return;
+    const fetchGlobalTabs = async () => {
+      try {
+        const res = await fetch(`${APP_API_URL}/api/settings/${GLOBAL_TABS_KEY}`, {
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.value && !isAdmin) {
+            // Não-admin: utilizar configuração definida pelo admin
+            setTabsConfig(data.value);
+          }
+        }
+      } catch { /* sem conexão: usa configuração local */ }
+    };
+    fetchGlobalTabs();
+  }, [isAuthenticated, token, isAdmin]);
   const [filterBarCollapsed, setFilterBarCollapsed] = useState(false);
 
   const initialWorkItemFilters: WorkItemFilters = {
@@ -756,9 +779,19 @@ const App = () => {
           isOpen={isTabsConfigOpen}
           onClose={() => setIsTabsConfigOpen(false)}
           tabs={tabsConfig}
-          onSave={(newTabs) => {
+          onSave={async (newTabs) => {
             setTabsConfig(newTabs);
             saveTabsConfig(newTabs);
+            // Admin: persiste configuração global de abas no backend
+            if (isAdmin && token) {
+              try {
+                await fetch(`${APP_API_URL}/api/settings/${GLOBAL_TABS_KEY}`, {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                  body: JSON.stringify({ value: newTabs }),
+                });
+              } catch { /* silencioso */ }
+            }
           }}
         />
 

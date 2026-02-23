@@ -67,6 +67,8 @@ const STORAGE_KEY = 'tc_seniority_config_v2';
 const SETTINGS_KEY = 'seniority_config';
 const ROLE_KEY = 'tc_role_config_v1';
 const ACTIVE_KEY = 'tc_active_config_v1';
+const ROLE_SETTINGS_KEY = 'role_config';
+const ACTIVE_SETTINGS_KEY = 'active_config';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 const loadLocalConfig = (): SeniorityConfigMap => {
@@ -309,20 +311,31 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
   const [selectedPerson, setSelectedPerson] = useState<string | null>(null);
   const [modalData, setModalData] = useState<ModalData | null>(null);
 
-  // ── carregar config do banco ao montar
+  // ── carregar config do banco ao montar (seniority + role + active)
   useEffect(() => {
     const fetchConfig = async () => {
       try {
-        const res = await fetch(`${API_URL}/api/settings/${SETTINGS_KEY}`, {
-          headers: { 'Authorization': `Bearer ${token}` },
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.value) {
-            setSeniorityConfig(data.value);
-            saveLocalConfig(data.value); // cache local
-            setConfigMeta({ updatedBy: data.updated_by, updatedAt: data.updated_at });
+        const headers = { 'Authorization': `Bearer ${token}` };
+        const [senRes, roleRes, activeRes] = await Promise.all([
+          fetch(`${API_URL}/api/settings/${SETTINGS_KEY}`, { headers }),
+          fetch(`${API_URL}/api/settings/${ROLE_SETTINGS_KEY}`, { headers }),
+          fetch(`${API_URL}/api/settings/${ACTIVE_SETTINGS_KEY}`, { headers }),
+        ]);
+        if (senRes.ok) {
+          const d = await senRes.json();
+          if (d.value) {
+            setSeniorityConfig(d.value);
+            saveLocalConfig(d.value);
+            setConfigMeta({ updatedBy: d.updated_by, updatedAt: d.updated_at });
           }
+        }
+        if (roleRes.ok) {
+          const d = await roleRes.json();
+          if (d.value) { setRoleConfig(d.value); saveRoleConfig(d.value); }
+        }
+        if (activeRes.ok) {
+          const d = await activeRes.json();
+          if (d.value) { setActiveConfig(d.value); saveActiveConfig(d.value); }
         }
       } catch {
         // sem conexão: usa localStorage já carregado
@@ -361,13 +374,17 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
     if (!isAdmin) return;
     setConfigSaving(true);
     try {
-      const res = await fetch(`${API_URL}/api/settings/${SETTINGS_KEY}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ value: cfg }),
-      });
-      if (res.ok) {
-        const data = await res.json();
+      const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
+      const [senRes] = await Promise.all([
+        fetch(`${API_URL}/api/settings/${SETTINGS_KEY}`, {
+          method: 'PUT', headers, body: JSON.stringify({ value: cfg }),
+        }),
+        fetch(`${API_URL}/api/settings/${ROLE_SETTINGS_KEY}`, {
+          method: 'PUT', headers, body: JSON.stringify({ value: roleCfg }),
+        }),
+      ]);
+      if (senRes.ok) {
+        const data = await senRes.json();
         setConfigMeta(prev => ({ ...prev, updatedBy: data.updated_by, updatedAt: new Date().toISOString() }));
       }
     } catch { /* silencioso: config já salva localmente */ }
@@ -630,15 +647,21 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
     }).filter(Boolean);
   }, [activeFilteredMembers, personMetrics]);
 
-  // ── toggle ativo/inativo de um membro
-  const toggleActive = useCallback((name: string) => {
-    setActiveConfig(prev => {
-      const isCurrentlyActive = prev[name] !== false;
-      const updated = { ...prev, [name]: !isCurrentlyActive };
-      saveActiveConfig(updated);
-      return updated;
-    });
-  }, []);
+  // ── toggle ativo/inativo de um membro (somente admin, persiste no banco)
+  const toggleActive = useCallback(async (name: string) => {
+    if (!isAdmin) return;
+    const isCurrentlyActive = activeConfig[name] !== false;
+    const updated = { ...activeConfig, [name]: !isCurrentlyActive };
+    setActiveConfig(updated);
+    saveActiveConfig(updated);
+    try {
+      await fetch(`${API_URL}/api/settings/${ACTIVE_SETTINGS_KEY}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ value: updated }),
+      });
+    } catch { /* silencioso: config local já atualizada */ }
+  }, [isAdmin, activeConfig, token, API_URL]);
 
   // ── toggle visibilidade de linhas no gráfico de tendência
   const togglePerson = (name: string) => {
@@ -1156,17 +1179,29 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
                             </span>
                           </div>
                         </div>
-                        <button
-                          onClick={e => { e.stopPropagation(); toggleActive(mc.name); }}
-                          className={`text-[10px] px-2 py-1 rounded-full border font-semibold transition-all shrink-0 ${
-                            isInactive
-                              ? 'bg-red-500/20 border-red-500/50 text-red-400 hover:bg-green-500/20 hover:border-green-500/50 hover:text-green-400'
-                              : 'bg-green-500/20 border-green-500/40 text-green-400 hover:bg-red-500/20 hover:border-red-500/40 hover:text-red-400'
-                          }`}
-                          title={isInactive ? 'Clique para ativar' : 'Clique para desativar'}
-                        >
-                          {isInactive ? 'Inativo' : 'Ativo'}
-                        </button>
+                        {isAdmin ? (
+                          <button
+                            onClick={e => { e.stopPropagation(); toggleActive(mc.name); }}
+                            className={`text-[10px] px-2 py-1 rounded-full border font-semibold transition-all shrink-0 ${
+                              isInactive
+                                ? 'bg-red-500/20 border-red-500/50 text-red-400 hover:bg-green-500/20 hover:border-green-500/50 hover:text-green-400'
+                                : 'bg-green-500/20 border-green-500/40 text-green-400 hover:bg-red-500/20 hover:border-red-500/40 hover:text-red-400'
+                            }`}
+                            title={isInactive ? 'Clique para ativar' : 'Clique para desativar'}
+                          >
+                            {isInactive ? 'Inativo' : 'Ativo'}
+                          </button>
+                        ) : (
+                          <span
+                            className={`text-[10px] px-2 py-1 rounded-full border font-semibold shrink-0 ${
+                              isInactive
+                                ? 'bg-red-500/20 border-red-500/50 text-red-400'
+                                : 'bg-green-500/20 border-green-500/40 text-green-400'
+                            }`}
+                          >
+                            {isInactive ? 'Inativo' : 'Ativo'}
+                          </span>
+                        )}
                       </div>
 
                       {/* métricas */}
