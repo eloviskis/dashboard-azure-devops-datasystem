@@ -604,6 +604,32 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
     }).filter(Boolean);
   }, [activeFilteredMembers, personMetrics]);
 
+  // ── médias por cargo
+  const roleStats = useMemo(() => {
+    const groups: Record<string, { delivered: number[]; ct: number[]; sp: number[] }> = {};
+    ROLE_OPTIONS.forEach(r => { groups[r] = { delivered: [], ct: [], sp: [] }; });
+    activeFilteredMembers.forEach(m => {
+      const met = personMetrics[m.name];
+      if (!met) return;
+      groups[m.role].delivered.push(met.delivered);
+      if (met.avgCycleTime) groups[m.role].ct.push(met.avgCycleTime);
+      groups[m.role].sp.push(met.storyPoints);
+    });
+    return ROLE_OPTIONS.map(r => {
+      const g = groups[r];
+      const count = g.delivered.length;
+      if (!count) return null;
+      const avg = (arr: number[]) => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+      return {
+        role: r,
+        count,
+        avgDelivered: Math.round(avg(g.delivered) * 10) / 10,
+        avgCT: g.ct.length ? Math.round(avg(g.ct) * 10) / 10 : null,
+        totalSP: g.sp.reduce((a, b) => a + b, 0),
+      };
+    }).filter(Boolean);
+  }, [activeFilteredMembers, personMetrics]);
+
   // ── toggle ativo/inativo de um membro
   const toggleActive = useCallback((name: string) => {
     setActiveConfig(prev => {
@@ -775,37 +801,76 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
 
       {hasData && (
         <>
-          {/* ── cards por senioridade ── */}
-          {seniorityStats.length > 0 && (
-            <div>
-              <h3 className="text-ds-light-text font-bold text-sm mb-3">📊 Médias por Senioridade — período completo</h3>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-                {seniorityStats.map(s => !s ? null : (
-                  <div
-                    key={s.seniority}
-                    className="bg-ds-navy border rounded-xl p-3 cursor-pointer transition-all hover:scale-[1.02]"
-                    style={{ borderColor: SENIORITY_COLORS[s.seniority as Seniority] + '60' }}
-                    onClick={() => setSelectedSeniority(prev => prev === s.seniority ? '__all__' : s.seniority)}
-                  >
-                    <span
-                      className="text-xs font-bold px-2 py-0.5 rounded-full border"
-                      style={{
-                        backgroundColor: SENIORITY_COLORS[s.seniority as Seniority] + '22',
-                        color: SENIORITY_COLORS[s.seniority as Seniority],
-                        borderColor: SENIORITY_COLORS[s.seniority as Seniority] + '50',
-                      }}
-                    >
-                      {s.seniority}
-                    </span>
-                    <p className="text-ds-text text-xs mt-2">{s.count} pessoa{s.count > 1 ? 's' : ''}</p>
-                    <p className="text-white font-bold text-lg">{s.avgDelivered}</p>
-                    <p className="text-ds-text text-xs">entregas/mês (média)</p>
-                    {s.avgCT && (
-                      <p className="text-ds-text text-xs mt-1">CT médio: <span className="text-ds-green">{s.avgCT}d</span></p>
-                    )}
+          {/* ── cards por senioridade e cargo lado a lado ── */}
+          {(seniorityStats.length > 0 || roleStats.length > 0) && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Médias por Senioridade */}
+              {seniorityStats.length > 0 && (
+                <div>
+                  <h3 className="text-ds-light-text font-bold text-sm mb-3">📊 Médias por Senioridade</h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {seniorityStats.map(s => !s ? null : (
+                      <div
+                        key={s.seniority}
+                        className="bg-ds-navy border rounded-xl p-3 cursor-pointer transition-all hover:scale-[1.02]"
+                        style={{ borderColor: SENIORITY_COLORS[s.seniority as Seniority] + '60' }}
+                        onClick={() => setSelectedSeniority(prev => prev === s.seniority ? '__all__' : s.seniority)}
+                      >
+                        <span
+                          className="text-xs font-bold px-2 py-0.5 rounded-full border"
+                          style={{
+                            backgroundColor: SENIORITY_COLORS[s.seniority as Seniority] + '22',
+                            color: SENIORITY_COLORS[s.seniority as Seniority],
+                            borderColor: SENIORITY_COLORS[s.seniority as Seniority] + '50',
+                          }}
+                        >
+                          {s.seniority}
+                        </span>
+                        <p className="text-ds-text text-xs mt-2">{s.count} pessoa{s.count > 1 ? 's' : ''}</p>
+                        <p className="text-white font-bold text-lg">{s.avgDelivered}</p>
+                        <p className="text-ds-text text-xs">entregas (média)</p>
+                        {s.avgCT && (
+                          <p className="text-ds-text text-xs mt-1">CT médio: <span className="text-ds-green">{s.avgCT}d</span></p>
+                        )}
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                </div>
+              )}
+
+              {/* Médias por Cargo */}
+              {roleStats.length > 0 && (
+                <div>
+                  <h3 className="text-ds-light-text font-bold text-sm mb-3">💼 Médias por Cargo</h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {roleStats.map(r => !r ? null : (
+                      <div
+                        key={r.role}
+                        className="bg-ds-navy border rounded-xl p-3 cursor-pointer transition-all hover:scale-[1.02]"
+                        style={{ borderColor: ROLE_COLORS[r.role as Role] + '60' }}
+                        onClick={() => setSelectedRole(prev => prev === r.role ? '__all__' : r.role)}
+                      >
+                        <span
+                          className="text-xs font-bold px-2 py-0.5 rounded-full border"
+                          style={{
+                            backgroundColor: ROLE_COLORS[r.role as Role] + '22',
+                            color: ROLE_COLORS[r.role as Role],
+                            borderColor: ROLE_COLORS[r.role as Role] + '50',
+                          }}
+                        >
+                          {r.role}
+                        </span>
+                        <p className="text-ds-text text-xs mt-2">{r.count} pessoa{r.count > 1 ? 's' : ''}</p>
+                        <p className="text-white font-bold text-lg">{r.avgDelivered}</p>
+                        <p className="text-ds-text text-xs">entregas (média)</p>
+                        {r.avgCT && (
+                          <p className="text-ds-text text-xs mt-1">CT médio: <span className="text-ds-green">{r.avgCT}d</span></p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
