@@ -158,6 +158,78 @@ const ConfigModal: React.FC<ConfigModalProps> = ({ members, config, onSave, onCl
   );
 };
 
+// ─── Modal de detalhamento de tarefas ─────────────────────────────────────────
+interface ModalData {
+  title: string;
+  items: WorkItem[];
+  color: string;
+}
+
+const AZURE_DEVOPS_BASE_URL = 'https://dev.azure.com/datasystemsoftwares/USE/_workitems/edit';
+
+const ItemListModal: React.FC<{ data: ModalData | null; onClose: () => void }> = ({ data, onClose }) => {
+  if (!data) return null;
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50" onClick={onClose}>
+      <div
+        className="bg-ds-navy border border-ds-border rounded-xl shadow-2xl max-w-4xl w-full mx-4 max-h-[85vh] flex flex-col"
+        onClick={e => e.stopPropagation()}
+      >
+        <div
+          className="p-4 rounded-t-xl flex justify-between items-center"
+          style={{ backgroundColor: data.color + '33', borderBottom: `1px solid ${data.color}40` }}
+        >
+          <h2 className="text-white font-bold text-base">{data.title}</h2>
+          <button onClick={onClose} className="text-white hover:text-gray-200 text-2xl font-bold leading-none">×</button>
+        </div>
+
+        <div className="p-4 overflow-y-auto flex-1">
+          <p className="text-ds-text text-sm mb-3">
+            Total: <span className="font-bold text-white">{data.items.length}</span> {data.items.length === 1 ? 'item' : 'itens'}
+          </p>
+          <ul className="space-y-2">
+            {data.items.map((item, idx) => (
+              <li
+                key={item.workItemId || idx}
+                className="bg-ds-dark-blue border border-ds-border rounded-lg p-3 hover:border-ds-green transition-colors"
+              >
+                <div className="flex items-start gap-3">
+                  <span className="text-xs font-mono px-2 py-1 rounded shrink-0 text-white" style={{ backgroundColor: data.color + '44' }}>
+                    #{item.workItemId}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <a
+                      href={`${AZURE_DEVOPS_BASE_URL}/${item.workItemId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-white hover:text-ds-green font-medium block truncate mb-1"
+                      title={item.title}
+                    >
+                      {item.title}
+                    </a>
+                    <div className="grid grid-cols-2 gap-1 text-xs text-ds-text">
+                      <div>🏷️ {item.type}</div>
+                      <div>📊 {item.state}</div>
+                      {item.storyPoints ? <div>⚡ {item.storyPoints} SP</div> : null}
+                      {item.cycleTime ? <div>⏱️ {item.cycleTime.toFixed(1)}d CT</div> : null}
+                    </div>
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div className="p-4 border-t border-ds-border">
+          <button onClick={onClose} className="w-full bg-ds-border hover:bg-ds-green text-white py-2 px-4 rounded-lg transition-colors text-sm">
+            Fechar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ─── componente principal ────────────────────────────────────────────────────
 interface Props { data: WorkItem[]; }
 
@@ -181,6 +253,7 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
   );
   const [activePersons, setActivePersons] = useState<Set<string>>(new Set());
   const [selectedPerson, setSelectedPerson] = useState<string | null>(null);
+  const [modalData, setModalData] = useState<ModalData | null>(null);
 
   // ── carregar config do banco ao montar
   useEffect(() => {
@@ -643,7 +716,12 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
                 />
                 <YAxis tick={{ fill: '#8892B0', fontSize: 11 }} />
                 <Tooltip content={<CustomTooltip />} />
-                <Bar dataKey="Entregues" radius={[4, 4, 0, 0]} onClick={d => setSelectedPerson(d.fullName === selectedPerson ? null : d.fullName)}>
+                <Bar dataKey="Entregues" radius={[4, 4, 0, 0]} style={{ cursor: 'pointer' }} onClick={d => {
+                  const met = personMetrics[d.fullName];
+                  if (!met) return;
+                  const completed = met.items.filter(i => COMPLETED_STATES.includes(i.state));
+                  setModalData({ title: `Itens Entregues — ${d.fullName}`, items: completed, color: d.color });
+                }}>
                   {throughputChartData.map((d, i) => (
                     <Cell
                       key={i}
@@ -687,7 +765,12 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
                     width={80}
                   />
                   <Tooltip content={<CustomTooltip />} />
-                  <Bar dataKey="Cycle Time Médio" radius={[0, 4, 4, 0]}>
+                  <Bar dataKey="Cycle Time Médio" radius={[0, 4, 4, 0]} style={{ cursor: 'pointer' }} onClick={d => {
+                    const met = personMetrics[d.fullName];
+                    if (!met) return;
+                    const completed = met.items.filter(i => COMPLETED_STATES.includes(i.state));
+                    setModalData({ title: `Cycle Time — ${d.fullName}`, items: completed, color: d.color });
+                  }}>
                     {cycleTimeChartData.map((d, i) => (
                       <Cell key={i} fill={d.color} />
                     ))}
@@ -857,7 +940,11 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
                         borderColor: isSelected ? SENIORITY_COLORS[mc.seniority] : '#303C55',
                         boxShadow: isSelected ? `0 0 0 1px ${SENIORITY_COLORS[mc.seniority]}60` : undefined,
                       }}
-                      onClick={() => setSelectedPerson(prev => prev === mc.name ? null : mc.name)}
+                      onClick={() => {
+                        const met = personMetrics[mc.name];
+                        if (!met) return;
+                        setModalData({ title: `Tarefas — ${mc.name}`, items: met.items, color: SENIORITY_COLORS[mc.seniority] });
+                      }}
                     >
                       {/* header do card */}
                       <div className="flex items-center gap-3 mb-3">
@@ -891,13 +978,9 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
                           <p className="text-ds-text mb-0.5">Em Andamento</p>
                           <p className="text-yellow-300 font-bold text-xl">{met?.inProgress ?? 0}</p>
                         </div>
-                        <div className="bg-ds-dark-blue rounded-lg p-2 text-center">
+                        <div className="bg-ds-dark-blue rounded-lg p-2 text-center col-span-2">
                           <p className="text-ds-text mb-0.5">CT Médio</p>
                           <p className="text-white font-bold text-base">{fmtCT(met?.avgCycleTime)}</p>
-                        </div>
-                        <div className="bg-ds-dark-blue rounded-lg p-2 text-center">
-                          <p className="text-ds-text mb-0.5">Story Points</p>
-                          <p className="text-blue-300 font-bold text-base">{met?.storyPoints ?? 0}</p>
                         </div>
                       </div>
 
@@ -944,6 +1027,9 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
           </div>
         </>
       )}
+
+      {/* ── modal de detalhamento de tarefas ── */}
+      <ItemListModal data={modalData} onClose={() => setModalData(null)} />
 
       {/* ── modal config ── */}
       {showConfig && (
