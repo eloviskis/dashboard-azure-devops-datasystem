@@ -25,8 +25,8 @@ const getWorkItemUrl = (workItemId: number | string): string => {
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
     return (
-      <div style={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }}>
-        <p style={{ color: '#64ffda', fontWeight: 'bold', marginBottom: '5px' }}>{String(label)}</p>
+      <div className="chart-tooltip">
+        <p className="chart-tooltip-title">{String(label)}</p>
         {payload.map((entry: any, index: number) => {
           // Garantir que só valores primitivos sejam renderizados
           const value = typeof entry.value === 'object' ? JSON.stringify(entry.value) : String(entry.value);
@@ -414,10 +414,10 @@ const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data: rawData
                     if (!active || !payload?.length) return null;
                     const d = payload[0].payload;
                     return (
-                      <div style={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }}>
-                        <p style={{ color: '#64ffda', fontWeight: 'bold' }}>{String(label)}</p>
+                      <div className="chart-tooltip">
+                        <p className="chart-tooltip-title--no-mb">{String(label)}</p>
                         <p>MTTR: <strong>{String(d.mttr)} dias</strong></p>
-                        <p style={{ color: '#a0aec0', fontSize: '12px' }}>{String(d.count)} issues resolvidas</p>
+                        <p className="chart-tooltip-subtle">{String(d.count)} issues resolvidas</p>
                       </div>
                     );
                   }}
@@ -472,9 +472,9 @@ const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data: rawData
                       if (!active || !payload?.length) return null;
                       const d = payload[0].payload;
                       return (
-                        <div style={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }}>
+                        <div className="chart-tooltip">
                           <p style={{ color: d.fill, fontWeight: 'bold' }}>{String(d.name)}</p>
-                          <p>{String(d.value)} issues — <span style={{ color: '#64ffda', fontSize: 11 }}>clique para ver</span></p>
+                          <p>{String(d.value)} issues — <span className="chart-tooltip-cta">clique para ver</span></p>
                         </div>
                       );
                     }}

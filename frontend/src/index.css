@@ -68,3 +68,29 @@ body {
 }
 .login-btn:hover:not(:disabled) { filter: brightness(1.1); }
 .login-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ─── Chart Tooltip (Recharts custom tooltips) ─── */
+.chart-tooltip {
+  background-color: #0a192f;
+  border: 1px solid #64ffda;
+  border-radius: 8px;
+  color: #e6f1ff;
+  padding: 10px 14px;
+}
+.chart-tooltip-title {
+  color: #64ffda;
+  font-weight: bold;
+  margin-bottom: 5px;
+}
+.chart-tooltip-title--no-mb {
+  color: #64ffda;
+  font-weight: bold;
+}
+.chart-tooltip-subtle {
+  color: #a0aec0;
+  font-size: 12px;
+}
+.chart-tooltip-cta {
+  color: #64ffda;
+  font-size: 11px;
+}
