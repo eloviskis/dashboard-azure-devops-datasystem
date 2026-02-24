@@ -1270,7 +1270,7 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
       {/* ── modal config ── */}
       {showConfig && (
         <ConfigModal
-          members={allMembers}
+          members={allMembers.filter(name => activeConfig[name] !== false)}
           config={seniorityConfig}
           roleConfig={roleConfig}
           onSave={handleSaveConfig}
