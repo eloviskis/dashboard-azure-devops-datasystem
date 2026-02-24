@@ -310,6 +310,7 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
   const [activePersons, setActivePersons] = useState<Set<string>>(new Set());
   const [selectedPerson, setSelectedPerson] = useState<string | null>(null);
   const [modalData, setModalData] = useState<ModalData | null>(null);
+  const [filterBarCollapsed, setFilterBarCollapsed] = useState(false);
 
   // ── carregar config do banco ao montar (seniority + role + active)
   useEffect(() => {
@@ -678,6 +679,16 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
   return (
     <div className="space-y-6">
       {/* ── barra de filtros ── */}
+      <div className="relative">
+        <button
+          onClick={() => setFilterBarCollapsed(!filterBarCollapsed)}
+          className="w-full flex items-center justify-center gap-2 py-1.5 text-xs text-ds-muted hover:text-ds-light-text bg-ds-navy/50 hover:bg-ds-navy border border-ds-border rounded-lg transition-colors"
+          title={filterBarCollapsed ? 'Mostrar filtros' : 'Recolher filtros'}
+        >
+          <span>{filterBarCollapsed ? '▼ Mostrar Filtros' : '▲ Recolher Filtros'}</span>
+        </button>
+      </div>
+      {!filterBarCollapsed && (
       <div className="bg-ds-navy p-4 rounded-xl border border-ds-border flex flex-wrap items-end gap-4">
         <div>
           <label htmlFor="tc-team" className="block text-ds-text text-xs mb-1">Time</label>
@@ -811,7 +822,24 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
             <span className="text-xs text-ds-text opacity-50">Senioridade configurada pelo admin</span>
           )}
         </div>
+
+        {/* ── botão limpar filtros ── */}
+        <button
+          onClick={() => {
+            setSelectedTeam('__all__');
+            setSelectedSeniority('__all__');
+            setSelectedRole('__all__');
+            setShowOnlyActive(false);
+            setHistoryMonths(6);
+            setCustomStart(format(subMonths(new Date(), 5), 'yyyy-MM-dd'));
+            setCustomEnd(format(new Date(), 'yyyy-MM-dd'));
+          }}
+          className="bg-ds-muted/20 text-ds-light-text font-semibold py-2 px-4 rounded-md hover:bg-ds-muted/40 transition-colors text-sm"
+        >
+          Limpar Filtros
+        </button>
       </div>
+      )}
 
       {/* ── se não há dados ── */}
       {!hasData && (
