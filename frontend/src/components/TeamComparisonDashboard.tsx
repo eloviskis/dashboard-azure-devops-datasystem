@@ -244,11 +244,47 @@ const ROLE_COLORS: Record<Role, string> = {
   'Outros': '#a0aec0',
 };
 
-const ConfigModal: React.FC<ConfigModalProps> = ({ members, config, roleConfig, admissionConfig, avatarConfig, onSave, onClose }) => {
+const ConfigModal: React.FC<ConfigModalProps> = ({ members, config, roleConfig, admissionConfig, avatarConfig, onSave, onClose, token, apiUrl }) => {
   const [local, setLocal] = useState<SeniorityConfigMap>({ ...config });
   const [localRole, setLocalRole] = useState<RoleConfigMap>({ ...roleConfig });
   const [localAdmission, setLocalAdmission] = useState<AdmissionConfigMap>({ ...admissionConfig });
   const [localAvatar, setLocalAvatar] = useState<AvatarConfigMap>({ ...avatarConfig });
+  const [importingAvatars, setImportingAvatars] = useState(false);
+
+  // Função para importar avatars do Azure DevOps
+  const handleImportAzureAvatars = async () => {
+    if (!token || !apiUrl) return;
+    setImportingAvatars(true);
+    try {
+      const res = await fetch(`${apiUrl}/api/team-avatars`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.avatars) {
+          // Mesclar avatars importados com os existentes (prioridade para os já definidos manualmente)
+          const merged = { ...localAvatar };
+          for (const memberName of members) {
+            // Só importa se não tiver avatar definido
+            if (!merged[memberName] && !merged[memberName.toUpperCase()]) {
+              // Busca case-insensitive no resultado da API
+              const azureKey = Object.keys(data.avatars).find(
+                k => k.toUpperCase() === memberName.toUpperCase()
+              );
+              if (azureKey && data.avatars[azureKey]) {
+                merged[memberName] = data.avatars[azureKey];
+              }
+            }
+          }
+          setLocalAvatar(merged);
+        }
+      }
+    } catch (e) {
+      console.error('Erro ao importar avatars do Azure:', e);
+    } finally {
+      setImportingAvatars(false);
+    }
+  };
 
   // Busca case-insensitive para data de admissão
   const findAdmission = (name: string): string => {
@@ -419,13 +455,27 @@ const ConfigModal: React.FC<ConfigModalProps> = ({ members, config, roleConfig, 
           </div>
         </div>
 
-        <div className="p-4 border-t border-ds-border flex gap-3 justify-end">
-          <button onClick={onClose} className="px-4 py-2 text-sm text-ds-text border border-ds-border rounded-lg hover:bg-ds-dark-blue transition-colors">
-            Cancelar
+        <div className="p-4 border-t border-ds-border flex gap-3 justify-between">
+          <button
+            onClick={handleImportAzureAvatars}
+            disabled={importingAvatars || !token}
+            className="px-4 py-2 text-sm bg-ds-dark-blue border border-ds-border text-ds-light-text rounded-lg hover:bg-ds-navy transition-colors disabled:opacity-50 flex items-center gap-2"
+            title="Importar fotos de perfil do Azure DevOps"
+          >
+            {importingAvatars ? (
+              <>⏳ Importando...</>
+            ) : (
+              <>☁️ Importar Fotos do Azure</>
+            )}
           </button>
-          <button onClick={handleSave} className="px-4 py-2 text-sm bg-ds-green/20 border border-ds-green/40 text-ds-green rounded-lg hover:bg-ds-green/30 transition-colors font-semibold">
-            Salvar Configuração
-          </button>
+          <div className="flex gap-3">
+            <button onClick={onClose} className="px-4 py-2 text-sm text-ds-text border border-ds-border rounded-lg hover:bg-ds-dark-blue transition-colors">
+              Cancelar
+            </button>
+            <button onClick={handleSave} className="px-4 py-2 text-sm bg-ds-green/20 border border-ds-green/40 text-ds-green rounded-lg hover:bg-ds-green/30 transition-colors font-semibold">
+              Salvar Configuração
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -1720,6 +1770,8 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
           avatarConfig={avatarConfig}
           onSave={handleSaveConfig}
           onClose={() => setShowConfig(false)}
+          token={token}
+          apiUrl={API_URL}
         />
       )}
     </div>

@@ -334,6 +334,16 @@ const initDatabase = async () => {
     `;
     console.log('✅ app_settings table ready');
 
+    // Tabela para armazenar avatars dos membros (extraídos do Azure DevOps)
+    await sql`
+      CREATE TABLE IF NOT EXISTS team_member_avatars (
+        name TEXT PRIMARY KEY,
+        image_url TEXT NOT NULL,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `;
+    console.log('✅ team_member_avatars table ready');
+
     // Criar usuário admin padrão se não existir
     const adminExists = await sql`SELECT id FROM users WHERE username = 'admin'`;
     if (adminExists.length === 0) {
@@ -420,6 +430,36 @@ async function syncData() {
       }
 
       // Salvar no banco
+      // Coletar avatars dos membros durante a sync
+      const memberAvatars = new Map();
+      for (const item of allWorkItems) {
+        const fields = item.fields || {};
+        // Extrair avatar do AssignedTo
+        const assignedToObj = fields['System.AssignedTo'];
+        if (assignedToObj?.displayName && assignedToObj?.imageUrl) {
+          memberAvatars.set(assignedToObj.displayName, assignedToObj.imageUrl);
+        }
+        // Extrair avatar do CreatedBy
+        const createdByObj = fields['System.CreatedBy'];
+        if (createdByObj?.displayName && createdByObj?.imageUrl) {
+          memberAvatars.set(createdByObj.displayName, createdByObj.imageUrl);
+        }
+      }
+
+      // Salvar avatars no banco
+      for (const [name, imageUrl] of memberAvatars) {
+        try {
+          await sql`
+            INSERT INTO team_member_avatars (name, image_url, updated_at)
+            VALUES (${name}, ${imageUrl}, CURRENT_TIMESTAMP)
+            ON CONFLICT (name) DO UPDATE SET
+              image_url = EXCLUDED.image_url,
+              updated_at = CURRENT_TIMESTAMP
+          `;
+        } catch (e) { /* ignore individual errors */ }
+      }
+      console.log(`   Saved ${memberAvatars.size} member avatars`);
+
       for (const item of allWorkItems) {
         const fields = item.fields || {};
         const workItemId = item.id;
@@ -963,6 +1003,25 @@ app.put('/api/settings/:key', authenticateToken, requireAdmin, async (req, res) 
   } catch (error) {
     console.error('❌ Error saving setting:', error);
     res.status(500).json({ error: 'Erro ao salvar configuração' });
+  }
+});
+
+// ===========================================
+// TEAM MEMBER AVATARS ENDPOINT
+// ===========================================
+
+// Buscar todos os avatars dos membros (extraídos do Azure DevOps)
+app.get('/api/team-avatars', authenticateToken, async (req, res) => {
+  try {
+    const rows = await sql`SELECT name, image_url, updated_at FROM team_member_avatars ORDER BY name`;
+    const avatars = {};
+    for (const row of rows) {
+      avatars[row.name] = row.image_url;
+    }
+    res.json({ success: true, avatars, count: rows.length });
+  } catch (error) {
+    console.error('❌ Error fetching team avatars:', error);
+    res.status(500).json({ error: 'Erro ao buscar avatars' });
   }
 });
 
