@@ -311,6 +311,58 @@ async function saveWorkItems(items) {
   return saved;
 }
 
+// Extrair e salvar avatars dos membros da equipe
+async function saveAvatars(items) {
+  const client = await pool.connect();
+  const memberAvatars = new Map();
+  
+  console.log('🖼️  Extraindo avatars dos membros...');
+  
+  // Extrair avatars de AssignedTo e CreatedBy
+  for (const item of items) {
+    const f = item.fields || {};
+    const assignedToObj = f['System.AssignedTo'];
+    if (assignedToObj?.displayName && assignedToObj?.imageUrl) {
+      memberAvatars.set(assignedToObj.displayName, assignedToObj.imageUrl);
+    }
+    const createdByObj = f['System.CreatedBy'];
+    if (createdByObj?.displayName && createdByObj?.imageUrl) {
+      memberAvatars.set(createdByObj.displayName, createdByObj.imageUrl);
+    }
+  }
+  
+  let saved = 0;
+  try {
+    // Criar tabela se não existir
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS team_member_avatars (
+        name TEXT PRIMARY KEY,
+        image_url TEXT NOT NULL,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    
+    for (const [name, imageUrl] of memberAvatars) {
+      try {
+        await client.query(`
+          INSERT INTO team_member_avatars (name, image_url, updated_at)
+          VALUES ($1, $2, CURRENT_TIMESTAMP)
+          ON CONFLICT (name) DO UPDATE SET
+            image_url = EXCLUDED.image_url,
+            updated_at = CURRENT_TIMESTAMP
+        `, [name, imageUrl]);
+        saved++;
+      } catch (e) { /* ignore individual errors */ }
+    }
+    
+    console.log(`   ✅ ${saved} avatars salvos`);
+  } finally {
+    client.release();
+  }
+  
+  return saved;
+}
+
 async function savePullRequests(prs) {
   const client = await pool.connect();
   const syncedAt = new Date().toISOString();
@@ -388,6 +440,9 @@ async function runSync() {
     const items = await fetchWorkItems();
     const itemsSaved = await saveWorkItems(items);
     
+    // Extrair e salvar avatars dos membros
+    const avatarsSaved = await saveAvatars(items);
+    
     // Buscar e salvar PRs
     const prs = await fetchPullRequests();
     const prsSaved = await savePullRequests(prs);
@@ -398,6 +453,7 @@ async function runSync() {
     console.log('\n' + '='.repeat(60));
     console.log(`✅ Sincronização concluída com sucesso!`);
     console.log(`   Work Items: ${itemsSaved}`);
+    console.log(`   Avatars: ${avatarsSaved}`);
     console.log(`   Pull Requests: ${prsSaved}`);
     console.log('='.repeat(60) + '\n');
     
