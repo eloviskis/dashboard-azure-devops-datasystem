@@ -20,6 +20,8 @@ interface MemberConfig {
   role: Role;
   active: boolean;
   color?: string;
+  admissionDate?: string;
+  yearsAtCompany: number | null;
 }
 
 interface SeniorityConfigMap {
@@ -32,6 +34,10 @@ interface RoleConfigMap {
 
 interface ActiveConfigMap {
   [name: string]: boolean;
+}
+
+interface AdmissionConfigMap {
+  [name: string]: string; // formato: 'YYYY-MM-DD'
 }
 
 // ─── constantes ──────────────────────────────────────────────────────────────
@@ -63,12 +69,81 @@ const PERSON_PALETTE = [
 
 const COMPLETED_STATES = ['Done','Concluído','Closed','Fechado','Finished','Resolved','Pronto'];
 
+// Faixas de anos de empresa para filtro
+const YEARS_RANGES = [
+  { label: '< 1 ano', min: 0, max: 1 },
+  { label: '1-3 anos', min: 1, max: 3 },
+  { label: '3-5 anos', min: 3, max: 5 },
+  { label: '5-10 anos', min: 5, max: 10 },
+  { label: '10+ anos', min: 10, max: 999 },
+];
+
+// Dados iniciais de admissão (dd/mm/yyyy -> yyyy-mm-dd)
+const DEFAULT_ADMISSION_DATA: Record<string, string> = {
+  'ADEMILSON DE ALMEIDA': '2021-04-05',
+  'ALLAN KELVIN DOS SANTOS': '2025-04-07',
+  'ANA BEATRIZ MARTINI MATHEUS': '2024-09-11',
+  'BRUNA DA SILVA TOGNOLLI': '2025-02-10',
+  'BRUNO MIRANDA E SOUSA': '2015-02-09',
+  'CAMILA SOUSA ALVES': '2024-06-17',
+  'CARLOS EDUARDO BATISTA': '2025-05-05',
+  'DANIEL DAVI LIBANEO': '2023-06-14',
+  'DAVID VINICIUS ALVES': '2020-09-01',
+  'DOUGLAS HENRIQUE FERREIRA': '2025-06-09',
+  'ELOI CARLOS SANTAROZA': '2024-06-03',
+  'FABRICIO BELON': '2007-12-12',
+  'FELIPE FURLAM CAGNIN': '2022-07-12',
+  'FELIPE MARQUES BUENO': '2025-06-09',
+  'FERNANDA AIME GOMES DA SILVA': '2025-07-07',
+  'FRANCIELLY CRISTINE SILVA DOS SANTOS': '2025-07-21',
+  'GABRIEL DIAS ROCHA': '2026-01-12',
+  'GABRIEL HENRIQUE FOLI': '2022-07-12',
+  'GIOVANNA PAOLA LUNETTA CREPALDI MATIAS': '2024-06-03',
+  'GUILHERME HENRIQUE DE OLIVEIRA BARBOZA': '2024-01-02',
+  'GUILHERME JOSE DA SILVA': '2026-01-19',
+  'HUXLEY RUANIS LOPES GOMES': '2019-12-16',
+  'JESSICA ROCHA CARDOSO': '2025-07-07',
+  'JOAO VICTOR BRAYNER ANTUNES DA SILVA': '2025-04-14',
+  'JOAO VITOR PEDON BONTEMPO': '2026-01-19',
+  'JONAS HENRIQUE LANGE': '2020-11-10',
+  'JULIANA RODRIGUES DE SOUZA': '2025-09-01',
+  'KAREN EDUARDA RIBEIRO DOS SANTOS': '2021-10-04',
+  'LARISSA KREISEL PELEGRINO': '2022-10-10',
+  'LUIS GUSTAVO FIGUEIREDO BIANQUINI': '2025-07-07',
+  'LUIZ FELIPE XAVIER': '2023-07-19',
+  'MAIRA FERREIRA SOARES SCOMPARIM': '2024-12-02',
+  'MATEUS BACCE KUHL': '2025-05-08',
+  'MATHEUS DE ANDRADE': '2019-10-15',
+  'MAYCON DANIEL DA SILVA': '2025-02-10',
+  'MIZAEL DOUGLAS DE MELLO': '2025-03-17',
+  'NATHALIA CRISTINA DO NASCIMENTO': '2022-09-01',
+  'NATHALIA TESCH GONCALVES': '2025-05-12',
+  'OVIRSION EDSON DOS SANTOS': '2024-10-16',
+  'RAFAEL FARIAS BEZERRA': '2024-12-02',
+  'REBECA PERSIKE': '2013-08-19',
+  'RODRIGO CONCEICAO BEZERRA': '2025-06-16',
+  'RODRIGO FABIANO DE FREITAS': '2005-06-01',
+  'SAMUEL CASTILHO ROCHA': '2025-06-02',
+  'SANDRA DE GASPARI MARCHESIN': '2011-01-01',
+  'TALLES CRHISTIAN ARRIEL': '2025-01-15',
+  'TIAGO LUIS XAVIER': '2025-03-10',
+  'VALDECIR TACITO LEITE': '2019-07-10',
+  'VINICIUS AUGUSTO FERREIRA': '2012-07-16',
+  'VINICIUS DE OLIVEIRA': '2025-11-17',
+  'WALTER GIMA': '2023-11-01',
+  'WELLINGTON PEREIRA DE ALMEIDA': '2021-12-01',
+  'WESLEY DA ROCHA': '2021-05-03',
+  'WILLIAM CESAR SOARES DE CAMARGO': '2025-03-10',
+};
+
 const STORAGE_KEY = 'tc_seniority_config_v2';
 const SETTINGS_KEY = 'seniority_config';
 const ROLE_KEY = 'tc_role_config_v1';
 const ACTIVE_KEY = 'tc_active_config_v1';
+const ADMISSION_KEY = 'tc_admission_config_v1';
 const ROLE_SETTINGS_KEY = 'role_config';
 const ACTIVE_SETTINGS_KEY = 'active_config';
+const ADMISSION_SETTINGS_KEY = 'admission_config';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 const loadLocalConfig = (): SeniorityConfigMap => {
@@ -87,6 +162,38 @@ const loadActiveConfig = (): ActiveConfigMap => {
   try { return JSON.parse(localStorage.getItem(ACTIVE_KEY) || '{}'); } catch { return {}; }
 };
 const saveActiveConfig = (cfg: ActiveConfigMap) => localStorage.setItem(ACTIVE_KEY, JSON.stringify(cfg));
+
+const loadAdmissionConfig = (): AdmissionConfigMap => {
+  try {
+    const saved = JSON.parse(localStorage.getItem(ADMISSION_KEY) || '{}');
+    // Mescla dados iniciais com salvos (salvos têm prioridade)
+    return { ...DEFAULT_ADMISSION_DATA, ...saved };
+  } catch {
+    return { ...DEFAULT_ADMISSION_DATA };
+  }
+};
+const saveAdmissionConfig = (cfg: AdmissionConfigMap) => localStorage.setItem(ADMISSION_KEY, JSON.stringify(cfg));
+
+// Calcula anos de empresa a partir da data de admissão
+const calcYearsAtCompany = (admissionDate: string | undefined): number | null => {
+  if (!admissionDate) return null;
+  const admission = new Date(admissionDate);
+  const now = new Date();
+  const diffMs = now.getTime() - admission.getTime();
+  const years = diffMs / (1000 * 60 * 60 * 24 * 365.25);
+  return Math.max(0, years);
+};
+
+// Formata anos de empresa para exibição
+const formatYearsAtCompany = (years: number | null): string => {
+  if (years === null) return '';
+  if (years < 1) {
+    const months = Math.floor(years * 12);
+    return months <= 1 ? '< 1 mês de DS' : `${months} meses de DS`;
+  }
+  const fullYears = Math.floor(years);
+  return fullYears === 1 ? '1 ano de DS' : `${fullYears} anos de DS`;
+};
 
 const abbrev = (name: string) =>
   name.split(' ').filter(Boolean).map(p => p[0]).join('').toUpperCase().slice(0, 2);
@@ -112,7 +219,8 @@ interface ConfigModalProps {
   members: string[];
   config: SeniorityConfigMap;
   roleConfig: RoleConfigMap;
-  onSave: (cfg: SeniorityConfigMap, roleCfg: RoleConfigMap) => void;
+  admissionConfig: AdmissionConfigMap;
+  onSave: (cfg: SeniorityConfigMap, roleCfg: RoleConfigMap, admissionCfg: AdmissionConfigMap) => void;
   onClose: () => void;
 }
 
@@ -123,9 +231,10 @@ const ROLE_COLORS: Record<Role, string> = {
   'Outros': '#a0aec0',
 };
 
-const ConfigModal: React.FC<ConfigModalProps> = ({ members, config, roleConfig, onSave, onClose }) => {
+const ConfigModal: React.FC<ConfigModalProps> = ({ members, config, roleConfig, admissionConfig, onSave, onClose }) => {
   const [local, setLocal] = useState<SeniorityConfigMap>({ ...config });
   const [localRole, setLocalRole] = useState<RoleConfigMap>({ ...roleConfig });
+  const [localAdmission, setLocalAdmission] = useState<AdmissionConfigMap>({ ...admissionConfig });
 
   const handleChange = (name: string, value: Seniority) => {
     setLocal(prev => ({ ...prev, [name]: value }));
@@ -135,7 +244,11 @@ const ConfigModal: React.FC<ConfigModalProps> = ({ members, config, roleConfig, 
     setLocalRole(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleSave = () => { onSave(local, localRole); onClose(); };
+  const handleAdmissionChange = (name: string, value: string) => {
+    setLocalAdmission(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleSave = () => { onSave(local, localRole, localAdmission); onClose(); };
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50" onClick={onClose}>
@@ -156,6 +269,8 @@ const ConfigModal: React.FC<ConfigModalProps> = ({ members, config, roleConfig, 
             {members.map(name => {
               const current = local[name] ?? 'Pleno';
               const currentRole = localRole[name] ?? 'DEV';
+              const currentAdmission = localAdmission[name] ?? '';
+              const yearsAtCompany = calcYearsAtCompany(currentAdmission);
               return (
                 <div key={name} className="bg-ds-dark-blue border border-ds-border rounded-lg p-3 flex items-center gap-3">
                   <div
@@ -166,30 +281,51 @@ const ConfigModal: React.FC<ConfigModalProps> = ({ members, config, roleConfig, 
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-white text-sm font-medium truncate">{name}</p>
-                    <label htmlFor={`sen-${name}`} className="sr-only">Senioridade de {name}</label>
-                    <select
-                      id={`sen-${name}`}
-                      value={current}
-                      onChange={e => handleChange(name, e.target.value as Seniority)}
-                      className="mt-1 w-full bg-ds-navy border border-ds-border text-ds-light-text text-xs rounded-md px-2 py-1"
-                      style={{ borderColor: SENIORITY_COLORS[current] + '60' }}
-                    >
-                      {SENIORITY_OPTIONS.map(s => (
-                        <option key={s} value={s}>{s}</option>
-                      ))}
-                    </select>
-                    <label htmlFor={`role-${name}`} className="sr-only">Cargo de {name}</label>
-                    <select
-                      id={`role-${name}`}
-                      value={currentRole}
-                      onChange={e => handleRoleChange(name, e.target.value as Role)}
-                      className="mt-1 w-full bg-ds-navy border border-ds-border text-ds-light-text text-xs rounded-md px-2 py-1"
-                      style={{ borderColor: ROLE_COLORS[currentRole] + '60' }}
-                    >
-                      {ROLE_OPTIONS.map(r => (
-                        <option key={r} value={r}>{r}</option>
-                      ))}
-                    </select>
+                    <div className="grid grid-cols-2 gap-1 mt-1">
+                      <div>
+                        <label htmlFor={`sen-${name}`} className="sr-only">Senioridade de {name}</label>
+                        <select
+                          id={`sen-${name}`}
+                          value={current}
+                          onChange={e => handleChange(name, e.target.value as Seniority)}
+                          className="w-full bg-ds-navy border border-ds-border text-ds-light-text text-xs rounded-md px-2 py-1"
+                          style={{ borderColor: SENIORITY_COLORS[current] + '60' }}
+                        >
+                          {SENIORITY_OPTIONS.map(s => (
+                            <option key={s} value={s}>{s}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label htmlFor={`role-${name}`} className="sr-only">Cargo de {name}</label>
+                        <select
+                          id={`role-${name}`}
+                          value={currentRole}
+                          onChange={e => handleRoleChange(name, e.target.value as Role)}
+                          className="w-full bg-ds-navy border border-ds-border text-ds-light-text text-xs rounded-md px-2 py-1"
+                          style={{ borderColor: ROLE_COLORS[currentRole] + '60' }}
+                        >
+                          {ROLE_OPTIONS.map(r => (
+                            <option key={r} value={r}>{r}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    <div className="mt-1">
+                      <label htmlFor={`admission-${name}`} className="text-ds-text text-[10px]">Admissão</label>
+                      <input
+                        id={`admission-${name}`}
+                        type="date"
+                        value={currentAdmission}
+                        onChange={e => handleAdmissionChange(name, e.target.value)}
+                        className="w-full bg-ds-navy border border-ds-border text-ds-light-text text-xs rounded-md px-2 py-1"
+                      />
+                      {yearsAtCompany !== null && (
+                        <span className="text-[10px] text-ds-green mt-0.5 block">
+                          {formatYearsAtCompany(yearsAtCompany)}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
@@ -292,6 +428,7 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
   const [seniorityConfig, setSeniorityConfig] = useState<SeniorityConfigMap>(loadLocalConfig);
   const [roleConfig, setRoleConfig] = useState<RoleConfigMap>(loadRoleConfig);
   const [activeConfig, setActiveConfig] = useState<ActiveConfigMap>(loadActiveConfig);
+  const [admissionConfig, setAdmissionConfig] = useState<AdmissionConfigMap>(loadAdmissionConfig);
   const [configMeta, setConfigMeta] = useState<{ updatedBy?: string; updatedAt?: string } | null>(null);
   const [configLoading, setConfigLoading] = useState(true);
   const [configSaving, setConfigSaving] = useState(false);
@@ -299,6 +436,7 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
   const [selectedTeam, setSelectedTeam] = useState<string>('__all__');
   const [selectedSeniority, setSelectedSeniority] = useState<string>('__all__');
   const [selectedRole, setSelectedRole] = useState<string>('__all__');
+  const [selectedYearsRange, setSelectedYearsRange] = useState<string>('__all__');
   const [showOnlyActive, setShowOnlyActive] = useState<boolean>(false);
   const [historyMonths, setHistoryMonths] = useState<number>(6);
   const [customStart, setCustomStart] = useState<string>(
@@ -312,15 +450,16 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
   const [modalData, setModalData] = useState<ModalData | null>(null);
   const [filterBarCollapsed, setFilterBarCollapsed] = useState(false);
 
-  // ── carregar config do banco ao montar (seniority + role + active)
+  // ── carregar config do banco ao montar (seniority + role + active + admission)
   useEffect(() => {
     const fetchConfig = async () => {
       try {
         const headers = { 'Authorization': `Bearer ${token}` };
-        const [senRes, roleRes, activeRes] = await Promise.all([
+        const [senRes, roleRes, activeRes, admissionRes] = await Promise.all([
           fetch(`${API_URL}/api/settings/${SETTINGS_KEY}`, { headers }),
           fetch(`${API_URL}/api/settings/${ROLE_SETTINGS_KEY}`, { headers }),
           fetch(`${API_URL}/api/settings/${ACTIVE_SETTINGS_KEY}`, { headers }),
+          fetch(`${API_URL}/api/settings/${ADMISSION_SETTINGS_KEY}`, { headers }),
         ]);
         if (senRes.ok) {
           const d = await senRes.json();
@@ -337,6 +476,10 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
         if (activeRes.ok) {
           const d = await activeRes.json();
           if (d.value) { setActiveConfig(d.value); saveActiveConfig(d.value); }
+        }
+        if (admissionRes.ok) {
+          const d = await admissionRes.json();
+          if (d.value) { setAdmissionConfig(d.value); saveAdmissionConfig(d.value); }
         }
       } catch {
         // sem conexão: usa localStorage já carregado
@@ -367,11 +510,13 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
   );
 
   // ── salvar config (admin: banco + localStorage; outro: apenas localStorage)
-  const handleSaveConfig = useCallback(async (cfg: SeniorityConfigMap, roleCfg: RoleConfigMap) => {
+  const handleSaveConfig = useCallback(async (cfg: SeniorityConfigMap, roleCfg: RoleConfigMap, admissionCfg: AdmissionConfigMap) => {
     setSeniorityConfig(cfg);
     saveLocalConfig(cfg);
     setRoleConfig(roleCfg);
     saveRoleConfig(roleCfg);
+    setAdmissionConfig(admissionCfg);
+    saveAdmissionConfig(admissionCfg);
     if (!isAdmin) return;
     setConfigSaving(true);
     try {
@@ -382,6 +527,9 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
         }),
         fetch(`${API_URL}/api/settings/${ROLE_SETTINGS_KEY}`, {
           method: 'PUT', headers, body: JSON.stringify({ value: roleCfg }),
+        }),
+        fetch(`${API_URL}/api/settings/${ADMISSION_SETTINGS_KEY}`, {
+          method: 'PUT', headers, body: JSON.stringify({ value: admissionCfg }),
         }),
       ]);
       if (senRes.ok) {
@@ -403,24 +551,38 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
     return eachMonthOfInterval({ start: startOfMonth(start), end: endOfMonth(end) });
   }, [historyMonths, customStart, customEnd]);
 
-  // ── configuração dos membros (com seniority, role, active e cor)
+  // ── configuração dos membros (com seniority, role, active, admissão e cor)
   const memberConfigs = useMemo((): MemberConfig[] => {
-    return allMembers.map((name, idx) => ({
-      name,
-      seniority: seniorityConfig[name] ?? 'Pleno',
-      role: roleConfig[name] ?? 'DEV',
-      active: activeConfig[name] !== false,
-      color: PERSON_PALETTE[idx % PERSON_PALETTE.length],
-    }));
-  }, [allMembers, seniorityConfig, roleConfig, activeConfig]);
+    return allMembers.map((name, idx) => {
+      const admissionDate = admissionConfig[name];
+      return {
+        name,
+        seniority: seniorityConfig[name] ?? 'Pleno',
+        role: roleConfig[name] ?? 'DEV',
+        active: activeConfig[name] !== false,
+        color: PERSON_PALETTE[idx % PERSON_PALETTE.length],
+        admissionDate,
+        yearsAtCompany: calcYearsAtCompany(admissionDate),
+      };
+    });
+  }, [allMembers, seniorityConfig, roleConfig, activeConfig, admissionConfig]);
 
-  // ── membros filtrados por senioridade, cargo e status
+  // ── membros filtrados por senioridade, cargo, status e anos de empresa
   const filteredMembers = useMemo(() => {
     let result = memberConfigs;
     if (selectedSeniority !== '__all__') result = result.filter(m => m.seniority === selectedSeniority);
     if (selectedRole !== '__all__') result = result.filter(m => m.role === selectedRole);
+    if (selectedYearsRange !== '__all__') {
+      const range = YEARS_RANGES.find(r => r.label === selectedYearsRange);
+      if (range) {
+        result = result.filter(m => {
+          if (m.yearsAtCompany === null) return false;
+          return m.yearsAtCompany >= range.min && m.yearsAtCompany < range.max;
+        });
+      }
+    }
     return result;
-  }, [memberConfigs, selectedSeniority, selectedRole]);
+  }, [memberConfigs, selectedSeniority, selectedRole, selectedYearsRange]);
 
   // ── apenas membros ativos (usados em gráficos e métricas agregadas)
   // sempre exclui inativos dos cálculos; o filtro "Somente Ativos" restringe
@@ -736,6 +898,21 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
         </div>
 
         <div>
+          <label htmlFor="tc-years" className="block text-ds-text text-xs mb-1">Tempo de DS</label>
+          <select
+            id="tc-years"
+            value={selectedYearsRange}
+            onChange={e => setSelectedYearsRange(e.target.value)}
+            className="bg-ds-dark-blue border border-ds-border text-ds-light-text text-sm rounded-md p-2"
+          >
+            <option value="__all__">Todos</option>
+            {YEARS_RANGES.map(r => (
+              <option key={r.label} value={r.label}>{r.label}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
           <label htmlFor="tc-status" className="block text-ds-text text-xs mb-1">Status</label>
           <select
             id="tc-status"
@@ -829,6 +1006,7 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
             setSelectedTeam('__all__');
             setSelectedSeniority('__all__');
             setSelectedRole('__all__');
+            setSelectedYearsRange('__all__');
             setShowOnlyActive(false);
             setHistoryMonths(6);
             setCustomStart(format(subMonths(new Date(), 5), 'yyyy-MM-dd'));
@@ -1206,6 +1384,11 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
                               {mc.role}
                             </span>
                           </div>
+                          {mc.yearsAtCompany !== null && (
+                            <p className="text-[10px] text-ds-green mt-1 font-medium">
+                              🏢 {formatYearsAtCompany(mc.yearsAtCompany)}
+                            </p>
+                          )}
                         </div>
                         {isAdmin ? (
                           <button
@@ -1301,6 +1484,7 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
           members={allMembers.filter(name => activeConfig[name] !== false)}
           config={seniorityConfig}
           roleConfig={roleConfig}
+          admissionConfig={admissionConfig}
           onSave={handleSaveConfig}
           onClose={() => setShowConfig(false)}
         />
