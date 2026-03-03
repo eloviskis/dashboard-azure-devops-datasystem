@@ -235,6 +235,8 @@ interface ConfigModalProps {
   avatarConfig: AvatarConfigMap;
   onSave: (cfg: SeniorityConfigMap, roleCfg: RoleConfigMap, admissionCfg: AdmissionConfigMap, avatarCfg: AvatarConfigMap) => void;
   onClose: () => void;
+  token?: string;
+  apiUrl?: string;
 }
 
 const ROLE_COLORS: Record<Role, string> = {
