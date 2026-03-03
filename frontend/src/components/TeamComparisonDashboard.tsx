@@ -376,14 +376,41 @@ const ConfigModal: React.FC<ConfigModalProps> = ({ members, config, roleConfig, 
                     </div>
                     <div className="mt-1">
                       <label htmlFor={`avatar-${name}`} className="text-ds-text text-[10px]">📷 URL da Foto</label>
-                      <input
-                        id={`avatar-${name}`}
-                        type="url"
-                        value={currentAvatar}
-                        onChange={e => handleAvatarChange(name, e.target.value)}
-                        placeholder="https://..."
-                        className="w-full bg-ds-navy border border-ds-border text-ds-light-text text-xs rounded-md px-2 py-1"
-                      />
+                      <div className="flex gap-1">
+                        <input
+                          id={`avatar-${name}`}
+                          type="url"
+                          value={currentAvatar}
+                          onChange={e => handleAvatarChange(name, e.target.value)}
+                          placeholder="https://..."
+                          className="flex-1 bg-ds-navy border border-ds-border text-ds-light-text text-xs rounded-md px-2 py-1"
+                        />
+                        <input
+                          type="file"
+                          id={`avatar-file-${name}`}
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              const reader = new FileReader();
+                              reader.onload = (event) => {
+                                const base64 = event.target?.result as string;
+                                handleAvatarChange(name, base64);
+                              };
+                              reader.readAsDataURL(file);
+                            }
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => document.getElementById(`avatar-file-${name}`)?.click()}
+                          className="px-2 py-1 bg-ds-dark-blue border border-ds-border text-ds-text text-xs rounded-md hover:bg-ds-navy transition-colors"
+                          title="Enviar foto do dispositivo"
+                        >
+                          📁
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
