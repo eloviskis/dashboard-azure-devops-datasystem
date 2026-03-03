@@ -236,6 +236,15 @@ const ConfigModal: React.FC<ConfigModalProps> = ({ members, config, roleConfig, 
   const [localRole, setLocalRole] = useState<RoleConfigMap>({ ...roleConfig });
   const [localAdmission, setLocalAdmission] = useState<AdmissionConfigMap>({ ...admissionConfig });
 
+  // Busca case-insensitive para data de admissão
+  const findAdmission = (name: string): string => {
+    if (localAdmission[name]) return localAdmission[name];
+    const upperName = name.toUpperCase();
+    if (localAdmission[upperName]) return localAdmission[upperName];
+    const key = Object.keys(localAdmission).find(k => k.toUpperCase() === upperName);
+    return key ? localAdmission[key] : '';
+  };
+
   const handleChange = (name: string, value: Seniority) => {
     setLocal(prev => ({ ...prev, [name]: value }));
   };
@@ -269,8 +278,8 @@ const ConfigModal: React.FC<ConfigModalProps> = ({ members, config, roleConfig, 
             {members.map(name => {
               const current = local[name] ?? 'Pleno';
               const currentRole = localRole[name] ?? 'DEV';
-              const currentAdmission = localAdmission[name] ?? '';
-              const yearsAtCompany = calcYearsAtCompany(currentAdmission);
+              const currentAdmission = findAdmission(name);
+              const yearsAtCompany = calcYearsAtCompany(currentAdmission || undefined);
               return (
                 <div key={name} className="bg-ds-dark-blue border border-ds-border rounded-lg p-3 flex items-center gap-3">
                   <div
