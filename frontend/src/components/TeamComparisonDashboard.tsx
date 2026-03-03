@@ -405,6 +405,85 @@ const ConfigModal: React.FC<ConfigModalProps> = ({ members, config, roleConfig, 
   );
 };
 
+// ─── Modal de perfil simples ────────────────────────────────────────────────
+interface ProfileModalData {
+  name: string;
+  avatarUrl?: string;
+  yearsAtCompany: number | null;
+  role: Role;
+  seniority: Seniority;
+}
+
+const ProfileModal: React.FC<{ data: ProfileModalData | null; onClose: () => void }> = ({ data, onClose }) => {
+  if (!data) return null;
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50" onClick={onClose}>
+      <div
+        className="bg-ds-navy border border-ds-border rounded-2xl shadow-2xl w-full max-w-xs mx-4 p-6 text-center"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Avatar grande */}
+        {data.avatarUrl ? (
+          <img
+            src={data.avatarUrl}
+            alt={data.name}
+            className="w-24 h-24 rounded-full object-cover mx-auto mb-4"
+            style={{ border: `3px solid ${SENIORITY_COLORS[data.seniority]}` }}
+          />
+        ) : (
+          <div
+            className="w-24 h-24 rounded-full flex items-center justify-center font-bold text-2xl mx-auto mb-4"
+            style={{
+              backgroundColor: SENIORITY_COLORS[data.seniority] + '33',
+              color: SENIORITY_COLORS[data.seniority],
+              border: `3px solid ${SENIORITY_COLORS[data.seniority]}`,
+            }}
+          >
+            {abbrev(data.name)}
+          </div>
+        )}
+
+        {/* Nome */}
+        <h3 className="text-white font-bold text-lg mb-2">{data.name}</h3>
+
+        {/* Cargo e Senioridade */}
+        <div className="flex items-center justify-center gap-2 mb-3">
+          <span
+            className="text-xs font-bold px-3 py-1 rounded-full border"
+            style={{
+              backgroundColor: ROLE_COLORS[data.role] + '22',
+              color: ROLE_COLORS[data.role],
+              borderColor: ROLE_COLORS[data.role] + '60',
+            }}
+          >
+            {data.role}
+          </span>
+          <span
+            className={`text-xs font-bold px-3 py-1 rounded-full border ${SENIORITY_BG[data.seniority]}`}
+          >
+            {data.seniority}
+          </span>
+        </div>
+
+        {/* Tempo de empresa */}
+        {data.yearsAtCompany !== null && (
+          <p className="text-ds-green font-semibold text-base">
+            🏢 {formatYearsAtCompany(data.yearsAtCompany)}
+          </p>
+        )}
+
+        {/* Botão fechar */}
+        <button
+          onClick={onClose}
+          className="mt-5 w-full bg-ds-border hover:bg-ds-green text-white py-2 px-4 rounded-lg transition-colors text-sm"
+        >
+          Fechar
+        </button>
+      </div>
+    </div>
+  );
+};
+
 // ─── Modal de detalhamento de tarefas ─────────────────────────────────────────
 interface ModalData {
   title: string;
@@ -508,6 +587,7 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
   const [activePersons, setActivePersons] = useState<Set<string>>(new Set());
   const [selectedPerson, setSelectedPerson] = useState<string | null>(null);
   const [modalData, setModalData] = useState<ModalData | null>(null);
+  const [profileModalData, setProfileModalData] = useState<ProfileModalData | null>(null);
   const [filterBarCollapsed, setFilterBarCollapsed] = useState(false);
 
   // ── carregar config do banco ao montar (seniority + role + active + admission + avatar)
@@ -1448,30 +1528,45 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
                     >
                       {/* header do card */}
                       <div className="flex items-start gap-3 mb-3">
-                        {/* Avatar com imagem ou iniciais */}
-                        {mc.avatarUrl ? (
-                          <img
-                            src={mc.avatarUrl}
-                            alt={mc.name}
-                            className="w-10 h-10 rounded-full object-cover shrink-0"
-                            style={{
-                              border: `2px solid ${ isInactive ? '#ef444460' : SENIORITY_COLORS[mc.seniority] + '60'}`,
-                              opacity: isInactive ? 0.75 : 1,
-                            }}
-                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                          />
-                        ) : (
-                          <div
-                            className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shrink-0"
-                            style={{
-                              backgroundColor: isInactive ? '#ef444433' : SENIORITY_COLORS[mc.seniority] + '33',
-                              color: isInactive ? '#ef4444' : SENIORITY_COLORS[mc.seniority],
-                              border: `2px solid ${ isInactive ? '#ef444460' : SENIORITY_COLORS[mc.seniority] + '60'}`,
-                            }}
-                          >
-                            {abbrev(mc.name)}
-                          </div>
-                        )}
+                        {/* Avatar com imagem ou iniciais - clicável para abrir perfil */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setProfileModalData({
+                              name: mc.name,
+                              avatarUrl: mc.avatarUrl,
+                              yearsAtCompany: mc.yearsAtCompany,
+                              role: mc.role,
+                              seniority: mc.seniority,
+                            });
+                          }}
+                          className="shrink-0 hover:scale-110 transition-transform cursor-pointer"
+                          title="Ver perfil"
+                        >
+                          {mc.avatarUrl ? (
+                            <img
+                              src={mc.avatarUrl}
+                              alt={mc.name}
+                              className="w-10 h-10 rounded-full object-cover"
+                              style={{
+                                border: `2px solid ${ isInactive ? '#ef444460' : SENIORITY_COLORS[mc.seniority] + '60'}`,
+                                opacity: isInactive ? 0.75 : 1,
+                              }}
+                              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                            />
+                          ) : (
+                            <div
+                              className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm"
+                              style={{
+                                backgroundColor: isInactive ? '#ef444433' : SENIORITY_COLORS[mc.seniority] + '33',
+                                color: isInactive ? '#ef4444' : SENIORITY_COLORS[mc.seniority],
+                                border: `2px solid ${ isInactive ? '#ef444460' : SENIORITY_COLORS[mc.seniority] + '60'}`,
+                              }}
+                            >
+                              {abbrev(mc.name)}
+                            </div>
+                          )}
+                        </button>
                         <div className="flex-1 min-w-0">
                           <p className="text-white font-semibold text-sm truncate">{mc.name}</p>
                           <div className="flex items-center gap-1 flex-wrap mt-0.5">
@@ -1584,6 +1679,9 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
 
       {/* ── modal de detalhamento de tarefas ── */}
       <ItemListModal data={modalData} onClose={() => setModalData(null)} />
+
+      {/* ── modal de perfil ── */}
+      <ProfileModal data={profileModalData} onClose={() => setProfileModalData(null)} />
 
       {/* ── modal config ── */}
       {showConfig && (
