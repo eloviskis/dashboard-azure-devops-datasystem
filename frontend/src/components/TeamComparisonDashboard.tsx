@@ -22,6 +22,7 @@ interface MemberConfig {
   color?: string;
   admissionDate?: string;
   yearsAtCompany: number | null;
+  avatarUrl?: string;
 }
 
 interface SeniorityConfigMap {
@@ -38,6 +39,10 @@ interface ActiveConfigMap {
 
 interface AdmissionConfigMap {
   [name: string]: string; // formato: 'YYYY-MM-DD'
+}
+
+interface AvatarConfigMap {
+  [name: string]: string; // URL da imagem de avatar
 }
 
 // ─── constantes ──────────────────────────────────────────────────────────────
@@ -141,9 +146,11 @@ const SETTINGS_KEY = 'seniority_config';
 const ROLE_KEY = 'tc_role_config_v1';
 const ACTIVE_KEY = 'tc_active_config_v1';
 const ADMISSION_KEY = 'tc_admission_config_v1';
+const AVATAR_KEY = 'tc_avatar_config_v1';
 const ROLE_SETTINGS_KEY = 'role_config';
 const ACTIVE_SETTINGS_KEY = 'active_config';
 const ADMISSION_SETTINGS_KEY = 'admission_config';
+const AVATAR_SETTINGS_KEY = 'avatar_config';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 const loadLocalConfig = (): SeniorityConfigMap => {
@@ -173,6 +180,11 @@ const loadAdmissionConfig = (): AdmissionConfigMap => {
   }
 };
 const saveAdmissionConfig = (cfg: AdmissionConfigMap) => localStorage.setItem(ADMISSION_KEY, JSON.stringify(cfg));
+
+const loadAvatarConfig = (): AvatarConfigMap => {
+  try { return JSON.parse(localStorage.getItem(AVATAR_KEY) || '{}'); } catch { return {}; }
+};
+const saveAvatarConfig = (cfg: AvatarConfigMap) => localStorage.setItem(AVATAR_KEY, JSON.stringify(cfg));
 
 // Calcula anos de empresa a partir da data de admissão
 const calcYearsAtCompany = (admissionDate: string | undefined): number | null => {
@@ -220,7 +232,8 @@ interface ConfigModalProps {
   config: SeniorityConfigMap;
   roleConfig: RoleConfigMap;
   admissionConfig: AdmissionConfigMap;
-  onSave: (cfg: SeniorityConfigMap, roleCfg: RoleConfigMap, admissionCfg: AdmissionConfigMap) => void;
+  avatarConfig: AvatarConfigMap;
+  onSave: (cfg: SeniorityConfigMap, roleCfg: RoleConfigMap, admissionCfg: AdmissionConfigMap, avatarCfg: AvatarConfigMap) => void;
   onClose: () => void;
 }
 
@@ -231,10 +244,11 @@ const ROLE_COLORS: Record<Role, string> = {
   'Outros': '#a0aec0',
 };
 
-const ConfigModal: React.FC<ConfigModalProps> = ({ members, config, roleConfig, admissionConfig, onSave, onClose }) => {
+const ConfigModal: React.FC<ConfigModalProps> = ({ members, config, roleConfig, admissionConfig, avatarConfig, onSave, onClose }) => {
   const [local, setLocal] = useState<SeniorityConfigMap>({ ...config });
   const [localRole, setLocalRole] = useState<RoleConfigMap>({ ...roleConfig });
   const [localAdmission, setLocalAdmission] = useState<AdmissionConfigMap>({ ...admissionConfig });
+  const [localAvatar, setLocalAvatar] = useState<AvatarConfigMap>({ ...avatarConfig });
 
   // Busca case-insensitive para data de admissão
   const findAdmission = (name: string): string => {
@@ -243,6 +257,15 @@ const ConfigModal: React.FC<ConfigModalProps> = ({ members, config, roleConfig, 
     if (localAdmission[upperName]) return localAdmission[upperName];
     const key = Object.keys(localAdmission).find(k => k.toUpperCase() === upperName);
     return key ? localAdmission[key] : '';
+  };
+
+  // Busca case-insensitive para avatar
+  const findAvatar = (name: string): string => {
+    if (localAvatar[name]) return localAvatar[name];
+    const upperName = name.toUpperCase();
+    if (localAvatar[upperName]) return localAvatar[upperName];
+    const key = Object.keys(localAvatar).find(k => k.toUpperCase() === upperName);
+    return key ? localAvatar[key] : '';
   };
 
   const handleChange = (name: string, value: Seniority) => {
@@ -257,7 +280,11 @@ const ConfigModal: React.FC<ConfigModalProps> = ({ members, config, roleConfig, 
     setLocalAdmission(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleSave = () => { onSave(local, localRole, localAdmission); onClose(); };
+  const handleAvatarChange = (name: string, value: string) => {
+    setLocalAvatar(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleSave = () => { onSave(local, localRole, localAdmission, localAvatar); onClose(); };
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50" onClick={onClose}>
@@ -279,15 +306,27 @@ const ConfigModal: React.FC<ConfigModalProps> = ({ members, config, roleConfig, 
               const current = local[name] ?? 'Pleno';
               const currentRole = localRole[name] ?? 'DEV';
               const currentAdmission = findAdmission(name);
+              const currentAvatar = findAvatar(name);
               const yearsAtCompany = calcYearsAtCompany(currentAdmission || undefined);
               return (
                 <div key={name} className="bg-ds-dark-blue border border-ds-border rounded-lg p-3 flex items-center gap-3">
-                  <div
-                    className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs shrink-0"
-                    style={{ backgroundColor: SENIORITY_COLORS[current] + '33', color: SENIORITY_COLORS[current], border: `1px solid ${SENIORITY_COLORS[current]}60` }}
-                  >
-                    {abbrev(name)}
-                  </div>
+                  {/* Avatar com preview ou iniciais */}
+                  {currentAvatar ? (
+                    <img
+                      src={currentAvatar}
+                      alt={name}
+                      className="w-9 h-9 rounded-full object-cover shrink-0"
+                      style={{ border: `1px solid ${SENIORITY_COLORS[current]}60` }}
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                    />
+                  ) : (
+                    <div
+                      className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs shrink-0"
+                      style={{ backgroundColor: SENIORITY_COLORS[current] + '33', color: SENIORITY_COLORS[current], border: `1px solid ${SENIORITY_COLORS[current]}60` }}
+                    >
+                      {abbrev(name)}
+                    </div>
+                  )}
                   <div className="flex-1 min-w-0">
                     <p className="text-white text-sm font-medium truncate">{name}</p>
                     <div className="grid grid-cols-2 gap-1 mt-1">
@@ -334,6 +373,17 @@ const ConfigModal: React.FC<ConfigModalProps> = ({ members, config, roleConfig, 
                           {formatYearsAtCompany(yearsAtCompany)}
                         </span>
                       )}
+                    </div>
+                    <div className="mt-1">
+                      <label htmlFor={`avatar-${name}`} className="text-ds-text text-[10px]">📷 URL da Foto</label>
+                      <input
+                        id={`avatar-${name}`}
+                        type="url"
+                        value={currentAvatar}
+                        onChange={e => handleAvatarChange(name, e.target.value)}
+                        placeholder="https://..."
+                        className="w-full bg-ds-navy border border-ds-border text-ds-light-text text-xs rounded-md px-2 py-1"
+                      />
                     </div>
                   </div>
                 </div>
@@ -438,6 +488,7 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
   const [roleConfig, setRoleConfig] = useState<RoleConfigMap>(loadRoleConfig);
   const [activeConfig, setActiveConfig] = useState<ActiveConfigMap>(loadActiveConfig);
   const [admissionConfig, setAdmissionConfig] = useState<AdmissionConfigMap>(loadAdmissionConfig);
+  const [avatarConfig, setAvatarConfig] = useState<AvatarConfigMap>(loadAvatarConfig);
   const [configMeta, setConfigMeta] = useState<{ updatedBy?: string; updatedAt?: string } | null>(null);
   const [configLoading, setConfigLoading] = useState(true);
   const [configSaving, setConfigSaving] = useState(false);
@@ -459,16 +510,17 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
   const [modalData, setModalData] = useState<ModalData | null>(null);
   const [filterBarCollapsed, setFilterBarCollapsed] = useState(false);
 
-  // ── carregar config do banco ao montar (seniority + role + active + admission)
+  // ── carregar config do banco ao montar (seniority + role + active + admission + avatar)
   useEffect(() => {
     const fetchConfig = async () => {
       try {
         const headers = { 'Authorization': `Bearer ${token}` };
-        const [senRes, roleRes, activeRes, admissionRes] = await Promise.all([
+        const [senRes, roleRes, activeRes, admissionRes, avatarRes] = await Promise.all([
           fetch(`${API_URL}/api/settings/${SETTINGS_KEY}`, { headers }),
           fetch(`${API_URL}/api/settings/${ROLE_SETTINGS_KEY}`, { headers }),
           fetch(`${API_URL}/api/settings/${ACTIVE_SETTINGS_KEY}`, { headers }),
           fetch(`${API_URL}/api/settings/${ADMISSION_SETTINGS_KEY}`, { headers }),
+          fetch(`${API_URL}/api/settings/${AVATAR_SETTINGS_KEY}`, { headers }),
         ]);
         if (senRes.ok) {
           const d = await senRes.json();
@@ -489,6 +541,10 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
         if (admissionRes.ok) {
           const d = await admissionRes.json();
           if (d.value) { setAdmissionConfig(d.value); saveAdmissionConfig(d.value); }
+        }
+        if (avatarRes.ok) {
+          const d = await avatarRes.json();
+          if (d.value) { setAvatarConfig(d.value); saveAvatarConfig(d.value); }
         }
       } catch {
         // sem conexão: usa localStorage já carregado
@@ -519,13 +575,15 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
   );
 
   // ── salvar config (admin: banco + localStorage; outro: apenas localStorage)
-  const handleSaveConfig = useCallback(async (cfg: SeniorityConfigMap, roleCfg: RoleConfigMap, admissionCfg: AdmissionConfigMap) => {
+  const handleSaveConfig = useCallback(async (cfg: SeniorityConfigMap, roleCfg: RoleConfigMap, admissionCfg: AdmissionConfigMap, avatarCfg: AvatarConfigMap) => {
     setSeniorityConfig(cfg);
     saveLocalConfig(cfg);
     setRoleConfig(roleCfg);
     saveRoleConfig(roleCfg);
     setAdmissionConfig(admissionCfg);
     saveAdmissionConfig(admissionCfg);
+    setAvatarConfig(avatarCfg);
+    saveAvatarConfig(avatarCfg);
     if (!isAdmin) return;
     setConfigSaving(true);
     try {
@@ -539,6 +597,9 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
         }),
         fetch(`${API_URL}/api/settings/${ADMISSION_SETTINGS_KEY}`, {
           method: 'PUT', headers, body: JSON.stringify({ value: admissionCfg }),
+        }),
+        fetch(`${API_URL}/api/settings/${AVATAR_SETTINGS_KEY}`, {
+          method: 'PUT', headers, body: JSON.stringify({ value: avatarCfg }),
         }),
       ]);
       if (senRes.ok) {
@@ -573,9 +634,19 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
       const key = Object.keys(admissionConfig).find(k => k.toUpperCase() === upperName);
       return key ? admissionConfig[key] : undefined;
     };
+
+    // Busca case-insensitive para avatar
+    const findAvatarUrl = (name: string): string | undefined => {
+      if (avatarConfig[name]) return avatarConfig[name];
+      const upperName = name.toUpperCase();
+      if (avatarConfig[upperName]) return avatarConfig[upperName];
+      const key = Object.keys(avatarConfig).find(k => k.toUpperCase() === upperName);
+      return key ? avatarConfig[key] : undefined;
+    };
     
     return allMembers.map((name, idx) => {
       const admissionDate = findAdmissionDate(name);
+      const avatarUrl = findAvatarUrl(name);
       return {
         name,
         seniority: seniorityConfig[name] ?? 'Pleno',
@@ -584,9 +655,10 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
         color: PERSON_PALETTE[idx % PERSON_PALETTE.length],
         admissionDate,
         yearsAtCompany: calcYearsAtCompany(admissionDate),
+        avatarUrl,
       };
     });
-  }, [allMembers, seniorityConfig, roleConfig, activeConfig, admissionConfig]);
+  }, [allMembers, seniorityConfig, roleConfig, activeConfig, admissionConfig, avatarConfig]);
 
   // ── membros filtrados por senioridade, cargo, status e anos de empresa
   const filteredMembers = useMemo(() => {
@@ -1376,16 +1448,30 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
                     >
                       {/* header do card */}
                       <div className="flex items-start gap-3 mb-3">
-                        <div
-                          className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shrink-0"
-                          style={{
-                            backgroundColor: isInactive ? '#ef444433' : SENIORITY_COLORS[mc.seniority] + '33',
-                            color: isInactive ? '#ef4444' : SENIORITY_COLORS[mc.seniority],
-                            border: `2px solid ${ isInactive ? '#ef444460' : SENIORITY_COLORS[mc.seniority] + '60'}`,
-                          }}
-                        >
-                          {abbrev(mc.name)}
-                        </div>
+                        {/* Avatar com imagem ou iniciais */}
+                        {mc.avatarUrl ? (
+                          <img
+                            src={mc.avatarUrl}
+                            alt={mc.name}
+                            className="w-10 h-10 rounded-full object-cover shrink-0"
+                            style={{
+                              border: `2px solid ${ isInactive ? '#ef444460' : SENIORITY_COLORS[mc.seniority] + '60'}`,
+                              opacity: isInactive ? 0.75 : 1,
+                            }}
+                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                          />
+                        ) : (
+                          <div
+                            className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shrink-0"
+                            style={{
+                              backgroundColor: isInactive ? '#ef444433' : SENIORITY_COLORS[mc.seniority] + '33',
+                              color: isInactive ? '#ef4444' : SENIORITY_COLORS[mc.seniority],
+                              border: `2px solid ${ isInactive ? '#ef444460' : SENIORITY_COLORS[mc.seniority] + '60'}`,
+                            }}
+                          >
+                            {abbrev(mc.name)}
+                          </div>
+                        )}
                         <div className="flex-1 min-w-0">
                           <p className="text-white font-semibold text-sm truncate">{mc.name}</p>
                           <div className="flex items-center gap-1 flex-wrap mt-0.5">
@@ -1506,6 +1592,7 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
           config={seniorityConfig}
           roleConfig={roleConfig}
           admissionConfig={admissionConfig}
+          avatarConfig={avatarConfig}
           onSave={handleSaveConfig}
           onClose={() => setShowConfig(false)}
         />
