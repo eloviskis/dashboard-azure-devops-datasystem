@@ -553,8 +553,20 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
 
   // ── configuração dos membros (com seniority, role, active, admissão e cor)
   const memberConfigs = useMemo((): MemberConfig[] => {
+    // Função para buscar data de admissão case-insensitive
+    const findAdmissionDate = (name: string): string | undefined => {
+      // Primeiro tenta match exato
+      if (admissionConfig[name]) return admissionConfig[name];
+      // Depois tenta match uppercase
+      const upperName = name.toUpperCase();
+      if (admissionConfig[upperName]) return admissionConfig[upperName];
+      // Busca nas chaves existentes
+      const key = Object.keys(admissionConfig).find(k => k.toUpperCase() === upperName);
+      return key ? admissionConfig[key] : undefined;
+    };
+    
     return allMembers.map((name, idx) => {
-      const admissionDate = admissionConfig[name];
+      const admissionDate = findAdmissionDate(name);
       return {
         name,
         seniority: seniorityConfig[name] ?? 'Pleno',
