@@ -263,12 +263,28 @@ const PeriodSelector: React.FC<{
 export const PeriodComparisonDashboard: React.FC<Props> = ({ data }) => {
   const [periodAConfig, setPeriodAConfig] = useState<PeriodConfig>({ preset: 'last-month' });
   const [periodBConfig, setPeriodBConfig] = useState<PeriodConfig>({ preset: 'current-month' });
+  const [selectedTeam, setSelectedTeam] = useState<string>('all');
+
+  // Extrair times disponíveis
+  const availableTeams = useMemo(() => {
+    const teams = new Set<string>();
+    data.forEach(w => {
+      if (w.team) teams.add(w.team);
+    });
+    return Array.from(teams).sort();
+  }, [data]);
+
+  // Filtrar dados por time
+  const filteredData = useMemo(() => {
+    if (selectedTeam === 'all') return data;
+    return data.filter(w => w.team === selectedTeam);
+  }, [data, selectedTeam]);
 
   const periodADates = useMemo(() => calculatePeriodDates(periodAConfig), [periodAConfig]);
   const periodBDates = useMemo(() => calculatePeriodDates(periodBConfig), [periodBConfig]);
 
-  const metricsA = useMemo(() => calculateMetrics(data, periodADates.start, periodADates.end), [data, periodADates]);
-  const metricsB = useMemo(() => calculateMetrics(data, periodBDates.start, periodBDates.end), [data, periodBDates]);
+  const metricsA = useMemo(() => calculateMetrics(filteredData, periodADates.start, periodADates.end), [filteredData, periodADates]);
+  const metricsB = useMemo(() => calculateMetrics(filteredData, periodBDates.start, periodBDates.end), [filteredData, periodBDates]);
 
   const periodALabel = format(periodADates.start, "dd/MM", { locale: ptBR }) + ' - ' + format(periodADates.end, "dd/MM/yy", { locale: ptBR });
   const periodBLabel = format(periodBDates.start, "dd/MM", { locale: ptBR }) + ' - ' + format(periodBDates.end, "dd/MM/yy", { locale: ptBR });
@@ -289,8 +305,46 @@ export const PeriodComparisonDashboard: React.FC<Props> = ({ data }) => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <h2 className="text-xl font-bold text-white">📊 Comparação de Períodos</h2>
+        
+        {/* Filtro de Time */}
+        <div className="flex items-center gap-2">
+          <label className="text-ds-text text-sm">Time:</label>
+          <select
+            value={selectedTeam}
+            onChange={e => setSelectedTeam(e.target.value)}
+            className="bg-ds-navy border border-ds-border text-ds-light-text text-sm rounded-md p-2"
+          >
+            <option value="all">Todos os Times</option>
+            {availableTeams.map(team => (
+              <option key={team} value={team}>{team}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Datas calculadas (debug visível) */}
+      <div className="bg-ds-dark-blue border border-ds-border rounded-lg p-3 text-xs">
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <span className="text-orange-400 font-medium">Período A:</span>
+            <span className="text-white ml-2">
+              {format(periodADates.start, "dd/MM/yyyy HH:mm", { locale: ptBR })} até {format(periodADates.end, "dd/MM/yyyy HH:mm", { locale: ptBR })}
+            </span>
+          </div>
+          <div>
+            <span className="text-green-400 font-medium">Período B:</span>
+            <span className="text-white ml-2">
+              {format(periodBDates.start, "dd/MM/yyyy HH:mm", { locale: ptBR })} até {format(periodBDates.end, "dd/MM/yyyy HH:mm", { locale: ptBR })}
+            </span>
+          </div>
+        </div>
+        {selectedTeam !== 'all' && (
+          <div className="mt-2 text-ds-text">
+            Filtrando por time: <span className="text-white font-medium">{selectedTeam}</span> ({filteredData.length} itens)
+          </div>
+        )}
       </div>
 
       {/* Period Selectors */}
