@@ -274,10 +274,10 @@ export const PeriodComparisonDashboard: React.FC<Props> = ({ data }) => {
   const periodBLabel = format(periodBDates.start, "dd/MM", { locale: ptBR }) + ' - ' + format(periodBDates.end, "dd/MM/yy", { locale: ptBR });
 
   const chartData = [
-    { name: 'Issues Criadas', 'Período A': metricsA.issuesCriadas, 'Período B': metricsB.issuesCriadas },
+    { name: 'Issues (pós-produção)', 'Período A': metricsA.issuesCriadas, 'Período B': metricsB.issuesCriadas },
     { name: 'Issues Fechadas', 'Período A': metricsA.issuesFechadas, 'Período B': metricsB.issuesFechadas },
-    { name: 'Issues Correção (Fechadas)', 'Período A': metricsA.issuesCorrecao, 'Período B': metricsB.issuesCorrecao },
-    { name: 'Bugs (type=Bug)', 'Período A': metricsA.bugsCriados, 'Período B': metricsB.bugsCriados },
+    { name: 'Issues Correção', 'Período A': metricsA.issuesCorrecao, 'Período B': metricsB.issuesCorrecao },
+    { name: 'Bugs (pré-produção)', 'Período A': metricsA.bugsCriados, 'Período B': metricsB.bugsCriados },
     { name: 'P0s', 'Período A': metricsA.issuesP0, 'Período B': metricsB.issuesP0 },
     { name: 'Sem Causa Raiz', 'Período A': metricsA.issuesSemCausaRaiz, 'Período B': metricsB.issuesSemCausaRaiz },
     { name: 'Throughput', 'Período A': metricsA.throughput, 'Período B': metricsB.throughput },
@@ -312,7 +312,7 @@ export const PeriodComparisonDashboard: React.FC<Props> = ({ data }) => {
       {/* Metrics Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <MetricCard
-          title="Issues Criadas"
+          title="Issues (pós-produção)"
           periodA={metricsA.issuesCriadas}
           periodB={metricsB.issuesCriadas}
           periodALabel={periodALabel}
@@ -327,14 +327,14 @@ export const PeriodComparisonDashboard: React.FC<Props> = ({ data }) => {
           periodBLabel={periodBLabel}
         />
         <MetricCard
-          title="Issues Correção (Fechadas)"
+          title="Issues Correção"
           periodA={metricsA.issuesCorrecao}
           periodB={metricsB.issuesCorrecao}
           periodALabel={periodALabel}
           periodBLabel={periodBLabel}
         />
         <MetricCard
-          title="Bugs (type=Bug)"
+          title="Bugs (pré-produção)"
           periodA={metricsA.bugsCriados}
           periodB={metricsB.bugsCriados}
           periodALabel={periodALabel}
@@ -391,7 +391,7 @@ export const PeriodComparisonDashboard: React.FC<Props> = ({ data }) => {
         <h3 className="text-white font-medium mb-3">📈 Resumo da Comparação</h3>
         <div className="text-ds-text text-sm space-y-2">
           <p>
-            <span className="font-medium text-white">Issues Criadas:</span>{' '}
+            <span className="font-medium text-white">Issues (pós-produção):</span>{' '}
             {metricsA.issuesCriadas} → {metricsB.issuesCriadas}{' '}
             ({metricsB.issuesCriadas > metricsA.issuesCriadas ? '⚠️ aumento' : metricsB.issuesCriadas < metricsA.issuesCriadas ? '✅ redução' : '= estável'})
           </p>
@@ -422,9 +422,10 @@ export const PeriodComparisonDashboard: React.FC<Props> = ({ data }) => {
       <div className="bg-ds-navy border border-ds-border rounded-lg p-4 text-xs text-ds-text">
         <p className="font-medium text-white mb-2">📋 Legenda dos campos:</p>
         <ul className="space-y-1">
-          <li><strong>Issues Correção:</strong> type=Issue com customType="Correção" (campo Custom Type)</li>
-          <li><strong>Bugs (type=Bug):</strong> Work items com type=Bug (diferente de Issue)</li>
-          <li><strong>P0s:</strong> Issues de Correção com priority=0 ou null</li>
+          <li><strong>🔴 Issue (pós-produção):</strong> Defeito encontrado pelo CLIENTE após ir para produção</li>
+          <li><strong>🟡 Bug (pré-produção):</strong> Defeito encontrado INTERNAMENTE antes de ir para produção (QA/Testes)</li>
+          <li><strong>Issues Correção:</strong> Issues com customType="Correção" (fechadas)</li>
+          <li><strong>P0s:</strong> Issues de Correção com prioridade crítica (priority=0 ou null)</li>
         </ul>
       </div>
     </div>
