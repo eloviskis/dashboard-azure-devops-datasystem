@@ -1,11 +1,15 @@
-import React, { useState, Component, ErrorInfo, ReactNode } from 'react';
+import React, { useState, useMemo, Component, ErrorInfo, ReactNode } from 'react';
 import './RootCauseDashboard.css';
 import { WorkItem } from '../types';
 import ChartInfoLamp from './ChartInfoLamp';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
+import { startOfMonth, endOfMonth, subMonths, isWithinInterval, parseISO } from 'date-fns';
 
 interface Props {
   data: WorkItem[];
+  allData?: WorkItem[]; // Todos os work items para calcular issues criadas no período
+  periodStartDate?: Date; // Início do período para filtro de criação
+  periodEndDate?: Date; // Fim do período para filtro de criação
 }
 
 interface ErrorBoundaryProps {
@@ -157,7 +161,7 @@ const ItemListModal: React.FC<{ data: ModalData | null; onClose: () => void }> =
   );
 };
 
-export const RootCauseDashboard: React.FC<Props> = ({ data }) => {
+export const RootCauseDashboard: React.FC<Props> = ({ data, allData, periodStartDate, periodEndDate }) => {
   const [modalData, setModalData] = useState<ModalData | null>(null);
 
   // Helper para verificar se causaRaiz está vazia (proteção contra null/undefined)
@@ -165,10 +169,31 @@ export const RootCauseDashboard: React.FC<Props> = ({ data }) => {
     return !causaRaiz || causaRaiz.trim() === '';
   };
 
+  // Calcular período padrão se não fornecido (mês atual)
+  const defaultStart = useMemo(() => startOfMonth(new Date()), []);
+  const defaultEnd = useMemo(() => endOfMonth(new Date()), []);
+  const startDate = periodStartDate || defaultStart;
+  const endDate = periodEndDate || defaultEnd;
+
   // Filtros e métricas - data já vem filtrado pelo período do App.tsx
   const issues = data.filter(w => w.type === 'Issue');
   const issuesFechadas = issues.filter(w => w.state === 'Closed');
-  const issuesCriadas = issues.filter(w => !!w.createdDate);
+  
+  // Issues Criadas: filtrar por createdDate dentro do período
+  // Usa allData se disponível, senão usa data
+  const sourceForCreated = allData || data;
+  const issuesCriadas = useMemo(() => {
+    return sourceForCreated.filter(w => {
+      if (w.type !== 'Issue') return false;
+      if (!w.createdDate) return false;
+      try {
+        const created = typeof w.createdDate === 'string' ? parseISO(w.createdDate) : new Date(w.createdDate);
+        return isWithinInterval(created, { start: startDate, end: endDate });
+      } catch {
+        return false;
+      }
+    });
+  }, [sourceForCreated, startDate, endDate]);
   
   // Verifica se há field customType preenchido em alguma issue
   const hasCustomTypeData = issuesFechadas.some(w => w.customType && w.customType.trim() !== '');

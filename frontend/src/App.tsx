@@ -162,7 +162,8 @@ const App = () => {
 
   const [workItemFilters, setWorkItemFilters] = useState<WorkItemFilters>(initialWorkItemFilters);
 
-  const filteredWorkItems = useMemo(() => {
+  // Calcular datas do período para passar para componentes
+  const periodDates = useMemo(() => {
     const now = new Date();
     let startDate: Date;
     let endDate: Date = now;
@@ -175,9 +176,13 @@ const App = () => {
       startDate = new Date(workItemFilters.customStartDate);
       endDate = new Date(workItemFilters.customEndDate + 'T23:59:59');
     } else {
-      // Se o período for 8, considera 7 dias atrás + hoje (total 8 dias)
       startDate = workItemFilters.period === 8 ? subDays(now, 7) : subDays(now, workItemFilters.period);
     }
+    return { startDate, endDate };
+  }, [workItemFilters]);
+
+  const filteredWorkItems = useMemo(() => {
+    const { startDate, endDate } = periodDates;
 
     return workItems.filter(item => {
       // Usa closedDate para itens concluídos (throughput preciso), changedDate para demais
@@ -196,7 +201,7 @@ const App = () => {
       if (workItemFilters.tags.length > 0 && (!itemTags.length || !itemTags.some(t => workItemFilters.tags.includes(t)))) return false;
       return true;
     });
-  }, [workItems, workItemFilters]);
+  }, [workItems, workItemFilters, periodDates]);
 
   
   const handleGenerateInsights = async () => {
@@ -579,7 +584,12 @@ const App = () => {
             <SectionHeader title="Root Cause das Issues Fechadas" />
             <div className="mb-6">
               <ChartInfoLamp info="Esta aba avalia as causas raízes mais comuns em ISSUES fechadas, além de métricas e comparativos por tipo, prioridade e pessoa. Facilita a identificação de padrões e oportunidades de melhoria nos processos." />
-              <RootCauseDashboardWithErrorBoundary data={filteredWorkItems} />
+              <RootCauseDashboardWithErrorBoundary 
+                data={filteredWorkItems} 
+                allData={workItems}
+                periodStartDate={periodDates.startDate}
+                periodEndDate={periodDates.endDate}
+              />
             </div>
           </>
         );
