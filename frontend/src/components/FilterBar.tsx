@@ -157,6 +157,7 @@ const FilterBar: React.FC<FilterBarProps> = ({
             className="bg-ds-navy border border-ds-border text-ds-light-text text-sm rounded-md p-2"
           >
             <option value="0">Todos</option>
+            <option value="-1">Começo do Mês (-30)</option>
             <option value="7">Últimos 7 dias</option>
             <option value="8">Última semana + Hoje</option>
             <option value="15">Últimos 15 dias</option>

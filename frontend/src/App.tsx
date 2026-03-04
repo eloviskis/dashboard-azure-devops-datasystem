@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 // Fix: Import `subDays` from its submodule `date-fns/subDays` to resolve the export error.
-import { subDays } from 'date-fns';
+import { subDays, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { GoogleGenAI } from '@google/genai';
 
 // Import Auth
@@ -35,6 +35,7 @@ import ThroughputBreakdownChart from './components/ThroughputBreakdownChart.tsx'
 import BottleneckAnalysisChart from './components/BottleneckAnalysisChart.tsx';
 import RootCauseChart from './components/RootCauseChart.tsx';
 import { RootCauseDashboardWithErrorBoundary } from './components/RootCauseDashboard';
+import { PeriodComparisonDashboard } from './components/PeriodComparisonDashboard';
 import BacklogAnalysisDashboard from './components/BacklogAnalysisDashboard.tsx';
 import ImpedimentosDashboard from './components/ImpedimentosDashboard.tsx';
 import POAnalysisDashboard from './components/POAnalysisDashboard.tsx';
@@ -69,7 +70,7 @@ import { WorkItem, WorkItemFilters } from './types.ts';
 // Import Metrics
 import { calculatePerformanceMetrics, calculateQualityMetrics, COMPLETED_STATES } from './utils/metrics.ts';
 
-type Tab = 'executive' | 'team-insights' | 'cycle-analytics' | 'performance' | 'quality' | 'kanban' | 'detailed-throughput' | 'bottlenecks' | 'tags' | 'clients' | 'montecarlo' | 'item-list' | 'rootcause' | 'backlog' | 'impedimentos' | 'po-analysis' | 'pull-requests' | 'scrum-ctc' | 'dora' | 'sla' | 'metas' | 'documentation' | 'team-comparison';
+type Tab = 'executive' | 'team-insights' | 'cycle-analytics' | 'performance' | 'quality' | 'kanban' | 'detailed-throughput' | 'bottlenecks' | 'tags' | 'clients' | 'montecarlo' | 'item-list' | 'rootcause' | 'period-comparison' | 'backlog' | 'impedimentos' | 'po-analysis' | 'pull-requests' | 'scrum-ctc' | 'dora' | 'sla' | 'metas' | 'documentation' | 'team-comparison';
 
 const DEFAULT_TAB_CONFIG = [
   // 🧭 1. Camada Executiva
@@ -91,6 +92,7 @@ const DEFAULT_TAB_CONFIG = [
   // 🧠 4. Qualidade e Engenharia
   { id: 'quality', label: 'Qualidade', visible: true },
   { id: 'rootcause', label: 'Root Cause (Issues)', visible: true },
+  { id: 'period-comparison', label: '📊 Comparação de Períodos', visible: true },
   { id: 'pull-requests', label: 'Pull Requests & Code Review', visible: true },
   { id: 'dora', label: 'Indicadores DevOps', visible: true },
   { id: 'tags', label: 'Análise de Tags', visible: true },
@@ -175,6 +177,10 @@ const App = () => {
     } else if (workItemFilters.periodMode === 'custom' && workItemFilters.customStartDate && workItemFilters.customEndDate) {
       startDate = new Date(workItemFilters.customStartDate);
       endDate = new Date(workItemFilters.customEndDate + 'T23:59:59');
+    } else if (workItemFilters.period === -1) {
+      // Começo do Mês (-30): equivalente à query Azure DevOps @StartOfMonth('-30d') AND < @StartOfMonth
+      startDate = startOfMonth(subMonths(now, 1));
+      endDate = endOfMonth(subMonths(now, 1));
     } else {
       startDate = workItemFilters.period === 8 ? subDays(now, 7) : subDays(now, workItemFilters.period);
     }
@@ -590,6 +596,16 @@ const App = () => {
                 periodStartDate={periodDates.startDate}
                 periodEndDate={periodDates.endDate}
               />
+            </div>
+          </>
+        );
+      case 'period-comparison':
+        return (
+          <>
+            <SectionHeader title="Comparação de Períodos" />
+            <div className="mb-6">
+              <ChartInfoLamp info="Compare métricas entre dois períodos diferentes para identificar tendências e evoluções. Útil para validar impacto de melhorias ou identificar regressões." />
+              <PeriodComparisonDashboard data={workItems} />
             </div>
           </>
         );
