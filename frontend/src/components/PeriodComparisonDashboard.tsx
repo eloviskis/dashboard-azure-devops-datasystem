@@ -65,7 +65,7 @@ const calculatePeriodDates = (config: PeriodConfig): { start: Date; end: Date } 
       return { start: subDays(now, 90), end: now };
     case 'custom':
       return {
-        start: config.customStart ? new Date(config.customStart) : subDays(now, 30),
+        start: config.customStart ? new Date(config.customStart + 'T00:00:00') : subDays(now, 30),
         end: config.customEnd ? new Date(config.customEnd + 'T23:59:59') : now,
       };
     default:
@@ -276,9 +276,8 @@ export const PeriodComparisonDashboard: React.FC<Props> = ({ data }) => {
   const chartData = [
     { name: 'Issues Criadas', 'Período A': metricsA.issuesCriadas, 'Período B': metricsB.issuesCriadas },
     { name: 'Issues Fechadas', 'Período A': metricsA.issuesFechadas, 'Período B': metricsB.issuesFechadas },
-    { name: 'Bugs Criados', 'Período A': metricsA.bugsCriados, 'Período B': metricsB.bugsCriados },
-    { name: 'Bugs Fechados', 'Período A': metricsA.bugsFechados, 'Período B': metricsB.bugsFechados },
-    { name: 'Correções', 'Período A': metricsA.issuesCorrecao, 'Período B': metricsB.issuesCorrecao },
+    { name: 'Issues Correção (Fechadas)', 'Período A': metricsA.issuesCorrecao, 'Período B': metricsB.issuesCorrecao },
+    { name: 'Bugs (type=Bug)', 'Período A': metricsA.bugsCriados, 'Período B': metricsB.bugsCriados },
     { name: 'P0s', 'Período A': metricsA.issuesP0, 'Período B': metricsB.issuesP0 },
     { name: 'Sem Causa Raiz', 'Período A': metricsA.issuesSemCausaRaiz, 'Período B': metricsB.issuesSemCausaRaiz },
     { name: 'Throughput', 'Período A': metricsA.throughput, 'Período B': metricsB.throughput },
@@ -328,26 +327,19 @@ export const PeriodComparisonDashboard: React.FC<Props> = ({ data }) => {
           periodBLabel={periodBLabel}
         />
         <MetricCard
-          title="Bugs Criados"
+          title="Issues Correção (Fechadas)"
+          periodA={metricsA.issuesCorrecao}
+          periodB={metricsB.issuesCorrecao}
+          periodALabel={periodALabel}
+          periodBLabel={periodBLabel}
+        />
+        <MetricCard
+          title="Bugs (type=Bug)"
           periodA={metricsA.bugsCriados}
           periodB={metricsB.bugsCriados}
           periodALabel={periodALabel}
           periodBLabel={periodBLabel}
           invertColors={true}
-        />
-        <MetricCard
-          title="Bugs Fechados"
-          periodA={metricsA.bugsFechados}
-          periodB={metricsB.bugsFechados}
-          periodALabel={periodALabel}
-          periodBLabel={periodBLabel}
-        />
-        <MetricCard
-          title="Issues Correção"
-          periodA={metricsA.issuesCorrecao}
-          periodB={metricsB.issuesCorrecao}
-          periodALabel={periodALabel}
-          periodBLabel={periodBLabel}
         />
         <MetricCard
           title="P0s (Críticos)"
@@ -409,6 +401,11 @@ export const PeriodComparisonDashboard: React.FC<Props> = ({ data }) => {
             ({metricsB.issuesFechadas > metricsA.issuesFechadas ? '✅ aumento' : metricsB.issuesFechadas < metricsA.issuesFechadas ? '⚠️ redução' : '= estável'})
           </p>
           <p>
+            <span className="font-medium text-white">Issues Correção (Fechadas):</span>{' '}
+            {metricsA.issuesCorrecao} → {metricsB.issuesCorrecao}{' '}
+            ({metricsB.issuesCorrecao > metricsA.issuesCorrecao ? '⚠️ aumento' : metricsB.issuesCorrecao < metricsA.issuesCorrecao ? '✅ redução' : '= estável'})
+          </p>
+          <p>
             <span className="font-medium text-white">P0s:</span>{' '}
             {metricsA.issuesP0} → {metricsB.issuesP0}{' '}
             ({metricsB.issuesP0 > metricsA.issuesP0 ? '🔴 aumento crítico' : metricsB.issuesP0 < metricsA.issuesP0 ? '✅ redução' : '= estável'})
@@ -419,6 +416,16 @@ export const PeriodComparisonDashboard: React.FC<Props> = ({ data }) => {
             ({metricsB.throughput > metricsA.throughput ? '✅ aumento' : metricsB.throughput < metricsA.throughput ? '⚠️ redução' : '= estável'})
           </p>
         </div>
+      </div>
+
+      {/* Legenda explicativa */}
+      <div className="bg-ds-navy border border-ds-border rounded-lg p-4 text-xs text-ds-text">
+        <p className="font-medium text-white mb-2">📋 Legenda dos campos:</p>
+        <ul className="space-y-1">
+          <li><strong>Issues Correção:</strong> type=Issue com customType="Correção" (campo Custom Type)</li>
+          <li><strong>Bugs (type=Bug):</strong> Work items com type=Bug (diferente de Issue)</li>
+          <li><strong>P0s:</strong> Issues de Correção com priority=0 ou null</li>
+        </ul>
       </div>
     </div>
   );
