@@ -29,8 +29,15 @@ const transformApiDataToWorkItem = (apiItem: any): WorkItem => {
     'default':                [0.03, 0.05, 0.40, 0.12, 0.12, 0.12, 0.16],
   };
 
-  if (apiItem.cycleTime && apiItem.cycleTime > 0) {
-    const ct = apiItem.cycleTime;
+  // Usa cycleTime para itens fechados ou age para itens abertos como base de tempo
+  const timeBasis = (apiItem.cycleTime && apiItem.cycleTime > 0)
+    ? apiItem.cycleTime
+    : (!COMPLETED_STATES.includes(apiItem.state) && apiItem.age && apiItem.age > 0)
+      ? apiItem.age
+      : 0;
+
+  if (timeBasis > 0) {
+    const ct = timeBasis;
     const profile = TYPE_PROFILES[apiItem.type] || TYPE_PROFILES['default'];
     const currentState = apiItem.state;
     
@@ -67,6 +74,9 @@ const transformApiDataToWorkItem = (apiItem: any): WorkItem => {
             timeInStatusDays![WORKFLOW_COLUMNS[i]] = Math.max(0, parseFloat(remaining.toFixed(1)));
           }
         });
+      } else if (currentState) {
+        // Estado não está na lista de WORKFLOW_COLUMNS: registra o age inteiro no estado atual
+        timeInStatusDays = { [currentState]: parseFloat(ct.toFixed(1)) };
       }
     }
   }
