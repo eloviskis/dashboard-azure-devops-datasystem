@@ -21,7 +21,8 @@ interface PeriodMetrics {
   issuesFechadas: number;
   bugsCriados: number;
   bugsFechados: number;
-  issuesCorrecao: number;
+  issuesCorrecaoCriadas: number;
+  issuesCorrecaoFechadas: number;
   issuesP0: number;
   issuesSemCausaRaiz: number;
   throughput: number;
@@ -124,7 +125,20 @@ const calculateMetrics = (data: WorkItem[], startDate: Date, endDate: Date): Per
     }
   }).length;
 
-  // Issues de Correção fechadas no período
+  // Issues de Correção CRIADAS no período
+  const issuesCorrecaoCriadas = data.filter(w => {
+    if (w.type !== 'Issue') return false;
+    if (w.customType !== 'Correção') return false;
+    if (!w.createdDate) return false;
+    try {
+      const created = typeof w.createdDate === 'string' ? parseISO(w.createdDate) : new Date(w.createdDate);
+      return isWithinInterval(created, { start: startDate, end: endDate });
+    } catch {
+      return false;
+    }
+  }).length;
+
+  // Issues de Correção FECHADAS no período
   const issuesCorrecaoFechadas = data.filter(w => {
     if (w.type !== 'Issue') return false;
     if (!COMPLETED_STATES.includes(w.state)) return false;
@@ -138,7 +152,7 @@ const calculateMetrics = (data: WorkItem[], startDate: Date, endDate: Date): Per
     }
   });
 
-  const issuesCorrecao = issuesCorrecaoFechadas.length;
+  const issuesCorrecaoFechadasCount = issuesCorrecaoFechadas.length;
   const issuesP0 = issuesCorrecaoFechadas.filter(w => normalizePriority(w.priority) === 0).length;
   const issuesSemCausaRaiz = issuesCorrecaoFechadas.filter(w => !w.causaRaiz || w.causaRaiz.trim() === '').length;
 
@@ -159,7 +173,8 @@ const calculateMetrics = (data: WorkItem[], startDate: Date, endDate: Date): Per
     issuesFechadas,
     bugsCriados,
     bugsFechados,
-    issuesCorrecao,
+    issuesCorrecaoCriadas,
+    issuesCorrecaoFechadas: issuesCorrecaoFechadasCount,
     issuesP0,
     issuesSemCausaRaiz,
     throughput,
@@ -290,10 +305,11 @@ export const PeriodComparisonDashboard: React.FC<Props> = ({ data }) => {
   const periodBLabel = format(periodBDates.start, "dd/MM", { locale: ptBR }) + ' - ' + format(periodBDates.end, "dd/MM/yy", { locale: ptBR });
 
   const chartData = [
-    { name: 'Issues (pós-produção)', 'Período A': metricsA.issuesCriadas, 'Período B': metricsB.issuesCriadas },
+    { name: 'Issues Criadas (pós-prod)', 'Período A': metricsA.issuesCriadas, 'Período B': metricsB.issuesCriadas },
     { name: 'Issues Fechadas', 'Período A': metricsA.issuesFechadas, 'Período B': metricsB.issuesFechadas },
-    { name: 'Issues Correção', 'Período A': metricsA.issuesCorrecao, 'Período B': metricsB.issuesCorrecao },
-    { name: 'Bugs (pré-produção)', 'Período A': metricsA.bugsCriados, 'Período B': metricsB.bugsCriados },
+    { name: 'Correção Criadas', 'Período A': metricsA.issuesCorrecaoCriadas, 'Período B': metricsB.issuesCorrecaoCriadas },
+    { name: 'Correção Fechadas', 'Período A': metricsA.issuesCorrecaoFechadas, 'Período B': metricsB.issuesCorrecaoFechadas },
+    { name: 'Bugs (pré-prod)', 'Período A': metricsA.bugsCriados, 'Período B': metricsB.bugsCriados },
     { name: 'P0s', 'Período A': metricsA.issuesP0, 'Período B': metricsB.issuesP0 },
     { name: 'Sem Causa Raiz', 'Período A': metricsA.issuesSemCausaRaiz, 'Período B': metricsB.issuesSemCausaRaiz },
     { name: 'Throughput', 'Período A': metricsA.throughput, 'Período B': metricsB.throughput },
@@ -366,7 +382,7 @@ export const PeriodComparisonDashboard: React.FC<Props> = ({ data }) => {
       {/* Metrics Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <MetricCard
-          title="Issues (pós-produção)"
+          title="Issues Criadas (pós-prod)"
           periodA={metricsA.issuesCriadas}
           periodB={metricsB.issuesCriadas}
           periodALabel={periodALabel}
@@ -381,14 +397,22 @@ export const PeriodComparisonDashboard: React.FC<Props> = ({ data }) => {
           periodBLabel={periodBLabel}
         />
         <MetricCard
-          title="Issues Correção"
-          periodA={metricsA.issuesCorrecao}
-          periodB={metricsB.issuesCorrecao}
+          title="Correção Criadas"
+          periodA={metricsA.issuesCorrecaoCriadas}
+          periodB={metricsB.issuesCorrecaoCriadas}
+          periodALabel={periodALabel}
+          periodBLabel={periodBLabel}
+          invertColors={true}
+        />
+        <MetricCard
+          title="Correção Fechadas"
+          periodA={metricsA.issuesCorrecaoFechadas}
+          periodB={metricsB.issuesCorrecaoFechadas}
           periodALabel={periodALabel}
           periodBLabel={periodBLabel}
         />
         <MetricCard
-          title="Bugs (pré-produção)"
+          title="Bugs (pré-prod)"
           periodA={metricsA.bugsCriados}
           periodB={metricsB.bugsCriados}
           periodALabel={periodALabel}
@@ -455,9 +479,14 @@ export const PeriodComparisonDashboard: React.FC<Props> = ({ data }) => {
             ({metricsB.issuesFechadas > metricsA.issuesFechadas ? '✅ aumento' : metricsB.issuesFechadas < metricsA.issuesFechadas ? '⚠️ redução' : '= estável'})
           </p>
           <p>
-            <span className="font-medium text-white">Issues Correção (Fechadas):</span>{' '}
-            {metricsA.issuesCorrecao} → {metricsB.issuesCorrecao}{' '}
-            ({metricsB.issuesCorrecao > metricsA.issuesCorrecao ? '⚠️ aumento' : metricsB.issuesCorrecao < metricsA.issuesCorrecao ? '✅ redução' : '= estável'})
+            <span className="font-medium text-white">Correção Criadas:</span>{' '}
+            {metricsA.issuesCorrecaoCriadas} → {metricsB.issuesCorrecaoCriadas}{' '}
+            ({metricsB.issuesCorrecaoCriadas > metricsA.issuesCorrecaoCriadas ? '⚠️ aumento' : metricsB.issuesCorrecaoCriadas < metricsA.issuesCorrecaoCriadas ? '✅ redução' : '= estável'})
+          </p>
+          <p>
+            <span className="font-medium text-white">Correção Fechadas:</span>{' '}
+            {metricsA.issuesCorrecaoFechadas} → {metricsB.issuesCorrecaoFechadas}{' '}
+            ({metricsB.issuesCorrecaoFechadas > metricsA.issuesCorrecaoFechadas ? '✅ aumento' : metricsB.issuesCorrecaoFechadas < metricsA.issuesCorrecaoFechadas ? '⚠️ redução' : '= estável'})
           </p>
           <p>
             <span className="font-medium text-white">P0s:</span>{' '}

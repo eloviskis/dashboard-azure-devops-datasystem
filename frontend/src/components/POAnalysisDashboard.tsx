@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { WorkItem } from '../types';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend, CartesianGrid } from 'recharts';
 import { parseISO, differenceInDays } from 'date-fns';
 import { CHART_COLORS } from '../constants';
 import { COMPLETED_STATES } from '../utils/metrics';
@@ -332,6 +332,45 @@ export const POAnalysisDashboard: React.FC<Props> = ({ data }) => {
       .sort((a, b) => b.mediaDias - a.mediaDias); // Ordena por maior tempo médio
   }, [data]);
 
+  // Tempo médio em cada state por time (backlog ativo)
+  const tempoMedioPorStatePorTime = useMemo(() => {
+    const itensAbertos = data.filter(item => !COMPLETED_STATES.includes(item.state) && item.timeInStatusDays);
+
+    if (itensAbertos.length === 0) return { chartData: [], statusOrder: [] };
+
+    const statsPorTime: Record<string, { count: number; statuses: Record<string, number> }> = {};
+    const allStatuses = new Set<string>();
+
+    itensAbertos.forEach(item => {
+      const team = item.team || 'Sem Time';
+      if (!statsPorTime[team]) {
+        statsPorTime[team] = { count: 0, statuses: {} };
+      }
+      statsPorTime[team].count++;
+      Object.entries(item.timeInStatusDays!).forEach(([status, days]) => {
+        statsPorTime[team].statuses[status] = (statsPorTime[team].statuses[status] || 0) + (days as number);
+        allStatuses.add(status);
+      });
+    });
+
+    const chartData = Object.entries(statsPorTime)
+      .map(([team, info]) => {
+        const avg: Record<string, number> = {};
+        Object.entries(info.statuses).forEach(([status, totalDays]) => {
+          avg[status] = parseFloat((totalDays / info.count).toFixed(1));
+        });
+        return { name: team, ...avg };
+      })
+      .sort((a, b) => {
+        const totalA = Object.values(a).reduce((s, v) => s + (typeof v === 'number' ? v : 0), 0);
+        const totalB = Object.values(b).reduce((s, v) => s + (typeof v === 'number' ? v : 0), 0);
+        return totalB - totalA;
+      });
+
+    const statusOrder = Array.from(allStatuses).sort();
+    return { chartData, statusOrder };
+  }, [data]);
+
   // Handler para clique no gráfico de backlog
   const handleBacklogTimeClick = (chartData: any) => {
     const items = chartData.items || [];
@@ -593,6 +632,51 @@ export const POAnalysisDashboard: React.FC<Props> = ({ data }) => {
           <span className="flex items-center gap-1"><span className="w-3 h-3 rounded" style={{backgroundColor: '#F6416C'}}></span> &gt; 90 dias (crítico)</span>
         </div>
       </div>
+
+      {/* Gráfico: Tempo Médio por State por Time */}
+      {tempoMedioPorStatePorTime.chartData.length > 0 && (
+        <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
+          <div className="font-bold mb-2 text-white">📊 Tempo Médio em Cada State por Time</div>
+          <ChartInfoLamp info="Mostra quanto tempo (em dias) os itens abertos ficam em média em cada estado do workflow, agrupado por time. Permite identificar gargalos no fluxo de cada equipe." />
+          <div className="text-xs text-ds-text mb-3">Média de dias que os itens do backlog ativo permanecem em cada estado do workflow</div>
+          <ResponsiveContainer width="100%" height={400}>
+            <BarChart
+              data={tempoMedioPorStatePorTime.chartData}
+              margin={{ top: 20, right: 30, left: 20, bottom: 50 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
+              <XAxis
+                dataKey="name"
+                tick={{ fill: '#fff', fontSize: 11 }}
+                angle={-45}
+                textAnchor="end"
+                height={70}
+              />
+              <YAxis
+                tick={{ fill: '#fff', fontSize: 12 }}
+                label={{ value: 'Dias', angle: -90, position: 'insideLeft', fill: '#fff' }}
+              />
+              <Tooltip
+                cursor={{ fill: 'rgba(100, 255, 218, 0.1)' }}
+                contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }}
+                labelStyle={{ color: '#64ffda', fontWeight: 'bold' }}
+                itemStyle={{ color: '#e6f1ff' }}
+                formatter={(value: number, name: string) => [`${value.toFixed(1)} dias`, name]}
+              />
+              <Legend wrapperStyle={{ paddingTop: '10px' }} />
+              {tempoMedioPorStatePorTime.statusOrder.map((status, index) => (
+                <Bar
+                  key={status}
+                  dataKey={status}
+                  stackId="state"
+                  fill={CHART_COLORS.palette[index % CHART_COLORS.palette.length]}
+                  radius={index === tempoMedioPorStatePorTime.statusOrder.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}
+                />
+              ))}
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
 
       {/* Gráfico: Taxa de Conclusão por Criador */}
       <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
