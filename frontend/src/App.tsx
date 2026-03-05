@@ -25,6 +25,7 @@ import IndividualPerformanceChart from './components/IndividualPerformanceChart.
 import BugVsIssuePieChart from './components/BugVsIssuePieChart.tsx';
 import BugCreationTrendChart from './components/BugCreationTrendChart.tsx';
 import TeamBugChart from './components/TeamBugChart.tsx';
+import BugIssueByFeatureChart from './components/BugIssueByFeatureChart.tsx';
 import AIInsightsModal from './components/AIInsightsModal.tsx';
 import CumulativeFlowDiagram from './components/CumulativeFlowDiagram.tsx';
 import LeadVsCycleTimeChart from './components/LeadVsCycleTimeChart.tsx';
@@ -460,6 +461,12 @@ const App = () => {
             <div className="mt-6">
               <ChartInfoLamp info="Analisa a taxa de retrabalho por time e pessoa. Identifica reincidência de bugs, ajudando a priorizar melhorias de qualidade e processo." />
               <ReworkAnalysisChart data={filteredWorkItems} />
+            </div>
+            {/* Bugs e Issues por Feature */}
+            <div className="mt-6 bg-ds-navy p-4 rounded-lg border border-ds-border">
+              <ChartInfoLamp info="Mostra, por feature, quantos bugs foram encontrados antes de ir pra produção (detectados internamente) e quantos issues foram reportados pelo cliente após a entrega. Clique nas barras para ver os itens detalhados." />
+              <h3 className="text-ds-light-text font-bold text-lg mb-4">Bugs e Issues por Feature</h3>
+              <BugIssueByFeatureChart data={filteredWorkItems} />
             </div>
           </>
         );
