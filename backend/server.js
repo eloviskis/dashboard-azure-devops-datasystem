@@ -840,6 +840,39 @@ app.get('/api/auth/validate', authenticateToken, (req, res) => {
   res.json({ valid: true, user: req.user });
 });
 
+app.put('/api/auth/change-password', authenticateToken, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Senha atual e nova senha são obrigatórias' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'A nova senha deve ter no mínimo 6 caracteres' });
+    }
+
+    const users = await sql`SELECT * FROM users WHERE id = ${req.user.id}`;
+    if (users.length === 0) {
+      return res.status(404).json({ error: 'Usuário não encontrado' });
+    }
+
+    const user = users[0];
+    const validCurrent = bcrypt.compareSync(currentPassword, user.password);
+    if (!validCurrent) {
+      return res.status(401).json({ error: 'Senha atual incorreta' });
+    }
+
+    const hashedNew = bcrypt.hashSync(newPassword, 10);
+    await sql`UPDATE users SET password = ${hashedNew}, updated_at = CURRENT_TIMESTAMP WHERE id = ${req.user.id}`;
+
+    res.json({ message: 'Senha alterada com sucesso' });
+  } catch (error) {
+    console.error('❌ Error changing password:', error);
+    res.status(500).json({ error: 'Erro ao alterar senha' });
+  }
+});
+
 // ===========================================
 // USER MANAGEMENT ENDPOINTS
 // ===========================================

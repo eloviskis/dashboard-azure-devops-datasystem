@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { SyncStatus } from '../hooks/useAzureDevOpsData';
 import { WorkItem } from '../types';
 // Fix: Import date-fns functions from their submodules for v2 compatibility.
@@ -6,6 +6,7 @@ import { formatDistanceToNow } from 'date-fns'; // Updated to named imports
 // Fix: Import locale data with a default import from its specific path to resolve type errors.
 import { ptBR } from 'date-fns/locale/pt-BR'; // Updated to named imports
 import { useAuth } from '../contexts/AuthContext';
+import ChangePasswordModal from './ChangePasswordModal';
 
 interface HeaderProps {
     lastSyncStatus: SyncStatus | null;
@@ -18,6 +19,20 @@ interface HeaderProps {
 const Header: React.FC<HeaderProps> = ({ lastSyncStatus, onOpenUserManagement, onSync, syncing, workItems = [] }) => {
     const { user, logout, isAdmin } = useAuth();
     const [showAlerts, setShowAlerts] = useState(false);
+    const [showUserMenu, setShowUserMenu] = useState(false);
+    const [showChangePassword, setShowChangePassword] = useState(false);
+    const userMenuRef = useRef<HTMLDivElement>(null);
+
+    // Fecha o menu ao clicar fora
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+                setShowUserMenu(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
     
     // Alert badge: high priority items aging in WIP
     const alerts = useMemo(() => {
@@ -176,20 +191,50 @@ const Header: React.FC<HeaderProps> = ({ lastSyncStatus, onOpenUserManagement, o
                         <span className="hidden sm:inline">Usuários</span>
                     </button>
                 )}
-                <div className="text-right">
-                    <p className="text-sm text-ds-light-text">{user?.username}</p>
-                    <p className="text-xs text-ds-text">{isAdmin ? 'Administrador' : 'Usuário'}</p>
+                {/* User menu dropdown */}
+                <div className="relative" ref={userMenuRef}>
+                    <button
+                        onClick={() => setShowUserMenu(v => !v)}
+                        className="flex items-center gap-2 px-3 py-2 bg-ds-navy hover:bg-ds-border rounded-lg transition-colors text-sm"
+                        title="Menu do usuário"
+                    >
+                        <div className="text-right">
+                            <p className="text-sm text-ds-light-text leading-tight">{user?.username}</p>
+                            <p className="text-xs text-ds-text">{isAdmin ? 'Administrador' : 'Usuário'}</p>
+                        </div>
+                        <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 text-ds-text transition-transform ${showUserMenu ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                    </button>
+
+                    {showUserMenu && (
+                        <div className="absolute right-0 top-12 w-48 bg-ds-navy border border-ds-border rounded-lg shadow-xl z-50 overflow-hidden">
+                            <button
+                                onClick={() => { setShowChangePassword(true); setShowUserMenu(false); }}
+                                className="w-full flex items-center gap-3 px-4 py-3 text-sm text-ds-light-text hover:bg-ds-border transition-colors"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-ds-green" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                                </svg>
+                                Alterar Senha
+                            </button>
+                            <div className="border-t border-ds-border" />
+                            <button
+                                onClick={() => { logout(); setShowUserMenu(false); }}
+                                className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-400 hover:bg-ds-border transition-colors"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                                </svg>
+                                Sair
+                            </button>
+                        </div>
+                    )}
                 </div>
-                <button
-                    onClick={logout}
-                    className="flex items-center gap-2 px-3 py-2 bg-ds-navy hover:bg-ds-border rounded-lg transition-colors text-sm"
-                    title="Sair"
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                    </svg>
-                    <span className="hidden sm:inline">Sair</span>
-                </button>
+
+                {showChangePassword && (
+                    <ChangePasswordModal onClose={() => setShowChangePassword(false)} />
+                )}
             </div>
             
             {/* Fix: Replace unsupported `style jsx` with a standard `style` tag for compatibility. */}
