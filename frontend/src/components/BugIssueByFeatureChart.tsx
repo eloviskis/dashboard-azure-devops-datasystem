@@ -117,8 +117,26 @@ const truncate = (str: string, max: number) =>
 
 const BugIssueByFeatureChart: React.FC<BugIssueByFeatureChartProps> = ({ data }) => {
   const [modalData, setModalData] = useState<ModalData | null>(null);
+  const [selectedTeams, setSelectedTeams] = useState<string[]>([]);
 
-  // Mapa id → WorkItem para navegação pela hierarquia
+  // Lista de times disponíveis nos dados
+  const availableTeams = useMemo(() => {
+    const teams = new Set<string>();
+    data.forEach(item => {
+      if ((item.type === 'Bug' || item.type === 'Issue') && item.team) {
+        teams.add(item.team);
+      }
+    });
+    return Array.from(teams).sort();
+  }, [data]);
+
+  const toggleTeam = (team: string) => {
+    setSelectedTeams(prev =>
+      prev.includes(team) ? prev.filter(t => t !== team) : [...prev, team]
+    );
+  };
+
+  // Mapa id → WorkItem para navegação pela hierarquia (usa dados completos para resolver features)
   const lookup = useMemo(() => {
     const map = new Map<number, WorkItem>();
     data.forEach(item => map.set(item.workItemId, item));
@@ -129,7 +147,13 @@ const BugIssueByFeatureChart: React.FC<BugIssueByFeatureChartProps> = ({ data })
   const { chartData, itemsByFeature } = useMemo(() => {
     const grouped: Record<string, { featureTitle: string; bugs: WorkItem[]; issues: WorkItem[] }> = {};
 
-    data.forEach(item => {
+    const source = selectedTeams.length === 0
+      ? data
+      : data.filter(item =>
+          (item.type === 'Bug' || item.type === 'Issue') && selectedTeams.includes(item.team ?? '')
+        );
+
+    source.forEach(item => {
       if (item.type !== 'Bug' && item.type !== 'Issue') return;
 
       const feature = resolveFeature(item, lookup);
@@ -163,7 +187,7 @@ const BugIssueByFeatureChart: React.FC<BugIssueByFeatureChartProps> = ({ data })
     });
 
     return { chartData: sorted, itemsByFeature: map };
-  }, [data, lookup]);
+  }, [data, lookup, selectedTeams]);
 
   const openModal = (featureTitle: string, type: 'Bug' | 'Issue') => {
     const entry = itemsByFeature[featureTitle];
@@ -187,6 +211,38 @@ const BugIssueByFeatureChart: React.FC<BugIssueByFeatureChartProps> = ({ data })
   return (
     <>
       <ItemListModal data={modalData} onClose={() => setModalData(null)} />
+
+      {/* Filtro de Times */}
+      {availableTeams.length > 0 && (
+        <div className="mb-4">
+          <div className="text-xs text-ds-text mb-2 font-semibold uppercase tracking-wide">Filtrar por time:</div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setSelectedTeams([])}
+              className={`px-3 py-1 rounded-full text-xs font-medium transition-colors border ${
+                selectedTeams.length === 0
+                  ? 'bg-ds-green text-ds-dark border-ds-green'
+                  : 'bg-transparent text-ds-text border-ds-border hover:border-ds-green hover:text-ds-green'
+              }`}
+            >
+              Todos
+            </button>
+            {availableTeams.map(team => (
+              <button
+                key={team}
+                onClick={() => toggleTeam(team)}
+                className={`px-3 py-1 rounded-full text-xs font-medium transition-colors border ${
+                  selectedTeams.includes(team)
+                    ? 'bg-ds-green text-ds-dark border-ds-green'
+                    : 'bg-transparent text-ds-text border-ds-border hover:border-ds-green hover:text-ds-green'
+                }`}
+              >
+                {team}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Legenda de contexto */}
       <div className="flex flex-wrap gap-4 mb-4 text-xs text-ds-text">
