@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { WorkItem } from '../types';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts';
+import { parseISO, differenceInDays } from 'date-fns';
 import { CHART_COLORS } from '../constants';
 import { COMPLETED_STATES } from '../utils/metrics';
 import ChartInfoLamp from './ChartInfoLamp';
@@ -294,6 +295,53 @@ export const POAnalysisDashboard: React.FC<Props> = ({ data }) => {
 
   const itensPluriClientes = clientesAfetadosData.length;
 
+  // Tempo médio de vida do backlog por time (itens abertos)
+  const tempoMedioBacklogPorTime = useMemo(() => {
+    const now = new Date();
+    
+    // Filtra apenas itens que NÃO estão fechados (backlog ativo)
+    const itensAbertos = data.filter(item => !COMPLETED_STATES.includes(item.state) && item.createdDate);
+    
+    // Agrupa por time e calcula a idade média
+    const statsPorTime = itensAbertos.reduce((acc, item) => {
+      const team = item.team || 'Sem Time';
+      if (!acc[team]) {
+        acc[team] = { totalDias: 0, count: 0, items: [] as WorkItem[] };
+      }
+      
+      try {
+        const created = typeof item.createdDate === 'string' ? parseISO(item.createdDate) : new Date(item.createdDate as Date);
+        const idadeDias = differenceInDays(now, created);
+        acc[team].totalDias += idadeDias;
+        acc[team].count++;
+        acc[team].items.push(item);
+      } catch {
+        // Ignora itens com data inválida
+      }
+      
+      return acc;
+    }, {} as Record<string, { totalDias: number; count: number; items: WorkItem[] }>);
+    
+    return Object.entries(statsPorTime)
+      .map(([name, stats]) => ({
+        name,
+        mediaDias: stats.count > 0 ? Math.round(stats.totalDias / stats.count) : 0,
+        quantidade: stats.count,
+        items: stats.items
+      }))
+      .sort((a, b) => b.mediaDias - a.mediaDias); // Ordena por maior tempo médio
+  }, [data]);
+
+  // Handler para clique no gráfico de backlog
+  const handleBacklogTimeClick = (chartData: any) => {
+    const items = chartData.items || [];
+    setModalData({
+      title: `Backlog ativo - Time ${chartData.name} (${items.length} itens, média ${chartData.mediaDias} dias)`,
+      items,
+      color: '#FF9800'
+    });
+  };
+
   // Handlers de clique
   const handleCriadorClick = (chartData: any, index: number) => {
     const criadorName = chartData.name;
@@ -488,6 +536,62 @@ export const POAnalysisDashboard: React.FC<Props> = ({ data }) => {
             />
           </BarChart>
         </ResponsiveContainer>
+      </div>
+
+      {/* Gráfico: Tempo Médio de Vida do Backlog por Time */}
+      <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
+        <div className="font-bold mb-2 text-white">⏱️ Tempo Médio de Vida do Backlog por Time</div>
+        <ChartInfoLamp info="Idade média (em dias) dos itens ABERTOS no backlog de cada time. Quanto maior, mais antigo é o backlog pendente. Clique para ver os itens." />
+        <div className="text-xs text-ds-text mb-3">Média de dias desde a criação dos itens ainda não fechados (backlog ativo)</div>
+        <ResponsiveContainer width="100%" height={350}>
+          <BarChart 
+            data={tempoMedioBacklogPorTime}
+            margin={{ top: 20, right: 30, left: 20, bottom: 50 }}
+          >
+            <XAxis 
+              dataKey="name" 
+              tick={{ fill: '#fff', fontSize: 11 }} 
+              angle={-45}
+              textAnchor="end"
+              height={70}
+            />
+            <YAxis 
+              tick={{ fill: '#fff', fontSize: 12 }} 
+              label={{ value: 'Dias', angle: -90, position: 'insideLeft', fill: '#fff' }}
+            />
+            <Tooltip 
+              formatter={(value: number, name: string) => {
+                if (name === 'mediaDias') return [`${value} dias (média)`, 'Idade Média'];
+                if (name === 'quantidade') return [`${value} itens`, 'Qtd Abertos'];
+                return [value, name];
+              }}
+              contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #FF9800', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }} 
+              labelStyle={{ color: '#FF9800', fontWeight: 'bold' }} 
+              itemStyle={{ color: '#e6f1ff' }}
+            />
+            <Legend />
+            <Bar 
+              dataKey="mediaDias" 
+              name="Dias (média)"
+              radius={[8, 8, 0, 0]}
+              cursor="pointer"
+              label={{ position: 'top', fill: '#FF9800', fontSize: 11, fontWeight: 'bold' }}
+              onClick={(data) => handleBacklogTimeClick(data)}
+            >
+              {tempoMedioBacklogPorTime.map((entry, idx) => (
+                <Cell 
+                  key={`cell-${idx}`} 
+                  fill={entry.mediaDias > 90 ? '#F6416C' : entry.mediaDias > 30 ? '#FF9800' : '#43A047'} 
+                />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+        <div className="flex gap-4 mt-2 text-xs justify-center">
+          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded" style={{backgroundColor: '#43A047'}}></span> &lt; 30 dias (saudável)</span>
+          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded" style={{backgroundColor: '#FF9800'}}></span> 30-90 dias (atenção)</span>
+          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded" style={{backgroundColor: '#F6416C'}}></span> &gt; 90 dias (crítico)</span>
+        </div>
       </div>
 
       {/* Gráfico: Taxa de Conclusão por Criador */}
