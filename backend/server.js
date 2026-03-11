@@ -24,13 +24,15 @@ const app = express();
 // This runs before any other middleware, route handler, or error.
 // ═══════════════════════════════════════════════════════════════════════════════
 const ALLOWED_ORIGINS = [
+  'https://dsmetrics.online',
+  'http://dsmetrics.online',
+  'https://www.dsmetrics.online',
+  'http://www.dsmetrics.online',
   'https://dashboard-azure-devops-datasystem.vercel.app',
   'https://dashboard-azure-devops-datasystem-git-main-eloviskis.vercel.app',
   'https://devops-datasystem.vercel.app',
   'http://localhost:5173',
   'http://localhost:3000',
-  'http://31.97.64.250',
-  'https://31.97.64.250',
   'http://187.77.55.172',
   'https://187.77.55.172'
 ];
