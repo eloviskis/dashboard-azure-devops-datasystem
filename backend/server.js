@@ -30,7 +30,9 @@ const ALLOWED_ORIGINS = [
   'http://localhost:5173',
   'http://localhost:3000',
   'http://31.97.64.250',
-  'https://31.97.64.250'
+  'https://31.97.64.250',
+  'http://187.77.55.172',
+  'https://187.77.55.172'
 ];
 
 function setCorsHeaders(req, res) {
@@ -70,17 +72,15 @@ let pool = null;
 let sql = null;
 
 if (DATABASE_URL) {
-  // Optimized for Vercel serverless environment
+  const isLocalDb = DATABASE_URL.includes('localhost') || DATABASE_URL.includes('127.0.0.1');
   pool = new Pool({
     connectionString: DATABASE_URL,
-    // VPS PostgreSQL requires SSL with self-signed certificate
-    ssl: { rejectUnauthorized: false },
-    // Serverless-friendly settings: smaller pool, faster timeouts
-    max: 2, // Reduced for serverless - Vercel doesn't keep connections alive
+    ssl: isLocalDb ? false : { rejectUnauthorized: false },
+    max: isLocalDb ? 10 : 2,
     min: 0,
-    idleTimeoutMillis: 10000, // Close idle connections faster
-    connectionTimeoutMillis: 5000, // Faster connection timeout
-    allowExitOnIdle: true, // Allow pool to close when all connections are idle
+    idleTimeoutMillis: isLocalDb ? 30000 : 10000,
+    connectionTimeoutMillis: 5000,
+    allowExitOnIdle: !isLocalDb,
   });
 
   // Tagged template literal function for SQL queries
