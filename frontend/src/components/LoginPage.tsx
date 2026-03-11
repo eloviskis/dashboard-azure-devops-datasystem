@@ -1,25 +1,72 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+
+function generateCaptcha() {
+  const ops = ['+', '-', '×'] as const;
+  const op = ops[Math.floor(Math.random() * ops.length)];
+  let a: number, b: number, answer: number;
+  switch (op) {
+    case '+':
+      a = Math.floor(Math.random() * 20) + 1;
+      b = Math.floor(Math.random() * 20) + 1;
+      answer = a + b;
+      break;
+    case '-':
+      a = Math.floor(Math.random() * 20) + 5;
+      b = Math.floor(Math.random() * a) + 1;
+      answer = a - b;
+      break;
+    case '×':
+      a = Math.floor(Math.random() * 10) + 1;
+      b = Math.floor(Math.random() * 10) + 1;
+      answer = a * b;
+      break;
+  }
+  return { question: `${a} ${op} ${b} = ?`, answer };
+}
 
 const LoginPage: React.FC = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [captchaInput, setCaptchaInput] = useState('');
+  const [captcha, setCaptcha] = useState(generateCaptcha);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [failCount, setFailCount] = useState(0);
   const { login } = useAuth();
+
+  const refreshCaptcha = useCallback(() => {
+    setCaptcha(generateCaptcha());
+    setCaptchaInput('');
+  }, []);
+
+  // Renovar captcha após cada tentativa falha
+  useEffect(() => {
+    if (failCount > 0) refreshCaptcha();
+  }, [failCount, refreshCaptcha]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+
+    // Validar captcha
+    if (parseInt(captchaInput, 10) !== captcha.answer) {
+      setError('Resposta do captcha incorreta');
+      setFailCount(f => f + 1);
+      return;
+    }
+
     setLoading(true);
 
     try {
       const success = await login(username, password);
       if (!success) {
         setError('Usuário ou senha inválidos');
+        setFailCount(f => f + 1);
       }
     } catch (err) {
       setError('Erro ao conectar com o servidor');
+      setFailCount(f => f + 1);
     } finally {
       setLoading(false);
     }
@@ -76,6 +123,40 @@ const LoginPage: React.FC = () => {
                 required
                 disabled={loading}
               />
+            </div>
+
+            {/* Captcha */}
+            <div>
+              <label htmlFor="captcha" className="block text-sm font-medium text-ds-light-text mb-2">
+                Verificação de Segurança
+              </label>
+              <div className="flex items-center gap-3">
+                <div className="flex-shrink-0 bg-gradient-to-r from-blue-600/20 to-purple-600/20 border border-blue-500/30 rounded-lg px-4 py-3 select-none" style={{ fontFamily: 'monospace', letterSpacing: '2px' }}>
+                  <span className="text-blue-300 text-lg font-bold">{captcha.question}</span>
+                </div>
+                <input
+                  id="captcha"
+                  type="text"
+                  inputMode="numeric"
+                  value={captchaInput}
+                  onChange={(e) => setCaptchaInput(e.target.value.replace(/[^0-9-]/g, ''))}
+                  className="login-input w-24 px-4 py-3 rounded-lg text-center"
+                  placeholder="?"
+                  required
+                  disabled={loading}
+                  autoComplete="off"
+                />
+                <button
+                  type="button"
+                  onClick={refreshCaptcha}
+                  className="text-ds-muted hover:text-blue-400 transition-colors p-2"
+                  title="Novo captcha"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                </button>
+              </div>
             </div>
 
             {error && (
