@@ -516,6 +516,7 @@ async function syncData() {
         // Campos de Identificação e Falha do Processo
         const identificacao = fields['Custom.7ac99842-e0ec-4f18-b91b-53bfe3e3b3f5'] || '';
         const falhaDoProcesso = fields['Custom.Falhadoprocesso'] || '';
+        const impedimento = fields['Custom.Impedimento'] === true;
 
         await sql`
           INSERT INTO work_items (work_item_id, title, state, type, assigned_to, team, area_path, iteration_path,
@@ -523,13 +524,13 @@ async function syncData() {
             code_review_level1, code_review_level2, custom_type, root_cause_status, squad, area, complexity,
             reincidencia, performance_days, qa, causa_raiz, root_cause_legacy, created_by, po, ready_date, done_date,
             root_cause_task, root_cause_team, root_cause_version, dev, platform, application, branch_base, delivered_version, base_version,
-            identificacao, falha_do_processo, synced_at)
+            identificacao, falha_do_processo, impedimento, synced_at)
           VALUES (${workItemId}, ${title}, ${state}, ${type}, ${assignedTo}, ${team}, ${areaPath}, ${iterationPath},
             ${createdDate}, ${changedDate}, ${closedDate}, ${storyPoints}, ${tags}, ${tipoCliente}, ${priority}, ${url}, ${activatedDate || null},
             ${codeReviewLevel1}, ${codeReviewLevel2}, ${customType}, ${rootCauseStatus}, ${squad}, ${area}, ${complexity},
             ${reincidencia}, ${performanceDays}, ${qa}, ${causaRaiz}, ${rootCauseLegacy}, ${createdBy}, ${po}, ${readyDate}, ${doneDate},
             ${rootCauseTask}, ${rootCauseTeam}, ${rootCauseVersion}, ${dev}, ${platform}, ${application}, ${branchBase}, ${deliveredVersion}, ${baseVersion},
-            ${identificacao}, ${falhaDoProcesso}, ${new Date().toISOString()})
+            ${identificacao}, ${falhaDoProcesso}, ${impedimento}, ${new Date().toISOString()})
           ON CONFLICT (work_item_id) DO UPDATE SET
             title = EXCLUDED.title, state = EXCLUDED.state, type = EXCLUDED.type, assigned_to = EXCLUDED.assigned_to,
             team = EXCLUDED.team, area_path = EXCLUDED.area_path, iteration_path = EXCLUDED.iteration_path,
@@ -564,6 +565,7 @@ async function syncData() {
             base_version = EXCLUDED.base_version,
             identificacao = EXCLUDED.identificacao,
             falha_do_processo = EXCLUDED.falha_do_processo,
+            impedimento = EXCLUDED.impedimento,
             synced_at = EXCLUDED.synced_at
         `;
       }
@@ -1185,7 +1187,8 @@ app.get('/api/items', authenticateToken, async (req, res) => {
         parentId: row.parent_id,
         // Campos de Identificação e Falha do Processo
         identificacao: row.identificacao,
-        falhaDoProcesso: row.falha_do_processo
+        falhaDoProcesso: row.falha_do_processo,
+        impedimento: row.impedimento || false
       };
     });
 
@@ -1256,7 +1259,8 @@ app.get('/api/items/period/:days', authenticateToken, async (req, res) => {
       baseVersion: row.base_version,
       // Campos de Identificação e Falha do Processo
       identificacao: row.identificacao,
-      falhaDoProcesso: row.falha_do_processo
+      falhaDoProcesso: row.falha_do_processo,
+      impedimento: row.impedimento || false
     }));
 
     res.json(items);
