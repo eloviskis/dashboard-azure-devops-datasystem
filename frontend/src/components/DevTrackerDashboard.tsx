@@ -830,6 +830,14 @@ const DevelopersView: React.FC<{
             <InputField label="Equipe / Cliente" value={form.client} onChange={e => setForm(f => ({ ...f, client: e.target.value }))} placeholder="ex: Wakanda, Gotham" />
             <div className="flex gap-2 pt-2">
               <button onClick={() => setShowForm(false)} className="flex-1 bg-ds-muted/40 text-ds-text text-sm py-2 rounded-lg hover:bg-ds-muted transition-colors border border-ds-border">Cancelar</button>
+              {editingDev && (
+                <button
+                  onClick={async () => { await handleToggle(editingDev); setShowForm(false); }}
+                  className="flex-1 bg-red-500/10 text-red-400 border border-red-500/30 text-sm py-2 rounded-lg hover:bg-red-500/20 transition-colors"
+                >
+                  {editingDev.active ? 'Inativar' : 'Reativar'}
+                </button>
+              )}
               <button onClick={handleSave} disabled={saving} className="flex-1 bg-ds-green text-ds-dark-blue font-semibold text-sm py-2 rounded-lg hover:bg-ds-green/80 transition-colors disabled:opacity-50">
                 {saving ? 'Salvando...' : 'Salvar'}
               </button>
