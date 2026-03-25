@@ -64,6 +64,7 @@ import MetasDashboard from './components/MetasDashboard.tsx';
 import DocumentationDashboard from './components/DocumentationDashboard.tsx';
 import TeamComparisonDashboard from './components/TeamComparisonDashboard.tsx';
 import { ErrorBoundary } from './components/ErrorBoundary.tsx';
+import DevTrackerDashboard from './components/DevTrackerDashboard.tsx';
 
 // Import Types
 import { WorkItem, WorkItemFilters } from './types.ts';
@@ -71,40 +72,42 @@ import { WorkItem, WorkItemFilters } from './types.ts';
 // Import Metrics
 import { calculatePerformanceMetrics, calculateQualityMetrics, COMPLETED_STATES } from './utils/metrics.ts';
 
-type Tab = 'executive' | 'team-insights' | 'cycle-analytics' | 'performance' | 'quality' | 'kanban' | 'detailed-throughput' | 'bottlenecks' | 'tags' | 'clients' | 'montecarlo' | 'item-list' | 'rootcause' | 'period-comparison' | 'backlog' | 'impedimentos' | 'po-analysis' | 'pull-requests' | 'scrum-ctc' | 'dora' | 'sla' | 'metas' | 'documentation' | 'team-comparison';
+type Tab = 'executive' | 'team-insights' | 'cycle-analytics' | 'performance' | 'quality' | 'kanban' | 'detailed-throughput' | 'bottlenecks' | 'tags' | 'clients' | 'montecarlo' | 'item-list' | 'rootcause' | 'period-comparison' | 'backlog' | 'impedimentos' | 'po-analysis' | 'pull-requests' | 'scrum-ctc' | 'dora' | 'sla' | 'metas' | 'documentation' | 'team-comparison' | 'devtracker';
 
 const DEFAULT_TAB_CONFIG = [
   // 🧭 1. Camada Executiva
-  { id: 'performance', label: 'Performance Geral', visible: true },
-  { id: 'executive', label: 'Visão Executiva', visible: true },
-  { id: 'team-insights', label: 'Insights por Time', visible: true },
-  { id: 'metas', label: 'Metas por Time', visible: true },
-  { id: 'sla', label: 'SLA Tracking', visible: true },
+  { id: 'performance', label: '📈 Performance Geral', visible: true },
+  { id: 'executive', label: '🎯 Visão Executiva', visible: true },
+  { id: 'team-insights', label: '👥 Insights por Time', visible: true },
+  { id: 'metas', label: '🏁 Metas por Time', visible: true },
+  { id: 'sla', label: '📋 SLA Tracking', visible: true },
   // 🔄 2. Fluxo e Entregas
-  { id: 'kanban', label: 'Fluxo Contínuo (Kanban)', visible: true },
-  { id: 'cycle-analytics', label: 'Cycle Time Analytics', visible: true },
-  { id: 'detailed-throughput', label: 'Vazão Detalhada', visible: true },
-  { id: 'po-analysis', label: 'Análise de Demanda', visible: true },
-  { id: 'backlog', label: 'Análise de Backlog', visible: true },
-  { id: 'montecarlo', label: 'Previsão (Monte Carlo)', visible: true },
+  { id: 'kanban', label: '📊 Fluxo Contínuo (Kanban)', visible: true },
+  { id: 'cycle-analytics', label: '⏱️ Cycle Time Analytics', visible: true },
+  { id: 'detailed-throughput', label: '📉 Vazão Detalhada', visible: true },
+  { id: 'po-analysis', label: '📥 Análise de Demanda', visible: true },
+  { id: 'backlog', label: '📚 Análise de Backlog', visible: true },
+  { id: 'montecarlo', label: '🎲 Previsão (Monte Carlo)', visible: true },
   // 🚧 3. Riscos e Bloqueios
-  { id: 'bottlenecks', label: 'Gargalos (Estimado)', visible: true },
-  { id: 'impedimentos', label: 'Impedimentos', visible: true },
+  { id: 'bottlenecks', label: '🚧 Gargalos (Estimado)', visible: true },
+  { id: 'impedimentos', label: '⚠️ Impedimentos', visible: true },
   // 🧠 4. Qualidade e Engenharia
-  { id: 'quality', label: 'Qualidade', visible: true },
-  { id: 'rootcause', label: 'Root Cause (Issues)', visible: true },
+  { id: 'quality', label: '✅ Qualidade', visible: true },
+  { id: 'rootcause', label: '🔍 Root Cause (Issues)', visible: true },
   { id: 'period-comparison', label: '📊 Comparação de Períodos', visible: true },
-  { id: 'pull-requests', label: 'Pull Requests & Code Review', visible: true },
-  { id: 'dora', label: 'Indicadores DevOps', visible: true },
-  { id: 'tags', label: 'Análise de Tags', visible: true },
+  { id: 'pull-requests', label: '🔀 Pull Requests & Code Review', visible: true },
+  { id: 'dora', label: '🚀 Indicadores DevOps', visible: true },
+  { id: 'tags', label: '🏷️ Análise de Tags', visible: true },
   // 👥 5. Visões Específicas
-  { id: 'clients', label: 'Análise por Cliente', visible: true },
-  { id: 'scrum-ctc', label: 'Scrum (CTC/Franquia)', visible: true },
+  { id: 'clients', label: '🏢 Análise por Cliente', visible: true },
+  { id: 'scrum-ctc', label: '🏃 Scrum (CTC/Franquia)', visible: true },
   { id: 'team-comparison', label: '👥 Pessoas & Senioridade', visible: true },
   // 📋 6. Operacional / Dados Brutos
-  { id: 'item-list', label: 'Lista de Itens', visible: true },
+  { id: 'item-list', label: '📝 Lista de Itens', visible: true },
   // 📚 7. Suporte e Governança
   { id: 'documentation', label: '📖 Documentação', visible: true },
+  // 👤 8. Gestão do Time
+  { id: 'devtracker', label: '🗂️ DevTracker', visible: true },
 ];
 
 const App = () => {
@@ -126,7 +129,7 @@ const App = () => {
 
   // ── buscar config global de abas do backend (para não-admins)
   const GLOBAL_TABS_KEY = 'global_tabs_config';
-  const APP_API_URL = import.meta.env.VITE_API_URL || 'https://backend-hazel-three-14.vercel.app';
+  const APP_API_URL = import.meta.env.VITE_API_URL || '';
 
   useEffect(() => {
     if (!isAuthenticated || !token) return;
@@ -355,7 +358,7 @@ const App = () => {
             {previousPeriodComparison && previousPeriodComparison.prevTotal > 0 && (
               <div className="bg-ds-navy p-4 rounded-lg border border-ds-border mb-6">
                 <h3 className="text-ds-light-text font-bold text-sm mb-2">📊 Comparativo com Período Anterior</h3>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-center">
                   <div>
                     <p className="text-ds-text text-xs">Total Atual</p>
                     <p className="text-lg font-bold text-ds-light-text">{total}</p>
@@ -432,7 +435,7 @@ const App = () => {
         return (
           <>
             <SectionHeader title="Análise de Qualidade" />
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6 mb-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6 mb-6">
                 <SummaryCard title="Bugs Abertos (Retrabalho)" value={openBugs} />
                 <SummaryCard title="Issues em Aberto (Prod.)" value={openIssues} />
                 <SummaryCard title="MTTR (Res. Média)" value={avgResolutionTime} unit="dias" />
@@ -631,7 +634,7 @@ const App = () => {
           <>
             <SectionHeader title="Análise de Impedimentos" />
             <div className="mb-6">
-              <ChartInfoLamp info="Esta aba analisa todas as tarefas com tag [IMPEDIMENTO], mostrando há quantos dias estão paradas, último comentário, time responsável e tipo de work item. Clique nas barras para ver detalhes." />
+              <ChartInfoLamp info="Esta aba analisa tarefas com o campo Impedimento ativo ou com tag [IMPEDIMENTO], mostrando há quantos dias estão paradas, time responsável e tipo de work item. Clique nas barras para ver detalhes." />
               <ImpedimentosDashboard data={filteredWorkItems} />
             </div>
           </>
@@ -706,6 +709,8 @@ const App = () => {
             <DocumentationDashboard />
           </>
         );
+      case 'devtracker':
+        return <DevTrackerDashboard />;
       default:
         return null;
     }
@@ -774,7 +779,7 @@ const App = () => {
             </div>
         </div>
         
-        {activeTab !== 'cycle-analytics' && activeTab !== 'team-insights' && activeTab !== 'pull-requests' && activeTab !== 'scrum-ctc' && activeTab !== 'team-comparison' && activeTab !== 'period-comparison' && (
+        {activeTab !== 'cycle-analytics' && activeTab !== 'team-insights' && activeTab !== 'pull-requests' && activeTab !== 'scrum-ctc' && activeTab !== 'team-comparison' && activeTab !== 'period-comparison' && activeTab !== 'devtracker' && (
         <div className="relative">
           <button
             onClick={() => setFilterBarCollapsed(!filterBarCollapsed)}

@@ -36,6 +36,7 @@ const ALL_TABS = [
   { id: 'team-comparison',     label: 'Pessoas & Senioridade' },
   { id: 'item-list',           label: 'Lista de Itens' },
   { id: 'documentation',       label: '📖 Documentação' },
+  { id: 'devtracker',          label: '🗂️ DevTracker' },
 ];
 
 const UserManagementPage: React.FC = () => {
@@ -58,7 +59,7 @@ const UserManagementPage: React.FC = () => {
   const [restrictTabs, setRestrictTabs] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const API_URL = import.meta.env.VITE_API_URL || 'https://backend-hazel-three-14.vercel.app';
+  const API_URL = import.meta.env.VITE_API_URL || '';
 
   const fetchUsers = useCallback(async () => {
     try {

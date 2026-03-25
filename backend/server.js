@@ -78,10 +78,10 @@ if (DATABASE_URL) {
   pool = new Pool({
     connectionString: DATABASE_URL,
     ssl: isLocalDb ? false : { rejectUnauthorized: false },
-    max: isLocalDb ? 10 : 2,
-    min: 0,
+    max: isLocalDb ? 25 : 3,
+    min: isLocalDb ? 2 : 0,
     idleTimeoutMillis: isLocalDb ? 30000 : 10000,
-    connectionTimeoutMillis: 5000,
+    connectionTimeoutMillis: isLocalDb ? 30000 : 8000,
     allowExitOnIdle: !isLocalDb,
   });
 
@@ -345,6 +345,62 @@ const initDatabase = async () => {
       )
     `;
     console.log('✅ team_member_avatars table ready');
+
+    // DevTracker: desenvolvedores do time
+    await sql`
+      CREATE TABLE IF NOT EXISTS devtracker_developers (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL,
+        role TEXT DEFAULT 'Dev Pleno',
+        email TEXT,
+        category TEXT NOT NULL,
+        client TEXT,
+        active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `;
+    console.log('✅ devtracker_developers table ready');
+
+    // DevTracker: projetos/demandas
+    await sql`
+      CREATE TABLE IF NOT EXISTS devtracker_projects (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL,
+        client TEXT,
+        priority TEXT DEFAULT 'Média',
+        status TEXT DEFAULT 'Em andamento',
+        start_date DATE,
+        deadline DATE,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `;
+    console.log('✅ devtracker_projects table ready');
+
+    // DevTracker: alocações dev <-> projeto
+    await sql`
+      CREATE TABLE IF NOT EXISTS devtracker_allocations (
+        id SERIAL PRIMARY KEY,
+        developer_id INTEGER REFERENCES devtracker_developers(id) ON DELETE CASCADE,
+        project_id INTEGER REFERENCES devtracker_projects(id) ON DELETE CASCADE,
+        allocated_date DATE DEFAULT CURRENT_DATE,
+        created_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(developer_id, project_id)
+      )
+    `;
+    console.log('✅ devtracker_allocations table ready');
+
+    // DevTracker: tags customizadas para devs e features
+    await sql`
+      CREATE TABLE IF NOT EXISTS devtracker_tags (
+        entity_type TEXT NOT NULL,
+        entity_id TEXT NOT NULL,
+        tag TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW(),
+        PRIMARY KEY (entity_type, entity_id, tag)
+      )
+    `;
+    console.log('✅ devtracker_tags table ready');
 
     // Criar usuário admin padrão se não existir
     const adminExists = await sql`SELECT id FROM users WHERE username = 'admin'`;
@@ -1438,6 +1494,374 @@ app.post('/api/sync/pull-requests', authenticateToken, async (req, res) => {
   }
 });
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// DevTracker API — Gestão de desenvolvedores e projetos do time
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// GET /api/devtracker/developers — lista devs com projetos alocados e tags customizadas
+app.get('/api/devtracker/developers', authenticateToken, async (req, res) => {
+  try {
+    const devs = await sql`
+      SELECT d.*,
+        COALESCE(
+          json_agg(
+            json_build_object(
+              'id', p.id,
+              'name', p.name,
+              'client', p.client,
+              'priority', p.priority,
+              'status', p.status,
+              'start_date', p.start_date,
+              'deadline', p.deadline,
+              'allocated_date', a.allocated_date
+            )
+          ) FILTER (WHERE p.id IS NOT NULL),
+          '[]'
+        ) AS projects,
+        COALESCE(
+          (SELECT json_agg(t.tag) FROM devtracker_tags t
+           WHERE t.entity_type = 'developer' AND t.entity_id = d.id::text),
+          '[]'::json
+        ) AS custom_tags
+      FROM devtracker_developers d
+      LEFT JOIN devtracker_allocations a ON a.developer_id = d.id
+      LEFT JOIN devtracker_projects p ON p.id = a.project_id
+      GROUP BY d.id
+      ORDER BY d.name
+    `;
+    res.json(devs);
+  } catch (err) {
+    console.error('❌ GET /api/devtracker/developers:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/devtracker/ado-members — todas as pessoas únicas do Azure DevOps (assigned_to) com avatar
+app.get('/api/devtracker/ado-members', authenticateToken, async (req, res) => {
+  try {
+    const members = await sql`
+      SELECT DISTINCT ON (LOWER(w.assigned_to))
+        w.assigned_to AS name,
+        a.image_url   AS avatar_url,
+        COUNT(w.work_item_id) OVER (PARTITION BY LOWER(w.assigned_to)) AS task_count
+      FROM work_items w
+      LEFT JOIN team_member_avatars a ON LOWER(a.name) = LOWER(w.assigned_to)
+      WHERE w.assigned_to IS NOT NULL AND w.assigned_to != ''
+      ORDER BY LOWER(w.assigned_to)
+    `;
+    res.json(members);
+  } catch (err) {
+    console.error('❌ GET /api/devtracker/ado-members:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/devtracker/import-from-ado — importa pessoas do Azure DevOps como developers (ignora duplicatas)
+app.post('/api/devtracker/import-from-ado', authenticateToken, async (req, res) => {
+  try {
+    const { members, category = 'paydev', role = 'Dev Pleno' } = req.body;
+    if (!Array.isArray(members) || members.length === 0) {
+      return res.status(400).json({ error: 'members array obrigatório' });
+    }
+    let imported = 0;
+    let skipped = 0;
+    for (const name of members) {
+      const existing = await sql`SELECT id FROM devtracker_developers WHERE LOWER(name) = LOWER(${name})`;
+      if (existing.length > 0) { skipped++; continue; }
+      await sql`
+        INSERT INTO devtracker_developers (name, role, category, active)
+        VALUES (${name}, ${role}, ${category}, true)
+      `;
+      imported++;
+    }
+    res.json({ imported, skipped });
+  } catch (err) {
+    console.error('❌ POST /api/devtracker/import-from-ado:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/devtracker/developers — cria novo dev
+app.post('/api/devtracker/developers', authenticateToken, async (req, res) => {
+  try {
+    const { name, role = 'Dev Pleno', email, category, client } = req.body;
+    if (!name || !category) return res.status(400).json({ error: 'name e category são obrigatórios' });
+    const result = await sql`
+      INSERT INTO devtracker_developers (name, role, email, category, client)
+      VALUES (${name}, ${role}, ${email || null}, ${category}, ${client || null})
+      RETURNING *
+    `;
+    res.status(201).json(result[0]);
+  } catch (err) {
+    console.error('❌ POST /api/devtracker/developers:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/devtracker/developers/:id — edita dev
+app.put('/api/devtracker/developers/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, role, email, category, client, active } = req.body;
+    const result = await sql`
+      UPDATE devtracker_developers
+      SET name = ${name},
+          role = ${role},
+          email = ${email || null},
+          category = ${category},
+          client = ${client || null},
+          active = ${active !== undefined ? active : true}
+      WHERE id = ${id}
+      RETURNING *
+    `;
+    if (result.length === 0) return res.status(404).json({ error: 'Developer not found' });
+    res.json(result[0]);
+  } catch (err) {
+    console.error('❌ PUT /api/devtracker/developers/:id:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/devtracker/developers/:id — inativa dev (soft delete)
+app.delete('/api/devtracker/developers/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    await sql`UPDATE devtracker_developers SET active = false WHERE id = ${id}`;
+    res.json({ success: true });
+  } catch (err) {
+    console.error('❌ DELETE /api/devtracker/developers/:id:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/devtracker/projects — lista projetos com devs alocados
+app.get('/api/devtracker/projects', authenticateToken, async (req, res) => {
+  try {
+    const projects = await sql`
+      SELECT p.*,
+        COALESCE(
+          json_agg(
+            json_build_object(
+              'id', d.id,
+              'name', d.name,
+              'role', d.role,
+              'allocated_date', a.allocated_date
+            )
+          ) FILTER (WHERE d.id IS NOT NULL),
+          '[]'
+        ) AS developers
+      FROM devtracker_projects p
+      LEFT JOIN devtracker_allocations a ON a.project_id = p.id
+      LEFT JOIN devtracker_developers d ON d.id = a.developer_id
+      GROUP BY p.id
+      ORDER BY p.created_at DESC
+    `;
+    res.json(projects);
+  } catch (err) {
+    console.error('❌ GET /api/devtracker/projects:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/devtracker/projects — cria projeto
+app.post('/api/devtracker/projects', authenticateToken, async (req, res) => {
+  try {
+    const { name, client, priority = 'Média', status = 'Em andamento', start_date, deadline } = req.body;
+    if (!name) return res.status(400).json({ error: 'name é obrigatório' });
+    const result = await sql`
+      INSERT INTO devtracker_projects (name, client, priority, status, start_date, deadline)
+      VALUES (${name}, ${client || null}, ${priority}, ${status}, ${start_date || null}, ${deadline || null})
+      RETURNING *
+    `;
+    res.status(201).json(result[0]);
+  } catch (err) {
+    console.error('❌ POST /api/devtracker/projects:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/devtracker/projects/:id — edita projeto
+app.put('/api/devtracker/projects/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, client, priority, status, start_date, deadline } = req.body;
+    const result = await sql`
+      UPDATE devtracker_projects
+      SET name = ${name},
+          client = ${client || null},
+          priority = ${priority},
+          status = ${status},
+          start_date = ${start_date || null},
+          deadline = ${deadline || null},
+          updated_at = NOW()
+      WHERE id = ${id}
+      RETURNING *
+    `;
+    if (result.length === 0) return res.status(404).json({ error: 'Project not found' });
+    res.json(result[0]);
+  } catch (err) {
+    console.error('❌ PUT /api/devtracker/projects/:id:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/devtracker/projects/:id — exclui projeto
+app.delete('/api/devtracker/projects/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    await sql`DELETE FROM devtracker_projects WHERE id = ${id}`;
+    res.json({ success: true });
+  } catch (err) {
+    console.error('❌ DELETE /api/devtracker/projects/:id:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/devtracker/projects/:id/complete — conclui projeto
+app.post('/api/devtracker/projects/:id/complete', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await sql`
+      UPDATE devtracker_projects SET status = 'Concluído', updated_at = NOW()
+      WHERE id = ${id} RETURNING *
+    `;
+    if (result.length === 0) return res.status(404).json({ error: 'Project not found' });
+    res.json(result[0]);
+  } catch (err) {
+    console.error('❌ POST /api/devtracker/projects/:id/complete:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/devtracker/allocations — aloca dev em projeto
+app.post('/api/devtracker/allocations', authenticateToken, async (req, res) => {
+  try {
+    const { developer_id, project_id } = req.body;
+    if (!developer_id || !project_id) return res.status(400).json({ error: 'developer_id e project_id são obrigatórios' });
+    const result = await sql`
+      INSERT INTO devtracker_allocations (developer_id, project_id)
+      VALUES (${developer_id}, ${project_id})
+      ON CONFLICT (developer_id, project_id) DO NOTHING
+      RETURNING *
+    `;
+    res.status(201).json(result[0] || { developer_id, project_id });
+  } catch (err) {
+    console.error('❌ POST /api/devtracker/allocations:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/devtracker/allocations/:developerId/:projectId — remove alocação
+app.delete('/api/devtracker/allocations/:developerId/:projectId', authenticateToken, async (req, res) => {
+  try {
+    const { developerId, projectId } = req.params;
+    await sql`DELETE FROM devtracker_allocations WHERE developer_id = ${developerId} AND project_id = ${projectId}`;
+    res.json({ success: true });
+  } catch (err) {
+    console.error('❌ DELETE /api/devtracker/allocations:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/devtracker/active-tasks — tarefas ativas por dev (com feature pai, po, qa e avatares)
+app.get('/api/devtracker/active-tasks', authenticateToken, async (req, res) => {
+  try {
+    const tasks = await sql`
+      SELECT
+        w.work_item_id, w.title, w.state, w.type,
+        w.assigned_to, w.po, w.qa,
+        w.first_activation_date, w.created_date,
+        w.changed_date, w.priority, w.story_points, w.url,
+        f.title        AS feature_title,
+        f.work_item_id AS feature_id,
+        av.image_url   AS avatar_url,
+        po_av.image_url AS po_avatar_url,
+        qa_av.image_url AS qa_avatar_url
+      FROM work_items w
+      LEFT JOIN work_items f
+        ON f.work_item_id = w.parent_id AND f.type = 'Feature'
+      LEFT JOIN team_member_avatars av
+        ON LOWER(av.name) = LOWER(w.assigned_to)
+      LEFT JOIN team_member_avatars po_av
+        ON LOWER(po_av.name) = LOWER(w.po)
+      LEFT JOIN team_member_avatars qa_av
+        ON LOWER(qa_av.name) = LOWER(w.qa)
+      WHERE w.state NOT IN (
+          'Done','Concluído','Closed','Fechado','Finished','Resolved','Pronto','Removed'
+        )
+        AND w.assigned_to IS NOT NULL
+        AND w.type NOT IN ('Feature', 'Epic')
+      ORDER BY w.first_activation_date DESC NULLS LAST
+    `;
+    res.json(tasks);
+  } catch (err) {
+    console.error('❌ GET /api/devtracker/active-tasks:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/devtracker/features — Features do Azure DevOps com tags customizadas
+app.get('/api/devtracker/features', authenticateToken, async (req, res) => {
+  try {
+    const features = await sql`
+      SELECT
+        w.work_item_id, w.title, w.state, w.type,
+        w.assigned_to, w.team, w.area_path,
+        w.created_date, w.changed_date, w.closed_date, w.first_activation_date,
+        w.story_points, w.tags, w.priority, w.url,
+        COALESCE(
+          (SELECT json_agg(t.tag) FROM devtracker_tags t
+           WHERE t.entity_type = 'feature' AND t.entity_id = w.work_item_id::text),
+          '[]'::json
+        ) AS custom_tags
+      FROM work_items w
+      WHERE w.type = 'Feature'
+      ORDER BY
+        CASE WHEN w.state IN ('Done','Concluído','Closed','Fechado','Finished','Resolved','Pronto')
+          THEN 1 ELSE 0 END,
+        w.first_activation_date DESC NULLS LAST,
+        w.created_date DESC
+    `;
+    res.json(features);
+  } catch (err) {
+    console.error('❌ GET /api/devtracker/features:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/devtracker/tags — adiciona tag
+app.post('/api/devtracker/tags', authenticateToken, async (req, res) => {
+  try {
+    const { entity_type, entity_id, tag } = req.body;
+    if (!entity_type || !entity_id || !tag) return res.status(400).json({ error: 'entity_type, entity_id e tag são obrigatórios' });
+    await sql`
+      INSERT INTO devtracker_tags (entity_type, entity_id, tag)
+      VALUES (${entity_type}, ${String(entity_id)}, ${tag.trim()})
+      ON CONFLICT DO NOTHING
+    `;
+    res.json({ success: true });
+  } catch (err) {
+    console.error('❌ POST /api/devtracker/tags:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/devtracker/tags — remove tag (body: entity_type, entity_id, tag)
+app.delete('/api/devtracker/tags', authenticateToken, async (req, res) => {
+  try {
+    const { entity_type, entity_id, tag } = req.body;
+    if (!entity_type || !entity_id || !tag) return res.status(400).json({ error: 'entity_type, entity_id e tag são obrigatórios' });
+    await sql`
+      DELETE FROM devtracker_tags
+      WHERE entity_type = ${entity_type} AND entity_id = ${String(entity_id)} AND tag = ${tag}
+    `;
+    res.json({ success: true });
+  } catch (err) {
+    console.error('❌ DELETE /api/devtracker/tags:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // 404 Handler
 app.use((req, res) => {
   res.status(404).json({ 
@@ -1457,11 +1881,19 @@ app.use((err, req, res, next) => {
 if (isConfigured()) {
   schedule.scheduleJob('*/30 * * * *', () => {
     console.log('🔄 Running scheduled sync...');
-    syncData();
-    syncPullRequests();
+    syncData().catch(e => console.error('❌ Scheduled sync error (non-fatal):', e.message));
+    syncPullRequests().catch(e => console.error('❌ Scheduled PR sync error (non-fatal):', e.message));
   });
   console.log('⏰ Scheduled sync every 30 minutes');
 }
+
+// Previne crash do processo por erros não capturados (ex: timeout VPS)
+process.on('unhandledRejection', (reason) => {
+  console.error('⚠️ Unhandled rejection (non-fatal):', reason instanceof Error ? reason.message : reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('⚠️ Uncaught exception (non-fatal):', err.message);
+});
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Global error handler — always include CORS headers even on 500 errors

@@ -5,6 +5,16 @@ import tailwindcss from '@tailwindcss/vite'
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [tailwindcss(), react()],
+  build: {
+    rollupOptions: {
+      output: {
+        // Força hash único usando timestamp
+        entryFileNames: `assets/[name]-${Date.now()}.js`,
+        chunkFileNames: `assets/[name]-${Date.now()}.js`,
+        assetFileNames: `assets/[name]-${Date.now()}.[ext]`
+      }
+    }
+  },
   server: {
     host: '0.0.0.0', // Permite acesso de qualquer IP
     port: 5173,
@@ -15,9 +25,7 @@ export default defineConfig({
       '.ngrok.io',
       'localhost'
     ],
-    hmr: {
-      clientPort: 443 // Porta HTTPS para HMR via ngrok
-    },
+    hmr: true,
     fs: {
       // Allow serving files from one level up to the project root
       allow: ['..']
