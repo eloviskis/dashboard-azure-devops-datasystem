@@ -236,7 +236,8 @@ const initDatabase = async () => {
       'identificacao TEXT', 'falha_do_processo TEXT',
       'first_activation_date TEXT',
       'original_estimate REAL', 'remaining_work REAL', 'completed_work REAL',
-      'parent_id INTEGER'
+      'parent_id INTEGER',
+      'categoria TEXT'
     ];
     for (const colDef of columnsToEnsure) {
       const [colName] = colDef.split(' ');
@@ -502,6 +503,15 @@ async function syncData() {
         if (createdByObj?.displayName && createdByObj?.imageUrl) {
           memberAvatars.set(createdByObj.displayName, createdByObj.imageUrl);
         }
+        // Extrair avatar do PO e QA
+        const poObj = fields['Custom.PO'] || fields['Custom.ProductOwner'];
+        if (poObj?.displayName && poObj?.imageUrl) {
+          memberAvatars.set(poObj.displayName, poObj.imageUrl);
+        }
+        const qaObj = fields['Custom.QA'];
+        if (qaObj?.displayName && qaObj?.imageUrl) {
+          memberAvatars.set(qaObj.displayName, qaObj.imageUrl);
+        }
       }
 
       // Salvar avatars no banco
@@ -551,11 +561,13 @@ async function syncData() {
         const complexity = fields['Custom.Complexity'] || fields['Custom.Complexidade'] || '';
         const reincidencia = fields['Custom.REINCIDENCIA'] || fields['Custom.Reincidencia'] || fields['Custom.Reincidência'] || '';
         const performanceDays = fields['Custom.PerformanceDays'] || fields['Custom.DiasPerformance'] || '';
-        const qa = fields['Custom.QA'] || '';
+        const qaField = fields['Custom.QA'];
+        const qa = qaField?.displayName || (typeof qaField === 'string' ? qaField : '') || '';
         const causaRaiz = fields['Custom.Raizdoproblema'] || '';
         const rootCauseLegacy = fields['Microsoft.VSTS.CMMI.RootCause'] || '';
         const createdBy = fields['System.CreatedBy']?.displayName || '';
-        const po = fields['Custom.PO'] || fields['Custom.ProductOwner'] || '';
+        const poField = fields['Custom.PO'] || fields['Custom.ProductOwner'];
+        const po = poField?.displayName || (typeof poField === 'string' ? poField : '') || '';
         const readyDate = fields['Custom.DOR'] || '';
         const doneDate = fields['Custom.DOD'] || '';
         // Novos campos de Root Cause
@@ -573,6 +585,7 @@ async function syncData() {
         const identificacao = fields['Custom.7ac99842-e0ec-4f18-b91b-53bfe3e3b3f5'] || '';
         const falhaDoProcesso = fields['Custom.Falhadoprocesso'] || '';
         const impedimento = fields['Custom.Impedimento'] === true;
+        const categoria = fields['Custom.Category'] || fields['Custom.Categoria'] || null;
 
         await sql`
           INSERT INTO work_items (work_item_id, title, state, type, assigned_to, team, area_path, iteration_path,
@@ -580,19 +593,19 @@ async function syncData() {
             code_review_level1, code_review_level2, custom_type, root_cause_status, squad, area, complexity,
             reincidencia, performance_days, qa, causa_raiz, root_cause_legacy, created_by, po, ready_date, done_date,
             root_cause_task, root_cause_team, root_cause_version, dev, platform, application, branch_base, delivered_version, base_version,
-            identificacao, falha_do_processo, impedimento, synced_at)
+            identificacao, falha_do_processo, impedimento, categoria, synced_at)
           VALUES (${workItemId}, ${title}, ${state}, ${type}, ${assignedTo}, ${team}, ${areaPath}, ${iterationPath},
             ${createdDate}, ${changedDate}, ${closedDate}, ${storyPoints}, ${tags}, ${tipoCliente}, ${priority}, ${url}, ${activatedDate || null},
             ${codeReviewLevel1}, ${codeReviewLevel2}, ${customType}, ${rootCauseStatus}, ${squad}, ${area}, ${complexity},
             ${reincidencia}, ${performanceDays}, ${qa}, ${causaRaiz}, ${rootCauseLegacy}, ${createdBy}, ${po}, ${readyDate}, ${doneDate},
             ${rootCauseTask}, ${rootCauseTeam}, ${rootCauseVersion}, ${dev}, ${platform}, ${application}, ${branchBase}, ${deliveredVersion}, ${baseVersion},
-            ${identificacao}, ${falhaDoProcesso}, ${impedimento}, ${new Date().toISOString()})
+            ${identificacao}, ${falhaDoProcesso}, ${impedimento}, ${categoria}, ${new Date().toISOString()})
           ON CONFLICT (work_item_id) DO UPDATE SET
             title = EXCLUDED.title, state = EXCLUDED.state, type = EXCLUDED.type, assigned_to = EXCLUDED.assigned_to,
             team = EXCLUDED.team, area_path = EXCLUDED.area_path, iteration_path = EXCLUDED.iteration_path,
             created_date = EXCLUDED.created_date, changed_date = EXCLUDED.changed_date, closed_date = EXCLUDED.closed_date,
             story_points = EXCLUDED.story_points, tags = EXCLUDED.tags, tipo_cliente = EXCLUDED.tipo_cliente,
-            priority = EXCLUDED.priority, url = EXCLUDED.url, 
+            priority = EXCLUDED.priority, url = EXCLUDED.url,
             first_activation_date = COALESCE(EXCLUDED.first_activation_date, work_items.first_activation_date),
             code_review_level1 = EXCLUDED.code_review_level1,
             code_review_level2 = EXCLUDED.code_review_level2,
@@ -622,6 +635,7 @@ async function syncData() {
             identificacao = EXCLUDED.identificacao,
             falha_do_processo = EXCLUDED.falha_do_processo,
             impedimento = EXCLUDED.impedimento,
+            categoria = EXCLUDED.categoria,
             synced_at = EXCLUDED.synced_at
         `;
       }
@@ -1536,14 +1550,20 @@ app.get('/api/devtracker/developers', authenticateToken, async (req, res) => {
   }
 });
 
-// GET /api/devtracker/ado-members — todas as pessoas únicas do Azure DevOps (assigned_to) com avatar
+// GET /api/devtracker/ado-members — todas as pessoas únicas do Azure DevOps com avatar e categoria mais frequente
 app.get('/api/devtracker/ado-members', authenticateToken, async (req, res) => {
   try {
     const members = await sql`
       SELECT DISTINCT ON (LOWER(w.assigned_to))
         w.assigned_to AS name,
         a.image_url   AS avatar_url,
-        COUNT(w.work_item_id) OVER (PARTITION BY LOWER(w.assigned_to)) AS task_count
+        COUNT(w.work_item_id) OVER (PARTITION BY LOWER(w.assigned_to)) AS task_count,
+        (
+          SELECT w2.categoria FROM work_items w2
+          WHERE LOWER(w2.assigned_to) = LOWER(w.assigned_to)
+            AND w2.categoria IS NOT NULL AND w2.categoria != ''
+          GROUP BY w2.categoria ORDER BY COUNT(*) DESC LIMIT 1
+        ) AS categoria
       FROM work_items w
       LEFT JOIN team_member_avatars a ON LOWER(a.name) = LOWER(w.assigned_to)
       WHERE w.assigned_to IS NOT NULL AND w.assigned_to != ''
@@ -1556,16 +1576,28 @@ app.get('/api/devtracker/ado-members', authenticateToken, async (req, res) => {
   }
 });
 
+// Mapeia categoria ADO → categoria devtracker
+function mapAdoCategoria(adoCategoria) {
+  if (!adoCategoria) return 'paydev';
+  const v = adoCategoria.toLowerCase().trim();
+  if (v.includes('paydev') || v.includes('pay dev')) return 'paydev';
+  if (v.includes('não aderência') || v.includes('nao aderencia') || v === '2-não aderência' || v.includes('ader')) return 'nao-aderencia';
+  return 'demandas-internas';
+}
+
 // POST /api/devtracker/import-from-ado — importa pessoas do Azure DevOps como developers (ignora duplicatas)
 app.post('/api/devtracker/import-from-ado', authenticateToken, async (req, res) => {
   try {
-    const { members, category = 'paydev', role = 'Dev Pleno' } = req.body;
+    const { members, role = 'Dev Pleno' } = req.body;
     if (!Array.isArray(members) || members.length === 0) {
       return res.status(400).json({ error: 'members array obrigatório' });
     }
     let imported = 0;
     let skipped = 0;
-    for (const name of members) {
+    for (const member of members) {
+      const name = typeof member === 'string' ? member : member.name;
+      const adoCategoria = typeof member === 'object' ? member.categoria : null;
+      const category = mapAdoCategoria(adoCategoria);
       const existing = await sql`SELECT id FROM devtracker_developers WHERE LOWER(name) = LOWER(${name})`;
       if (existing.length > 0) { skipped++; continue; }
       await sql`
@@ -1772,6 +1804,7 @@ app.get('/api/devtracker/active-tasks', authenticateToken, async (req, res) => {
         w.assigned_to, w.po, w.qa,
         w.first_activation_date, w.created_date,
         w.changed_date, w.priority, w.story_points, w.url,
+        w.impedimento, w.categoria, w.area_path,
         f.title        AS feature_title,
         f.work_item_id AS feature_id,
         av.image_url   AS avatar_url,
