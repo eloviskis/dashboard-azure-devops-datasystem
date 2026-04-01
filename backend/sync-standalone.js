@@ -244,12 +244,14 @@ async function saveWorkItems(items) {
       const area = f['Custom.Area'] || '';
       const reincidencia = f['Custom.REINCIDENCIA']?.toString() || '';
       const performanceDays = f['Custom.PerformanceDays'] || '';
-      const qa = f['Custom.QA']?.displayName || '';
+      const qaField = f['Custom.QA'];
+      const qa = qaField?.displayName || (typeof qaField === 'string' ? qaField : '') || '';
       const complexity = f['Custom.Complexity'] || '';
       const causaRaiz = f['Custom.Raizdoproblema'] || '';
       const rootCauseLegacy = f['Microsoft.VSTS.CMMI.RootCause'] || '';
       const createdBy = f['System.CreatedBy']?.displayName || '';
-      const po = f['Custom.PO'] || '';
+      const poField = f['Custom.PO'] || f['Custom.ProductOwner'];
+      const po = poField?.displayName || (typeof poField === 'string' ? poField : '') || '';
       const readyDate = f['Custom.DOR'] || null;
       const doneDate = f['Custom.DOD'] || null;
       // Campos de estimativa de tempo (Tasks)
@@ -258,6 +260,7 @@ async function saveWorkItems(items) {
       const completedWork = f['Microsoft.VSTS.Scheduling.CompletedWork'] || null;
       const parentId = f['System.Parent'] || null;
       const impedimento = f['Custom.Impedimento'] === true;
+      const categoria = f['Custom.Category'] || f['Custom.Categoria'] || f['Custom.categoria'] || null;
       const url = `https://dev.azure.com/${CONFIG.AZURE_ORG}/${CONFIG.AZURE_PROJECT}/_workitems/edit/${workItemId}`;
 
       await client.query(`
@@ -267,8 +270,8 @@ async function saveWorkItems(items) {
           priority, code_review_level1, code_review_level2, tipo_cliente, custom_type,
           root_cause_status, squad, area, reincidencia, performance_days, qa, complexity,
           causa_raiz, root_cause_legacy, created_by, po, ready_date, done_date, url, synced_at,
-          original_estimate, remaining_work, completed_work, parent_id, impedimento
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39)
+          original_estimate, remaining_work, completed_work, parent_id, impedimento, categoria
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40)
         ON CONFLICT (work_item_id) DO UPDATE SET
           title = EXCLUDED.title, state = EXCLUDED.state, type = EXCLUDED.type,
           assigned_to = EXCLUDED.assigned_to, team = EXCLUDED.team, area_path = EXCLUDED.area_path,
@@ -284,15 +287,15 @@ async function saveWorkItems(items) {
           ready_date = EXCLUDED.ready_date, done_date = EXCLUDED.done_date, url = EXCLUDED.url,
           synced_at = EXCLUDED.synced_at,
           original_estimate = EXCLUDED.original_estimate, remaining_work = EXCLUDED.remaining_work,
-          completed_work = EXCLUDED.completed_work, parent_id = EXCLUDED.parent_id,
-          impedimento = EXCLUDED.impedimento
+          completedWork = EXCLUDED.completed_work, parent_id = EXCLUDED.parent_id,
+          impedimento = EXCLUDED.impedimento, categoria = EXCLUDED.categoria
       `, [
         workItemId, title, state, type, assignedTo, team, areaPath, iterationPath,
         createdDate, changedDate, closedDate, firstActivationDate, storyPoints, tags,
         priority, codeReviewLevel1, codeReviewLevel2, tipoCliente, customType,
         rootCauseStatus, squad, area, reincidencia, performanceDays, qa, complexity,
         causaRaiz, rootCauseLegacy, createdBy, po, readyDate, doneDate, url, syncedAt,
-        originalEstimate, remainingWork, completedWork, parentId, impedimento
+        originalEstimate, remainingWork, completedWork, parentId, impedimento, categoria
       ]);
       
       saved++;
@@ -326,6 +329,15 @@ async function saveAvatars(items) {
     const createdByObj = f['System.CreatedBy'];
     if (createdByObj?.displayName && createdByObj?.imageUrl) {
       memberAvatars.set(createdByObj.displayName, createdByObj.imageUrl);
+    }
+    // Extrair avatar do PO e QA
+    const poObj = f['Custom.PO'] || f['Custom.ProductOwner'];
+    if (poObj?.displayName && poObj?.imageUrl) {
+      memberAvatars.set(poObj.displayName, poObj.imageUrl);
+    }
+    const qaObj = f['Custom.QA'];
+    if (qaObj?.displayName && qaObj?.imageUrl) {
+      memberAvatars.set(qaObj.displayName, qaObj.imageUrl);
     }
   }
   

@@ -244,12 +244,14 @@ async function saveWorkItems(items) {
       const area = f['Custom.Area'] || '';
       const reincidencia = f['Custom.REINCIDENCIA']?.toString() || '';
       const performanceDays = f['Custom.PerformanceDays'] || '';
-      const qa = f['Custom.QA']?.displayName || '';
+      const qaField = f['Custom.QA'];
+      const qa = qaField?.displayName || (typeof qaField === 'string' ? qaField : '') || '';
       const complexity = f['Custom.Complexity'] || '';
       const causaRaiz = f['Custom.Raizdoproblema'] || '';
       const rootCauseLegacy = f['Microsoft.VSTS.CMMI.RootCause'] || '';
       const createdBy = f['System.CreatedBy']?.displayName || '';
-      const po = f['Custom.PO'] || '';
+      const poField = f['Custom.PO'] || f['Custom.ProductOwner'];
+      const po = poField?.displayName || (typeof poField === 'string' ? poField : '') || '';
       const readyDate = f['Custom.DOR'] || null;
       const doneDate = f['Custom.DOD'] || null;
       // Campos de estimativa de tempo (Tasks)
@@ -258,7 +260,7 @@ async function saveWorkItems(items) {
       const completedWork = f['Microsoft.VSTS.Scheduling.CompletedWork'] || null;
       const parentId = f['System.Parent'] || null;
       const impedimento = f['Custom.Impedimento'] === true;
-      const categoria = f['Custom.Categoria'] || f['Custom.categoria'] || null;
+      const categoria = f['Custom.Category'] || f['Custom.Categoria'] || f['Custom.categoria'] || null;
       const url = `https://dev.azure.com/${CONFIG.AZURE_ORG}/${CONFIG.AZURE_PROJECT}/_workitems/edit/${workItemId}`;
 
       await client.query(`
@@ -327,6 +329,15 @@ async function saveAvatars(items) {
     const createdByObj = f['System.CreatedBy'];
     if (createdByObj?.displayName && createdByObj?.imageUrl) {
       memberAvatars.set(createdByObj.displayName, createdByObj.imageUrl);
+    }
+    // Extrair avatar do PO e QA
+    const poObj = f['Custom.PO'] || f['Custom.ProductOwner'];
+    if (poObj?.displayName && poObj?.imageUrl) {
+      memberAvatars.set(poObj.displayName, poObj.imageUrl);
+    }
+    const qaObj = f['Custom.QA'];
+    if (qaObj?.displayName && qaObj?.imageUrl) {
+      memberAvatars.set(qaObj.displayName, qaObj.imageUrl);
     }
   }
   
