@@ -1,0 +1,7 @@
+{
+  "AZURE_ORG": "sua-organizacao",
+  "AZURE_PROJECT": "seu-projeto",
+  "AZURE_PAT": "seu-personal-access-token",
+  "DATABASE_URL": "postgresql://usuario:senha@host:5432/banco",
+  "SYNC_INTERVAL_MINUTES": 30
+}
