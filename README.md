@@ -6,18 +6,14 @@ Dashboard em tempo real para acompanhamento de performance, qualidade e entrega 
 
 > ## ⛔ ANTES DE MUDAR QUALQUER COISA, LEIA ISTO
 >
-> Este é um **monorepo** com `frontend/` e `backend/` deployados como projetos **separados** no Vercel.
-> Se você não seguir as regras abaixo, **vai derrubar a aplicação inteira**.
->
-> **👉 Leia [REGRAS_DE_DEPLOY.md](REGRAS_DE_DEPLOY.md) antes de qualquer alteração.**
+> Toda a aplicação (frontend + backend) roda na **VPS** (187.77.55.172 / dsmetrics.online).
+> O backend roda via **PM2** e o frontend é servido pelo **Nginx**.
 >
 > Resumo rápido:
-> - `git push` deploya ambos automaticamente. Não precisa fazer deploy manual.
-> - **NUNCA** adicione `backend/` ou `frontend/` no `.vercelignore`
-> - **NUNCA** coloque `headers` no `backend/vercel.json`
 > - **NUNCA** use `process.exit()` no `backend/server.js`
 > - **SEMPRE** verifique imports do React ao adicionar hooks
-> - Se o deploy falhar, consulte [INCIDENTES.md](INCIDENTES.md)
+> - Após alterações no frontend: `npm run build` e copiar `dist/` para `/var/www/devops-dashboard/dist/`
+> - Após alterações no backend: copiar `server.js` para VPS e `pm2 restart devops-backend`
 
 ---
 
@@ -25,12 +21,12 @@ Dashboard em tempo real para acompanhamento de performance, qualidade e entrega 
 
 | Camada | Tecnologia | URL |
 |---|---|---|
-| Frontend | React + TypeScript + Vite (Vercel) | https://devops-datasystem.vercel.app |
-| Backend | Node.js + Express (Vercel serverless) | https://backend-hazel-three-14.vercel.app |
-| Banco | PostgreSQL 16 (VPS própria) | 31.97.64.250:5433 |
-| Sync | `sync-standalone.js` rodando localmente | — |
+| Frontend | React + TypeScript + Vite (Nginx) | https://dsmetrics.online |
+| Backend | Node.js + Express (PM2) | https://dsmetrics.online/api |
+| Banco | PostgreSQL 16 (VPS) | localhost:5432/devops_dashboard |
+| Sync | Auto-sync a cada 30 min (dentro do backend) | — |
 
-> **Importante:** o IP da VPS bloqueia conexões externas. A sincronização com o Azure DevOps **deve ser executada localmente** (máquina com acesso à rede autorizada).
+> **Toda a infraestrutura roda na VPS 187.77.55.172** — frontend (Nginx), backend (PM2, porta 3001), e banco PostgreSQL.
 
 ## Estrutura de Pastas
 
@@ -92,20 +88,18 @@ node sync-standalone.js
 
 ## Deploy
 
-O auto-deploy via GitHub está configurado e funciona automaticamente a cada `git push`.
+O deploy é feito manualmente na VPS via SCP + SSH.
 
 ```sh
-# Jeito certo (auto-deploy via Git)
-git push origin main
+# Frontend: build e copiar para VPS
+cd frontend
+npm run build
+scp -r dist/* root@187.77.55.172:/var/www/devops-dashboard/dist/
 
-# Deploy manual via API (se precisar)
-.\deploy.ps1                     # Ambos
-.\deploy.ps1 -Target backend     # Só backend
-.\deploy.ps1 -Target frontend    # Só frontend
+# Backend: copiar server.js e reiniciar PM2
+scp backend/server.js root@187.77.55.172:/opt/devops-dashboard/backend/
+ssh root@187.77.55.172 "pm2 restart devops-backend"
 ```
-
-> ⚠️ **NÃO use `cd backend && vercel --prod`** — o CLI tem bug com rootDirectory em monorepos.
-> Use `git push` ou o script `deploy.ps1`.
 
 ## Abas do Dashboard
 

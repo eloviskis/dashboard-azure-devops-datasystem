@@ -51,6 +51,9 @@ interface ActiveTask {
   avatar_url: string | null;
   po_avatar_url: string | null;
   qa_avatar_url: string | null;
+  impedimento: string | null;
+  categoria: string | null;
+  area_path: string | null;
 }
 
 type SubView = 'overview' | 'developers' | 'features';
@@ -419,19 +422,51 @@ const FeatureTasksModal: React.FC<{ ctx: ModalContext; onClose: () => void }> = 
 
 // ─── Overview View ─────────────────────────────────────────────────────────────
 
+/** Groups tasks by feature for a developer */
+function groupTasksByFeature(tasks: ActiveTask[]): { featureId: number | null; featureTitle: string | null; tasks: ActiveTask[] }[] {
+  const map = new Map<number | null, { featureTitle: string | null; tasks: ActiveTask[] }>();
+  for (const t of tasks) {
+    const key = t.feature_id ?? null;
+    if (!map.has(key)) map.set(key, { featureTitle: t.feature_title ?? null, tasks: [] });
+    map.get(key)!.tasks.push(t);
+  }
+  // Sort: features with ids first (by oldest task), then null-feature group
+  return Array.from(map.entries())
+    .sort(([a], [b]) => (a === null ? 1 : b === null ? -1 : 0))
+    .map(([featureId, v]) => ({ featureId, featureTitle: v.featureTitle, tasks: v.tasks }));
+}
+
+function featureOldestDays(tasks: ActiveTask[]): number {
+  return Math.max(...tasks.map(t => taskDaysActive(t)), 0);
+}
+
 const OverviewView: React.FC<{ developers: Developer[]; activeTasks: ActiveTask[]; features: Feature[] }> = ({ developers, activeTasks, features }) => {
   const activeDevs = developers.filter(d => d.active);
   const activeFeatures = features.filter(f => !isCompleted(f));
-  const completedFeatures = features.filter(f => isCompleted(f));
 
   // Filtros
   const [searchDev, setSearchDev] = useState('');
+  const [filterCat, setFilterCat] = useState<'' | 'paydev' | 'nao-aderencia' | 'demandas-internas'>('');
+  const [filterState, setFilterState] = useState('');
   const [filterAlloc, setFilterAlloc] = useState<'all' | 'allocated' | 'idle'>('all');
   const [filterDelay, setFilterDelay] = useState<'all' | 'delayed' | 'attention'>('all');
-  const [filterCat, setFilterCat] = useState<'' | 'paydev' | 'nao-aderencia' | 'demandas-internas'>('');
+  const [filterAreaPath, setFilterAreaPath] = useState('');
+  const [filterImpedimento, setFilterImpedimento] = useState(false);
 
-  // Modal
-  const [modalCtx, setModalCtx] = useState<ModalContext | null>(null);
+  // Feature expand state (gavetinhas): key = `${devId}-${featureId}`
+  const [expandedFeatures, setExpandedFeatures] = useState<Set<string>>(new Set());
+
+  const toggleFeature = (key: string) => {
+    setExpandedFeatures(prev => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  };
+
+  // Unique states & area paths for filter dropdowns
+  const allStates = Array.from(new Set(activeTasks.map(t => t.state).filter(Boolean))).sort();
+  const allAreaPaths = Array.from(new Set(activeTasks.map(t => t.area_path).filter(Boolean))).sort() as string[];
 
   const allocatedDevIds = new Set(
     activeDevs.filter(dev => activeTasks.some(t => devMatchesAssignedTo(dev.name, t.assigned_to))).map(d => d.id)
@@ -443,14 +478,13 @@ const OverviewView: React.FC<{ developers: Developer[]; activeTasks: ActiveTask[
   }
 
   function getDevTasks(dev: Developer): ActiveTask[] {
-    return activeTasks.filter(t => devMatchesAssignedTo(dev.name, t.assigned_to));
+    let tasks = activeTasks.filter(t => devMatchesAssignedTo(dev.name, t.assigned_to));
+    if (filterState) tasks = tasks.filter(t => t.state === filterState);
+    if (filterAreaPath) tasks = tasks.filter(t => t.area_path === filterAreaPath);
+    if (filterImpedimento) tasks = tasks.filter(t => t.impedimento && t.impedimento !== '');
+    return tasks;
   }
 
-  function openModal(task: ActiveTask, dev: Developer) {
-    setModalCtx({ featureId: task.feature_id, featureTitle: task.feature_title, devName: dev.name, allTasks: activeTasks });
-  }
-
-  // Aplica filtros nos devs
   function filterDev(dev: Developer): boolean {
     if (searchDev && !dev.name.toLowerCase().includes(searchDev.toLowerCase())) return false;
     if (filterAlloc === 'allocated' && !allocatedDevIds.has(dev.id)) return false;
@@ -466,12 +500,11 @@ const OverviewView: React.FC<{ developers: Developer[]; activeTasks: ActiveTask[
   return (
     <div className="space-y-5">
       {/* Summary cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-3 gap-3">
         {[
           { label: 'Devs Ativos', value: activeDevs.length, icon: '👤', color: 'text-ds-cyan' },
           { label: 'Projetos Ativos', value: activeFeatures.length, icon: '📁', color: 'text-ds-green' },
           { label: 'Em Atraso (>30d)', value: delayedTasksCount, icon: '⚠️', color: 'text-red-400' },
-          { label: 'Concluídos', value: completedFeatures.length, icon: '✅', color: 'text-ds-text' },
         ].map(card => (
           <div key={card.label} className="bg-ds-navy border border-ds-border rounded-xl p-4 flex items-center gap-3">
             <span className="text-2xl">{card.icon}</span>
@@ -489,7 +522,7 @@ const OverviewView: React.FC<{ developers: Developer[]; activeTasks: ActiveTask[
           value={searchDev}
           onChange={e => setSearchDev(e.target.value)}
           placeholder="Buscar pessoa..."
-          className="bg-ds-dark-blue border border-ds-border text-ds-light-text rounded-lg px-3 py-1.5 text-sm w-48 placeholder:text-ds-text/50 focus:outline-none focus:border-ds-cyan transition-colors"
+          className="bg-ds-dark-blue border border-ds-border text-ds-light-text rounded-lg px-3 py-1.5 text-sm w-40 placeholder:text-ds-text/50 focus:outline-none focus:border-ds-cyan transition-colors"
         />
         <select value={filterCat} onChange={e => setFilterCat(e.target.value as any)}
           className="bg-ds-dark-blue border border-ds-border text-ds-light-text rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-ds-cyan transition-colors">
@@ -497,6 +530,11 @@ const OverviewView: React.FC<{ developers: Developer[]; activeTasks: ActiveTask[
           <option value="paydev">PayDev</option>
           <option value="nao-aderencia">Não Aderência</option>
           <option value="demandas-internas">Demandas Internas</option>
+        </select>
+        <select value={filterState} onChange={e => setFilterState(e.target.value)}
+          className="bg-ds-dark-blue border border-ds-border text-ds-light-text rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-ds-cyan transition-colors">
+          <option value="">Estado tarefa</option>
+          {allStates.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
         <select value={filterAlloc} onChange={e => setFilterAlloc(e.target.value as any)}
           className="bg-ds-dark-blue border border-ds-border text-ds-light-text rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-ds-cyan transition-colors">
@@ -510,13 +548,30 @@ const OverviewView: React.FC<{ developers: Developer[]; activeTasks: ActiveTask[
           <option value="attention">Atenção (&gt;15d)</option>
           <option value="delayed">Em atraso (&gt;30d)</option>
         </select>
-        {(searchDev || filterCat || filterAlloc !== 'all' || filterDelay !== 'all') && (
-          <button onClick={() => { setSearchDev(''); setFilterCat(''); setFilterAlloc('all'); setFilterDelay('all'); }}
+        {allAreaPaths.length > 0 && (
+          <select value={filterAreaPath} onChange={e => setFilterAreaPath(e.target.value)}
+            className="bg-ds-dark-blue border border-ds-border text-ds-light-text rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-ds-cyan transition-colors">
+            <option value="">Time (Area Path)</option>
+            {allAreaPaths.map(ap => <option key={ap} value={ap}>{ap.split('\\').pop()}</option>)}
+          </select>
+        )}
+        <button
+          onClick={() => setFilterImpedimento(!filterImpedimento)}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+            filterImpedimento
+              ? 'bg-red-500/20 border-red-500/40 text-red-400'
+              : 'bg-ds-dark-blue border-ds-border text-ds-text hover:text-ds-light-text'
+          }`}
+        >
+          ⭐ Impedimento
+        </button>
+        {(searchDev || filterCat || filterState || filterAlloc !== 'all' || filterDelay !== 'all' || filterAreaPath || filterImpedimento) && (
+          <button onClick={() => { setSearchDev(''); setFilterCat(''); setFilterState(''); setFilterAlloc('all'); setFilterDelay('all'); setFilterAreaPath(''); setFilterImpedimento(false); }}
             className="text-xs text-ds-text hover:text-red-400 transition-colors px-2">✕ limpar filtros</button>
         )}
       </div>
 
-      {/* Dev groups by category */}
+      {/* Dev cards by category — 2-column grid */}
       {activeCats.map(cat => {
         const devsInCat = activeDevs.filter(d => d.category === cat && filterDev(d));
         if (devsInCat.length === 0) return null;
@@ -529,13 +584,14 @@ const OverviewView: React.FC<{ developers: Developer[]; activeTasks: ActiveTask[
               <span className="text-xs text-ds-text">{devsInCat.length} devs • {allocatedInCat} alocados</span>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {devsInCat.map(dev => {
                 const devTasks = getDevTasks(dev);
                 const avatarUrl = getDevAvatar(dev);
+                const featureGroups = groupTasksByFeature(devTasks);
 
                 return (
-                  <div key={dev.id} className="bg-ds-navy border border-ds-border rounded-xl p-4 hover:border-ds-muted transition-colors space-y-3">
+                  <div key={dev.id} className="bg-ds-navy border border-ds-border rounded-xl p-4 space-y-3">
                     {/* Dev header */}
                     <div className="flex items-center gap-3">
                       <DevAvatar name={dev.name} avatarUrl={avatarUrl} />
@@ -548,64 +604,90 @@ const OverviewView: React.FC<{ developers: Developer[]; activeTasks: ActiveTask[
                       </div>
                     </div>
 
-                    {/* Tasks */}
-                    {devTasks.length > 0 ? (
+                    {/* Feature gavetinhas */}
+                    {featureGroups.length > 0 ? (
                       <div className="space-y-2">
-                        {devTasks.slice(0, 2).map(task => {
-                          const days = taskDaysActive(task);
-                          const barClass = getDelayBarClass(days, false);
-                          const textClass = getDelayClass(days, false);
+                        {featureGroups.map(fg => {
+                          const fKey = `${dev.id}-${fg.featureId ?? 'none'}`;
+                          const isOpen = expandedFeatures.has(fKey);
+                          const days = featureOldestDays(fg.tasks);
                           const isDelayed = days > 30;
+                          const textClass = getDelayClass(days, false);
+                          const categoria = fg.tasks[0]?.categoria;
+                          const hasImpedimento = fg.tasks.some(t => t.impedimento && t.impedimento !== '');
+
                           return (
-                            <button
-                              key={task.work_item_id}
-                              onClick={() => openModal(task, dev)}
-                              className="w-full text-left bg-ds-dark-blue border border-ds-border rounded-lg p-2.5 space-y-1.5 hover:border-ds-cyan/40 hover:bg-ds-dark-blue/80 transition-colors cursor-pointer"
-                            >
-                              {task.feature_title && (
-                                <p className="text-xs text-ds-text/70 truncate">📁 {task.feature_title}</p>
+                            <div key={fKey}>
+                              {/* Feature row (gavetinha) */}
+                              <button
+                                onClick={() => toggleFeature(fKey)}
+                                className={`w-full text-left rounded-lg p-2.5 transition-colors cursor-pointer bg-ds-dark-blue hover:bg-ds-dark-blue/80 ${
+                                  isDelayed ? 'border-l-[3px] border-l-red-500 border-r border-t border-b border-r-ds-border border-t-ds-border border-b-ds-border' : 'border border-ds-border'
+                                }`}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <span className="text-amber-400 shrink-0">⭐</span>
+                                  <p className="flex-1 min-w-0 text-xs text-ds-light-text font-medium truncate">
+                                    {fg.featureTitle ?? 'Sem feature vinculada'}
+                                  </p>
+                                  <span className="text-xs text-ds-text shrink-0">{fg.tasks.length}</span>
+                                  <svg className={`w-4 h-4 text-ds-text shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                  </svg>
+                                </div>
+                                <div className="flex items-center gap-2 mt-1.5 ml-6 flex-wrap">
+                                  <span className={`flex items-center gap-1 text-xs font-semibold ${textClass}`}>
+                                    <span className={`w-2 h-2 rounded-full ${isDelayed ? 'bg-red-500' : days > 15 ? 'bg-amber-400' : 'bg-ds-green'}`} />
+                                    {days}d
+                                  </span>
+                                  {isDelayed && <span className="text-red-400 text-xs">⚠️</span>}
+                                  {categoria && (
+                                    <span className="text-xs px-1.5 py-0.5 rounded bg-ds-muted/50 text-ds-text border border-ds-border truncate max-w-[100px]" title={categoria}>
+                                      {categoria}
+                                    </span>
+                                  )}
+                                  {hasImpedimento && <span className="text-xs" title="Impedimento">💬</span>}
+                                </div>
+                              </button>
+
+                              {/* Expanded tasks (gavetinha aberta) */}
+                              {isOpen && (
+                                <div className="mt-1 space-y-1 ml-4">
+                                  {fg.tasks.map(task => {
+                                    const tDays = taskDaysActive(task);
+                                    return (
+                                      <div
+                                        key={task.work_item_id}
+                                        className="flex items-center gap-2 bg-ds-dark-blue/50 border border-ds-border/40 rounded-lg px-3 py-2 text-xs"
+                                      >
+                                        <span className="text-ds-text/60 shrink-0">📋</span>
+                                        <p className="flex-1 min-w-0 text-ds-light-text truncate">
+                                          {task.url ? (
+                                            <a href={task.url} target="_blank" rel="noopener noreferrer" className="hover:text-ds-green transition-colors">{task.title}</a>
+                                          ) : task.title}
+                                        </p>
+                                        <Badge text={task.state} className={getStateBadgeClass(task.state)} />
+                                        <span className={`font-medium shrink-0 ${getDelayClass(tDays, false)}`}>{tDays}d</span>
+                                        {task.qa && (
+                                          <span className="flex items-center gap-1 shrink-0">
+                                            <DevAvatar name={task.qa} avatarUrl={task.qa_avatar_url} size="w-5 h-5" />
+                                            <span className="text-amber-400/80">QA</span>
+                                          </span>
+                                        )}
+                                        {task.po && (
+                                          <span className="flex items-center gap-1 shrink-0">
+                                            <DevAvatar name={task.po} avatarUrl={task.po_avatar_url} size="w-5 h-5" />
+                                            <span className="text-ds-cyan/80">PO</span>
+                                          </span>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
                               )}
-                              <p className="text-xs text-ds-light-text font-medium leading-snug line-clamp-2">{task.title}</p>
-                              <div className="flex items-center gap-3 flex-wrap pt-0.5">
-                                <span className="flex items-center gap-1">
-                                  <DevAvatar name={task.assigned_to} avatarUrl={task.avatar_url} size="w-5 h-5" />
-                                  <span className="text-xs text-ds-text truncate max-w-[80px]">{task.assigned_to.split(' ')[0]}</span>
-                                </span>
-                                {task.po && (
-                                  <span className="flex items-center gap-1" title={`PO: ${task.po}`}>
-                                    <DevAvatar name={task.po} avatarUrl={task.po_avatar_url} size="w-5 h-5" />
-                                    <span className="text-xs text-ds-cyan/70">PO</span>
-                                  </span>
-                                )}
-                                {task.qa && (
-                                  <span className="flex items-center gap-1" title={`QA: ${task.qa}`}>
-                                    <DevAvatar name={task.qa} avatarUrl={task.qa_avatar_url} size="w-5 h-5" />
-                                    <span className="text-xs text-amber-400/70">QA</span>
-                                  </span>
-                                )}
-                              </div>
-                              <div className="flex items-center justify-between text-xs gap-2">
-                                <span className={`font-semibold flex items-center gap-1 ${textClass}`}>
-                                  🕐 {days}d
-                                  {isDelayed && <span className="text-red-400">⚠️ +{days - 30}d</span>}
-                                </span>
-                                <Badge text={task.state} className={getStateBadgeClass(task.state)} />
-                              </div>
-                              <div className="w-full bg-ds-muted rounded-full h-1">
-                                <div className={`h-1 rounded-full transition-all ${barClass}`}
-                                  style={{ width: `${Math.min(100, (days / 45) * 100)}%` }} />
-                              </div>
-                            </button>
+                            </div>
                           );
                         })}
-                        {devTasks.length > 2 && (
-                          <button
-                            onClick={() => setModalCtx({ featureId: null, featureTitle: null, devName: dev.name, allTasks: activeTasks })}
-                            className="w-full text-xs text-ds-cyan/70 hover:text-ds-cyan text-center py-1 transition-colors"
-                          >
-                            +{devTasks.length - 2} tarefa(s) — ver todas
-                          </button>
-                        )}
                       </div>
                     ) : (
                       <p className="text-xs text-ds-text italic">Sem projeto atribuído</p>
@@ -617,9 +699,6 @@ const OverviewView: React.FC<{ developers: Developer[]; activeTasks: ActiveTask[
           </div>
         );
       })}
-
-      {/* Modal */}
-      {modalCtx && <FeatureTasksModal ctx={modalCtx} onClose={() => setModalCtx(null)} />}
     </div>
   );
 };

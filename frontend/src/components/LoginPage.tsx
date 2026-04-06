@@ -73,122 +73,137 @@ const LoginPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center login-bg">
-      <div className="max-w-md w-full mx-4">
-        {/* Logo/Header */}
-        <div className="text-center mb-8">
-          <div className="login-icon-bg inline-flex items-center justify-center w-16 h-16 rounded-full mb-4">
-            <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-            </svg>
-          </div>
-          <h1 className="text-3xl font-bold">
-            <span className="text-white">DATA</span><span className="text-ds-green">SYSTEM</span>
-          </h1>
-          <p className="text-ds-text mt-2">Azure DevOps Analytics</p>
-        </div>
-
-        {/* Login Form */}
-        <div className="login-card rounded-2xl shadow-2xl p-8">
-          <h2 className="text-xl font-semibold text-white mb-6 text-center">Entrar na sua conta</h2>
-          
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div>
-              <label htmlFor="username" className="block text-sm font-medium text-ds-light-text mb-2">
-                Usuário
-              </label>
-              <input
-                id="username"
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="login-input w-full px-4 py-3 rounded-lg"
-                placeholder="Digite seu usuário"
-                required
-                disabled={loading}
-              />
+    <div className="min-h-screen flex login-bg">
+      <div className="flex min-h-screen w-full">
+        {/* Left side - Form */}
+        <div className="w-full lg:w-1/2 flex items-center justify-center p-4 sm:p-8">
+          <div className="max-w-md w-full">
+            {/* Logo/Header */}
+            <div className="text-center mb-8">
+              <img src="/logo-datasystem.png" alt="Data System" className="mx-auto mb-4 h-20 object-contain" />
+              <p className="text-ds-text mt-2">Azure DevOps Analytics</p>
             </div>
 
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-ds-light-text mb-2">
-                Senha
-              </label>
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="login-input w-full px-4 py-3 rounded-lg"
-                placeholder="Digite sua senha"
-                required
-                disabled={loading}
-              />
-            </div>
-
-            {/* Captcha */}
-            <div>
-              <label htmlFor="captcha" className="block text-sm font-medium text-ds-light-text mb-2">
-                Verificação de Segurança
-              </label>
-              <div className="flex items-center gap-3">
-                <div className="flex-shrink-0 bg-gradient-to-r from-blue-600/20 to-purple-600/20 border border-blue-500/30 rounded-lg px-4 py-3 select-none" style={{ fontFamily: 'monospace', letterSpacing: '2px' }}>
-                  <span className="text-blue-300 text-lg font-bold">{captcha.question}</span>
+            {/* Login Form */}
+            <div className="login-card rounded-2xl shadow-2xl p-8">
+              <h2 className="text-xl font-semibold text-white mb-6 text-center">Entrar na sua conta</h2>
+              
+              <form onSubmit={handleSubmit} className="space-y-5">
+                <div>
+                  <label htmlFor="username" className="block text-sm font-medium text-ds-light-text mb-2">
+                    Usuário
+                  </label>
+                  <input
+                    id="username"
+                    type="text"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    className="login-input w-full px-4 py-3 rounded-lg"
+                    placeholder="Digite seu usuário"
+                    required
+                    disabled={loading}
+                  />
                 </div>
-                <input
-                  id="captcha"
-                  type="text"
-                  inputMode="numeric"
-                  value={captchaInput}
-                  onChange={(e) => setCaptchaInput(e.target.value.replace(/[^0-9-]/g, ''))}
-                  className="login-input w-24 px-4 py-3 rounded-lg text-center"
-                  placeholder="?"
-                  required
-                  disabled={loading}
-                  autoComplete="off"
-                />
+
+                <div>
+                  <label htmlFor="password" className="block text-sm font-medium text-ds-light-text mb-2">
+                    Senha
+                  </label>
+                  <input
+                    id="password"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="login-input w-full px-4 py-3 rounded-lg"
+                    placeholder="Digite sua senha"
+                    required
+                    disabled={loading}
+                  />
+                </div>
+
+                {/* Captcha */}
+                <div>
+                  <label htmlFor="captcha" className="block text-sm font-medium text-ds-light-text mb-2">
+                    Verificação de Segurança
+                  </label>
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <div className="flex-shrink-0 bg-gradient-to-r from-blue-600/20 to-purple-600/20 border border-blue-500/30 rounded-lg px-4 py-3 select-none" style={{ fontFamily: 'monospace', letterSpacing: '2px' }}>
+                      <span className="text-blue-300 text-lg font-bold">{captcha.question}</span>
+                    </div>
+                    <input
+                      id="captcha"
+                      type="text"
+                      inputMode="numeric"
+                      value={captchaInput}
+                      onChange={(e) => setCaptchaInput(e.target.value.replace(/[^0-9-]/g, ''))}
+                      className="login-input w-24 px-4 py-3 rounded-lg text-center"
+                      placeholder="?"
+                      required
+                      disabled={loading}
+                      autoComplete="off"
+                    />
+                    <button
+                      type="button"
+                      onClick={refreshCaptcha}
+                      className="text-ds-muted hover:text-blue-400 transition-colors p-2"
+                      title="Novo captcha"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+
+                {error && (
+                  <div className="p-3 bg-red-500/10 border border-red-500/50 rounded-lg">
+                    <p className="text-red-400 text-sm text-center">{error}</p>
+                  </div>
+                )}
+
                 <button
-                  type="button"
-                  onClick={refreshCaptcha}
-                  className="text-ds-muted hover:text-blue-400 transition-colors p-2"
-                  title="Novo captcha"
+                  type="submit"
+                  disabled={loading}
+                  className="login-btn w-full py-3 px-4 shadow-lg"
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
+                  {loading ? (
+                    <span className="flex items-center justify-center">
+                      <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Entrando...
+                    </span>
+                  ) : (
+                    'Entrar'
+                  )}
                 </button>
-              </div>
+              </form>
             </div>
 
-            {error && (
-              <div className="p-3 bg-red-500/10 border border-red-500/50 rounded-lg">
-                <p className="text-red-400 text-sm text-center">{error}</p>
-              </div>
-            )}
+            {/* Solicitar acesso */}
+            <p className="text-center text-sm mt-4">
+              <a
+                href="mailto:eloi.santaroza@datasystem.com.br?subject=Solicitação de novo usuário - Performance Dashboard&body=Olá, gostaria de solicitar a criação de um novo usuário para o Performance Dashboard.%0A%0ANome: %0AE-mail: %0AEquipe: "
+                className="text-blue-400 hover:text-blue-300 transition-colors underline"
+              >
+                Solicitar acesso
+              </a>
+            </p>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="login-btn w-full py-3 px-4 shadow-lg"
-            >
-              {loading ? (
-                <span className="flex items-center justify-center">
-                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Entrando...
-                </span>
-              ) : (
-                'Entrar'
-              )}
-            </button>
-          </form>
+            {/* Footer */}
+            <p className="text-center text-ds-muted text-sm mt-6">
+              © 2026 Data System. Todos os direitos reservados.
+            </p>
+          </div>
         </div>
 
-        {/* Footer */}
-        <p className="text-center text-ds-muted text-sm mt-6">
-          © 2026 Data System. Todos os direitos reservados.
-        </p>
+        {/* Right side - Image */}
+        <div className="hidden lg:flex w-1/2 relative overflow-hidden">
+          <img src="/fotofachada.jpg" alt="Data System - Fachada" className="absolute inset-0 w-full h-full object-cover" />
+          <div className="absolute inset-0 bg-gradient-to-l from-transparent via-ds-dark-blue/20 to-ds-dark-blue/70" />
+          <div className="absolute inset-0 bg-gradient-to-t from-ds-dark-blue/50 via-transparent to-ds-dark-blue/30" />
+        </div>
       </div>
     </div>
   );

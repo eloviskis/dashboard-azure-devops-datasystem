@@ -28,9 +28,6 @@ const ALLOWED_ORIGINS = [
   'http://dsmetrics.online',
   'https://www.dsmetrics.online',
   'http://www.dsmetrics.online',
-  'https://dashboard-azure-devops-datasystem.vercel.app',
-  'https://dashboard-azure-devops-datasystem-git-main-eloviskis.vercel.app',
-  'https://devops-datasystem.vercel.app',
   'http://localhost:5173',
   'http://localhost:3000',
   'http://187.77.55.172',
@@ -39,7 +36,7 @@ const ALLOWED_ORIGINS = [
 
 function setCorsHeaders(req, res) {
   const origin = req.headers.origin;
-  if (origin && (ALLOWED_ORIGINS.includes(origin) || origin.endsWith('.vercel.app'))) {
+  if (origin && ALLOWED_ORIGINS.includes(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
   } else {
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -421,7 +418,7 @@ const initDatabase = async () => {
 // Initialize database on startup
 initDatabase();
 
-// Azure DevOps configuration - remove newlines from env vars (Vercel issue)
+// Azure DevOps configuration
 const AZURE_CONFIG = {
   organization: (process.env.AZURE_ORG || 'your-organization').replace(/[\r\n]/g, '').trim(),
   project: (process.env.AZURE_PROJECT || 'your-project').replace(/[\r\n]/g, '').trim(),
@@ -1176,7 +1173,7 @@ app.get('/api/test-db', async (req, res) => {
       server_time: result.rows[0].time,
       database: result.rows[0].database,
       version: result.rows[0].version.split(' ')[0] + ' ' + result.rows[0].version.split(' ')[1],
-      environment: process.env.VERCEL ? 'Vercel Serverless' : 'Local/VPS'
+      environment: 'VPS'
     });
   } catch (error) {
     res.status(500).json({ 
@@ -1950,5 +1947,5 @@ app.listen(PORT, () => {
   }
 });
 
-// Export for Vercel serverless
+// Export for Node.js
 module.exports = app;

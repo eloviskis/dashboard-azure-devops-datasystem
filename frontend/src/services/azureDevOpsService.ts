@@ -2,8 +2,8 @@ import { WorkItem } from '../types.ts';
 import { PullRequest } from '../types.ts';
 import { SyncStatus } from '../hooks/useAzureDevOpsData.ts';
 
-// Permite usar URL pública do backend via variável de ambiente ou localhost
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://backend-hazel-three-14.vercel.app';
+// Permite usar URL pública do backend via variável de ambiente
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://dsmetrics.online';
 
 // Helper: retorna headers com token JWT de autenticação
 const getAuthHeaders = (): HeadersInit => {
@@ -137,6 +137,7 @@ export const getLastSyncStatus = async (): Promise<SyncStatus> => {
         return {
             syncTime: data.syncTime || data.sync_time || new Date().toISOString(),
             status: data.status || 'error',
+            work_items: data.work_items || data.items_count || undefined,
         };
     } catch (error) {
         console.error("Error fetching sync status:", error);
@@ -163,7 +164,7 @@ export const getPullRequests = async (): Promise<PullRequest[]> => {
 
 export const triggerFullSync = async (): Promise<any> => {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 55000); // 55s timeout (Vercel limit ~60s)
+  const timeoutId = setTimeout(() => controller.abort(), 55000); // 55s timeout
   try {
     const response = await fetch(`${API_BASE_URL}/api/sync`, { method: 'POST', headers: getAuthHeaders(), signal: controller.signal });
     clearTimeout(timeoutId);
@@ -171,9 +172,9 @@ export const triggerFullSync = async (): Promise<any> => {
     return await response.json();
   } catch (error: any) {
     clearTimeout(timeoutId);
-    // AbortError = timeout, isso é esperado no Vercel (sync continua no backend)
+    // AbortError = timeout (sync continua no backend)
     if (error?.name === 'AbortError') {
-      console.log('Sync request timed out (expected on serverless). Data is being processed.');
+      console.log('Sync request timed out. Data is being processed.');
       return { status: 'processing' };
     }
     console.error("Error triggering full sync:", error);

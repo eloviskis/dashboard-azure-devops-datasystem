@@ -44,7 +44,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const API_URL = import.meta.env.VITE_API_URL || 'https://backend-hazel-three-14.vercel.app';
+  const API_URL = import.meta.env.VITE_API_URL || 'https://dsmetrics.online';
 
   const clearAuth = useCallback(() => {
     setToken(null);

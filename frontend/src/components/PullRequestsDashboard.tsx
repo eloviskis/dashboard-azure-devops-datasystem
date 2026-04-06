@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { PullRequest } from '../types';
 import { CHART_COLORS } from '../constants';
 import { getPullRequests, syncPullRequests } from '../services/azureDevOpsService';
@@ -168,11 +168,12 @@ const PullRequestsDashboard: React.FC = () => {
     const map: Record<string, { total: number; approved: number; rejected: number; noVote: number }> = {};
     filteredPRs.forEach(pr => {
       (pr.reviewers || []).forEach(r => {
-        if (!map[r.name]) map[r.name] = { total: 0, approved: 0, rejected: 0, noVote: 0 };
-        map[r.name].total++;
-        if (r.vote >= 5) map[r.name].approved++;
-        else if (r.vote <= -5) map[r.name].rejected++;
-        else map[r.name].noVote++;
+        const rName = r.name || 'Desconhecido';
+        if (!map[rName]) map[rName] = { total: 0, approved: 0, rejected: 0, noVote: 0 };
+        map[rName].total++;
+        if (r.vote >= 5) map[rName].approved++;
+        else if (r.vote <= -5) map[rName].rejected++;
+        else map[rName].noVote++;
       });
     });
     return Object.entries(map)
@@ -247,6 +248,74 @@ const PullRequestsDashboard: React.FC = () => {
       })
       .sort((a, b) => b.ageDays - a.ageDays);
   }, [filteredPRs]);
+
+  // === PR DETAIL MODAL STATE ===
+  const [modalPRs, setModalPRs] = useState<PullRequest[] | null>(null);
+  const [modalTitle, setModalTitle] = useState('');
+
+  const openModal = useCallback((title: string, prs: PullRequest[]) => {
+    setModalTitle(title);
+    setModalPRs(prs);
+  }, []);
+
+  // Click handlers for charts
+  const handleStatusPieClick = useCallback((data: any) => {
+    if (!data || !data.name) return;
+    const statusMap: Record<string, string> = { 'Ativos': 'active', 'Concluídos': 'completed', 'Abandonados': 'abandoned' };
+    const status = statusMap[data.name];
+    if (!status) return;
+    const prs = filteredPRs.filter(pr => pr.status === status);
+    openModal(`PRs ${data.name} (${prs.length})`, prs);
+  }, [filteredPRs, openModal]);
+
+  const handleVotePieClick = useCallback((data: any) => {
+    if (!data || data.vote === undefined) return;
+    const vote = data.vote;
+    const prs = filteredPRs.filter(pr => (pr.reviewers || []).some(r => r.vote === vote));
+    openModal(`PRs com voto "${data.name}" (${prs.length})`, prs);
+  }, [filteredPRs, openModal]);
+
+  const handleRepoBarClick = useCallback((data: any) => {
+    if (!data || !data.activePayload || !data.activePayload[0]) return;
+    const repo = data.activePayload[0].payload.repo;
+    if (!repo) return;
+    const prs = filteredPRs.filter(pr => pr.repositoryName === repo);
+    openModal(`PRs em ${repo} (${prs.length})`, prs);
+  }, [filteredPRs, openModal]);
+
+  const handleAuthorBarClick = useCallback((data: any) => {
+    if (!data || !data.activePayload || !data.activePayload[0]) return;
+    const name = data.activePayload[0].payload.name;
+    if (!name) return;
+    const prs = filteredPRs.filter(pr => pr.createdBy === name);
+    openModal(`PRs de ${name} (${prs.length})`, prs);
+  }, [filteredPRs, openModal]);
+
+  const handleReviewerBarClick = useCallback((data: any) => {
+    if (!data || !data.activePayload || !data.activePayload[0]) return;
+    const name = data.activePayload[0].payload.name;
+    if (!name) return;
+    const prs = filteredPRs.filter(pr => (pr.reviewers || []).some(r => r.name === name));
+    openModal(`PRs revisados por ${name} (${prs.length})`, prs);
+  }, [filteredPRs, openModal]);
+
+  const handleLifetimeClick = useCallback((data: any) => {
+    if (!data || !data.activeLabel) return;
+    const label = data.activeLabel;
+    // Find month from label (e.g. "jan/26")
+    const monthEntry = lifetimeTrend.find(m => m.label === label);
+    if (!monthEntry) return;
+    // Re-derive the month's PRs
+    const months = eachMonthOfInterval({ start: dateRange.start, end: dateRange.end });
+    const matchMonth = months.find(m => format(m, 'MMM/yy', { locale: ptBR }) === label);
+    if (!matchMonth) return;
+    const monthEnd = endOfMonth(matchMonth);
+    const prs = filteredPRs.filter(pr => {
+      const d = new Date(pr.createdDate);
+      return pr.status === 'completed' && isWithinInterval(d, { start: matchMonth, end: monthEnd });
+    });
+    openModal(`PRs concluídos em ${label} (${prs.length})`, prs);
+  }, [filteredPRs, lifetimeTrend, dateRange]);
 
   if (loading) return <div className="text-center p-10 text-ds-light-text">Carregando Pull Requests...</div>;
 
@@ -408,10 +477,10 @@ const PullRequestsDashboard: React.FC = () => {
         {/* Status Pie */}
         <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
           <h3 className="text-ds-light-text font-semibold mb-4">Distribuição por Status</h3>
-          <ChartInfoLamp info="Distribuição dos PRs entre Ativos, Concluídos e Abandonados no período selecionado." />
+          <ChartInfoLamp info="Distribuição dos PRs entre Ativos, Concluídos e Abandonados no período selecionado. Clique em uma fatia para ver os PRs." />
           <ResponsiveContainer width="100%" height={300}>
             <PieChart>
-              <Pie data={statusPieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+              <Pie data={statusPieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} onClick={handleStatusPieClick} className="cursor-pointer">
                 {statusPieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
               </Pie>
               <Tooltip contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }} labelStyle={{ color: '#64ffda', fontWeight: 'bold' }} itemStyle={{ color: '#e6f1ff' }} />
@@ -423,10 +492,10 @@ const PullRequestsDashboard: React.FC = () => {
         {/* Vote Distribution */}
         <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
           <h3 className="text-ds-light-text font-semibold mb-4">Distribuição de Votos</h3>
-          <ChartInfoLamp info="Distribuição dos votos nos PRs: Aprovado, Sem Voto, Aguardando Autor, Rejeitado. Votos 'Sem Voto' indicam PRs sem review ativa." />
+          <ChartInfoLamp info="Distribuição dos votos nos PRs: Aprovado, Sem Voto, Aguardando Autor, Rejeitado. Clique em uma fatia para ver os PRs." />
           <ResponsiveContainer width="100%" height={300}>
             <PieChart>
-              <Pie data={voteDistribution} dataKey="count" nameKey="name" cx="50%" cy="50%" outerRadius={100} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+              <Pie data={voteDistribution} dataKey="count" nameKey="name" cx="50%" cy="50%" outerRadius={100} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} onClick={handleVotePieClick} className="cursor-pointer">
                 {voteDistribution.map((entry, i) => <Cell key={i} fill={entry.color} />)}
               </Pie>
               <Tooltip contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }} labelStyle={{ color: '#64ffda', fontWeight: 'bold' }} itemStyle={{ color: '#e6f1ff' }} />
@@ -439,9 +508,9 @@ const PullRequestsDashboard: React.FC = () => {
       {/* PRs BY REPO */}
       <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
         <h3 className="text-ds-light-text font-semibold mb-4">Pull Requests por Repositório</h3>
-        <ChartInfoLamp info="Quantidade de PRs por repositório, divididos entre Concluídos, Ativos e Abandonados. Repositórios com muitos PRs ativos podem ter gargalo de review." />
-        <ResponsiveContainer width="100%" height={Math.max(300, prsByRepo.length * 35)}>
-          <BarChart data={prsByRepo} layout="vertical" margin={{ left: 120 }}>
+          <ChartInfoLamp info="Quantidade de PRs por repositório. Clique em uma barra para ver os PRs do repositório." />
+          <ResponsiveContainer width="100%" height={Math.max(300, prsByRepo.length * 35)}>
+            <BarChart data={prsByRepo} layout="vertical" margin={{ left: 120 }} onClick={handleRepoBarClick} className="cursor-pointer">
             <CartesianGrid strokeDasharray="3 3" stroke="#233554" />
             <XAxis type="number" tick={{ fill: '#8892B0', fontSize: 12 }} />
             <YAxis type="category" dataKey="repo" tick={{ fill: '#CCD6F6', fontSize: 11 }} width={120} />
@@ -459,9 +528,9 @@ const PullRequestsDashboard: React.FC = () => {
         {/* Top Authors */}
         <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
           <h3 className="text-ds-light-text font-semibold mb-4">Top Autores de PRs</h3>
-          <ChartInfoLamp info="Ranking dos desenvolvedores que mais criaram PRs no período. Ajuda a identificar os maiores contribuidores de código." />
+          <ChartInfoLamp info="Ranking dos desenvolvedores que mais criaram PRs. Clique em uma barra para ver os PRs do autor." />
           <ResponsiveContainer width="100%" height={Math.max(300, topAuthors.length * 30)}>
-            <BarChart data={topAuthors} layout="vertical" margin={{ left: 100, right: 50 }}>
+            <BarChart data={topAuthors} layout="vertical" margin={{ left: 100, right: 50 }} onClick={handleAuthorBarClick} className="cursor-pointer">
               <CartesianGrid strokeDasharray="3 3" stroke="#233554" />
               <XAxis type="number" tick={{ fill: '#8892B0', fontSize: 12 }} />
               <YAxis type="category" dataKey="name" tick={{ fill: '#CCD6F6', fontSize: 11 }} width={100} />
@@ -476,9 +545,9 @@ const PullRequestsDashboard: React.FC = () => {
         {/* Top Reviewers */}
         <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
           <h3 className="text-ds-light-text font-semibold mb-4">Top Reviewers</h3>
-          <ChartInfoLamp info="Ranking dos revisores mais ativos, com breakdown de aprovações, rejeições e sem voto. Concentração alta em poucos revisores é um risco." />
+          <ChartInfoLamp info="Ranking dos revisores mais ativos. Clique em uma barra para ver os PRs revisados por essa pessoa." />
           <ResponsiveContainer width="100%" height={Math.max(300, topReviewers.length * 30)}>
-            <BarChart data={topReviewers} layout="vertical" margin={{ left: 100 }}>
+            <BarChart data={topReviewers} layout="vertical" margin={{ left: 100 }} onClick={handleReviewerBarClick} className="cursor-pointer">
               <CartesianGrid strokeDasharray="3 3" stroke="#233554" />
               <XAxis type="number" tick={{ fill: '#8892B0', fontSize: 12 }} />
               <YAxis type="category" dataKey="name" tick={{ fill: '#CCD6F6', fontSize: 11 }} width={100} />
@@ -495,9 +564,9 @@ const PullRequestsDashboard: React.FC = () => {
       {/* LIFETIME TREND */}
       <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
         <h3 className="text-ds-light-text font-semibold mb-4">Tendência de Tempo de Vida dos PRs (dias)</h3>
-        <ChartInfoLamp info="Evolução mensal do tempo médio e P85 de vida dos PRs concluídos. Tempo de vida alto pode indicar gargalo no code review." />
-        <ResponsiveContainer width="100%" height={300}>
-          <LineChart data={lifetimeTrend}>
+          <ChartInfoLamp info="Evolução mensal do tempo de vida dos PRs concluídos. Clique em um ponto para ver os PRs do mês." />
+          <ResponsiveContainer width="100%" height={300}>
+            <LineChart data={lifetimeTrend} onClick={handleLifetimeClick} className="cursor-pointer">
             <CartesianGrid strokeDasharray="3 3" stroke="#233554" />
             <XAxis dataKey="label" tick={{ fill: '#8892B0', fontSize: 12 }} />
             <YAxis tick={{ fill: '#8892B0', fontSize: 12 }} />
@@ -546,7 +615,7 @@ const PullRequestsDashboard: React.FC = () => {
                       <div className="flex flex-wrap gap-1">
                         {(pr.reviewers || []).map((r, i) => (
                           <span key={i} className="text-xs px-1.5 py-0.5 rounded-full" style={{ backgroundColor: `${VOTE_COLORS[r.vote] || '#8892B0'}20`, color: VOTE_COLORS[r.vote] || '#8892B0' }}>
-                            {r.name.split(' ')[0]}: {VOTE_LABELS[r.vote] || 'N/A'}
+                            {(r.name || 'N/A').split(' ')[0]}: {VOTE_LABELS[r.vote] || 'N/A'}
                           </span>
                         ))}
                       </div>
@@ -555,6 +624,94 @@ const PullRequestsDashboard: React.FC = () => {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* PR DETAIL MODAL */}
+      {modalPRs && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setModalPRs(null)}>
+          <div className="bg-ds-navy border border-ds-border rounded-xl w-[90vw] max-w-5xl max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            {/* Modal header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-ds-border shrink-0">
+              <h2 className="text-ds-light-text font-bold text-lg">📋 {modalTitle}</h2>
+              <button onClick={() => setModalPRs(null)} className="text-ds-text hover:text-red-400 transition-colors text-xl font-bold">✕</button>
+            </div>
+            {/* Modal body */}
+            <div className="overflow-auto flex-1 p-4">
+              <table className="w-full text-sm text-left text-ds-text">
+                <thead className="text-xs text-ds-light-text uppercase bg-ds-dark-blue/50 sticky top-0">
+                  <tr>
+                    <th className="px-3 py-2">ID</th>
+                    <th className="px-3 py-2">Título</th>
+                    <th className="px-3 py-2">Autor</th>
+                    <th className="px-3 py-2">Repositório</th>
+                    <th className="px-3 py-2">Status</th>
+                    <th className="px-3 py-2">Criado em</th>
+                    <th className="px-3 py-2">Tempo (dias)</th>
+                    <th className="px-3 py-2">Reviewers</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {modalPRs.map(pr => {
+                    const lifetime = pr.lifetimeDays ?? Math.round((new Date().getTime() - new Date(pr.createdDate).getTime()) / (1000 * 60 * 60 * 24));
+                    return (
+                      <tr key={pr.pullRequestId} className="border-b border-ds-border/50 hover:bg-ds-muted/10">
+                        <td className="px-3 py-2">
+                          <a href={pr.url} target="_blank" rel="noopener noreferrer" className="text-ds-green hover:underline font-mono">
+                            #{pr.pullRequestId}
+                          </a>
+                        </td>
+                        <td className="px-3 py-2 max-w-[300px]">
+                          <p className="truncate text-ds-light-text" title={pr.title}>{pr.title}</p>
+                          {pr.sourceRefName && pr.targetRefName && (
+                            <p className="text-xs text-ds-text/60 truncate">{pr.sourceRefName.replace('refs/heads/', '')} → {pr.targetRefName.replace('refs/heads/', '')}</p>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 whitespace-nowrap">{pr.createdBy}</td>
+                        <td className="px-3 py-2 whitespace-nowrap text-xs">{pr.repositoryName}</td>
+                        <td className="px-3 py-2">
+                          <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{
+                            backgroundColor: `${STATUS_COLORS[pr.status] || '#8892B0'}20`,
+                            color: STATUS_COLORS[pr.status] || '#8892B0'
+                          }}>
+                            {pr.status === 'active' ? 'Ativo' : pr.status === 'completed' ? 'Concluído' : 'Abandonado'}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 whitespace-nowrap text-xs">{format(new Date(pr.createdDate), 'dd/MM/yyyy')}</td>
+                        <td className="px-3 py-2">
+                          <span className={`font-semibold ${lifetime > 7 ? 'text-red-400' : lifetime > 3 ? 'text-yellow-400' : 'text-ds-green'}`}>
+                            {lifetime}d
+                          </span>
+                        </td>
+                        <td className="px-3 py-2">
+                          <div className="flex flex-wrap gap-1">
+                            {(pr.reviewers || []).slice(0, 3).map((r, i) => (
+                              <span key={i} className="text-xs px-1.5 py-0.5 rounded-full whitespace-nowrap" style={{
+                                backgroundColor: `${VOTE_COLORS[r.vote] || '#8892B0'}20`,
+                                color: VOTE_COLORS[r.vote] || '#8892B0'
+                              }}>
+                                {(r.name || 'N/A').split(' ')[0]}
+                              </span>
+                            ))}
+                            {(pr.reviewers || []).length > 3 && (
+                              <span className="text-xs text-ds-text">+{pr.reviewers.length - 3}</span>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              {modalPRs.length === 0 && (
+                <p className="text-center text-ds-text py-8">Nenhum PR encontrado para este filtro.</p>
+              )}
+            </div>
+            {/* Modal footer */}
+            <div className="px-6 py-3 border-t border-ds-border text-xs text-ds-text shrink-0">
+              {modalPRs.length} PR(s) · Clique no ID para abrir no Azure DevOps
+            </div>
           </div>
         </div>
       )}

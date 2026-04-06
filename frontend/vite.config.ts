@@ -29,6 +29,13 @@ export default defineConfig({
     fs: {
       // Allow serving files from one level up to the project root
       allow: ['..']
+    },
+    proxy: {
+      '/api': {
+        target: 'https://dsmetrics.online',
+        changeOrigin: true,
+        secure: true
+      }
     }
   }
 })

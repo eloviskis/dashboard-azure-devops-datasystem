@@ -2,6 +2,8 @@ import React, { useState, useMemo } from 'react';
 import { WorkItem } from '../types';
 import { CHART_COLORS, STATUS_COLORS } from '../constants';
 import ChartInfoLamp from './ChartInfoLamp';
+import PercentilP85Chart from './PercentilP85Chart';
+import TeamPercentilesHistogram from './TeamPercentilesHistogram';
 import {
   ResponsiveContainer, LineChart, Line, BarChart, Bar,
   XAxis, YAxis, Tooltip, CartesianGrid, Legend, Cell,
@@ -672,8 +674,35 @@ const CycleTimeAnalyticsDashboard: React.FC<CycleTimeAnalyticsDashboardProps> = 
         </div>
       )}
 
+      {/* Percentil P85 do Cycle Time (mensal) */}
+      <PercentilP85Chart data={data} dateRange={dateRange} />
+
+      {/* Histograma de Percentis por Time */}
+      <TeamPercentilesHistogram data={data} dateRange={dateRange} />
+
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Trend Chart: Cycle Time vs Lead Time */}
+        <div className="lg:col-span-2 bg-ds-navy p-4 rounded-lg border border-ds-border">
+          <h3 className="text-ds-light-text font-bold text-lg mb-4">
+            📈 Tendência: Cycle Time vs Lead Time
+          </h3>
+          <ChartInfoLamp info="Evolução do cycle time e lead time médios por período, com linhas de referência SLA (P85 e P95). Ajuda a identificar tendências de melhora ou piora no fluxo." />
+          <ResponsiveContainer width="100%" height={350}>
+            <LineChart data={trendData}>
+              <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
+              <XAxis dataKey="label" stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} />
+              <YAxis stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} />
+              <Tooltip contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }} labelStyle={{ color: '#64ffda', fontWeight: 'bold' }} itemStyle={{ color: '#e6f1ff' }} />
+              <Legend />
+              <Line type="monotone" dataKey="cycleTime" name="Cycle Time (dias)" stroke={CHART_COLORS.primary} strokeWidth={2} dot={{ r: 4 }} />
+              <Line type="monotone" dataKey="leadTime" name="Lead Time (dias)" stroke="#60A5FA" strokeWidth={2} dot={{ r: 4 }} />
+              <ReferenceLine y={metrics.p85} stroke="#FFB86C" strokeDasharray="5 5" label={{ value: `SLA P85: ${metrics.p85}d`, position: 'insideTopRight', fill: '#FFB86C', fontSize: 11 }} />
+              <ReferenceLine y={metrics.p95} stroke="#F56565" strokeDasharray="5 5" label={{ value: `P95: ${metrics.p95}d`, position: 'insideBottomRight', fill: '#F56565', fontSize: 11 }} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+
         {/* Histórico Comparativo: Cycle vs Lead Time */}
         <div className="lg:col-span-2 bg-ds-navy p-4 rounded-lg border border-ds-border">
           <h3 className="text-ds-light-text font-bold text-lg mb-4">
@@ -705,7 +734,8 @@ const CycleTimeAnalyticsDashboard: React.FC<CycleTimeAnalyticsDashboardProps> = 
               <Legend />
               <Bar dataKey="cycleTime" name="Cycle Time (dias)" fill={CHART_COLORS.primary} radius={[4, 4, 0, 0]} label={{ position: 'top', fill: '#64FFDA', fontSize: 9 }} />
               <Bar dataKey="leadTime" name="Lead Time (dias)" fill="#60A5FA" radius={[4, 4, 0, 0]} label={{ position: 'top', fill: '#60A5FA', fontSize: 9 }} />
-              <ReferenceLine y={metrics.avg} stroke="#FFB86C" strokeDasharray="3 3" label={{ value: `Média CT: ${metrics.avg}d`, position: 'right', fill: '#FFB86C', fontSize: 10 }} />
+              <ReferenceLine y={metrics.p85} stroke="#FFB86C" strokeDasharray="5 5" label={{ value: `SLA P85: ${metrics.p85}d`, position: 'insideTopRight', fill: '#FFB86C', fontSize: 11 }} />
+              <ReferenceLine y={metrics.p95} stroke="#F56565" strokeDasharray="5 5" label={{ value: `P95: ${metrics.p95}d`, position: 'insideBottomRight', fill: '#F56565', fontSize: 11 }} />
             </BarChart>
           </ResponsiveContainer>
           <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">

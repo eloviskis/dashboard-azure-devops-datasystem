@@ -4,7 +4,10 @@ import { getWorkItems, getLastSyncStatus, triggerFullSync } from '../services/az
 
 export interface SyncStatus {
     syncTime: string;
-    status: 'success' | 'error' | 'No sync yet';
+    sync_time?: string;
+    status: 'success' | 'error' | 'warning' | 'No sync yet';
+    work_items?: number;
+    message?: string;
 }
 
 

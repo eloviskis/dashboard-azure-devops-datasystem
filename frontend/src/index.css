@@ -34,6 +34,25 @@ body {
 ::-webkit-scrollbar-thumb { background: #163050; border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: #1E3A55; }
 
+/* Tabs horizontal scrollbar - thin & elegant */
+.tabs-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(127, 211, 32, 0.3) transparent;
+}
+.tabs-scrollbar::-webkit-scrollbar {
+  height: 3px;
+}
+.tabs-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.tabs-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(90deg, rgba(127, 211, 32, 0.2), rgba(127, 211, 32, 0.4), rgba(127, 211, 32, 0.2));
+  border-radius: 10px;
+}
+.tabs-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(90deg, rgba(127, 211, 32, 0.4), rgba(127, 211, 32, 0.6), rgba(127, 211, 32, 0.4));
+}
+
 /* Login page */
 .login-bg {
   background: linear-gradient(135deg, #061526 0%, #0A1E35 50%, #061526 100%);

@@ -640,7 +640,7 @@ interface Props { data: WorkItem[]; }
 
 const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
   const { isAdmin, token } = useAuth();
-  const API_URL = import.meta.env.VITE_API_URL || 'https://backend-hazel-three-14.vercel.app';
+  const API_URL = import.meta.env.VITE_API_URL || 'https://dsmetrics.online';
 
   const [seniorityConfig, setSeniorityConfig] = useState<SeniorityConfigMap>(loadLocalConfig);
   const [roleConfig, setRoleConfig] = useState<RoleConfigMap>(loadRoleConfig);

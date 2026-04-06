@@ -1,60 +1,45 @@
 # Arquitetura do Sistema — Dashboard Azure DevOps
 
-## 🏗️ Infraestrutura (Fevereiro 2026)
+## 🏗️ Infraestrutura (Abril 2026)
 
 ### Banco de Dados
-- **Tipo**: PostgreSQL 16.11
-- **Localização**: VPS própria (`31.97.64.250:5433`)
+- **Tipo**: PostgreSQL 16
+- **Localização**: VPS (localhost:5432)
 - **Database**: `devops_dashboard` | **User**: `devops_dash`
-- **SSL**: `rejectUnauthorized: false`
-- **Conexão**: via `DATABASE_URL` no formato `postgresql://user:pass@host:port/database`
-
-> O IP da VPS bloqueia conexões externas não autorizadas. O backend Vercel consegue conectar; a máquina de desenvolvimento local também (rede interna).
+- **Conexão**: via `DATABASE_URL` no formato `postgresql://user:pass@localhost:5432/database`
 
 ### Backend
-- **Host**: Vercel (serverless)
-- **URL Produção**: https://backend-hazel-three-14.vercel.app
+- **Host**: VPS 187.77.55.172 (PM2, porta 3001)
+- **URL Produção**: https://dsmetrics.online/api
 - **Tecnologia**: Node.js + Express + `pg` (PostgreSQL)
-- **Startup**: ao iniciar, executa `ALTER TABLE work_items ADD COLUMN IF NOT EXISTS` para garantir que todas as colunas existam em bancos criados antes de migrações recentes
+- **Sync**: Auto-sync a cada 30 min (integrado no server.js)
+- **Startup**: ao iniciar, executa `ALTER TABLE work_items ADD COLUMN IF NOT EXISTS` para garantir que todas as colunas existam
 
 ### Frontend
-- **Host**: Vercel
-- **URL Produção**: https://devops-datasystem.vercel.app
+- **Host**: VPS 187.77.55.172 (Nginx)
+- **URL Produção**: https://dsmetrics.online
 - **Tecnologia**: React + TypeScript + Vite
 - **Design System**: Tailwind CSS + Recharts
-
-### Sincronizador
-- **Script principal**: `backend/sync-standalone.js` (40+ campos, inclui todos os campos custom)
-- **Execução**: local (máquina com acesso à rede da VPS)
-- **Script legado**: `backend/sync-local.js` — **não usar** para sync completo; não salva `identificacao`, `falha_do_processo` e outros campos recentes
 
 ---
 
 ## 📝 Fluxo de Deploy
 
-> **Atenção**: o auto-deploy via GitHub **não dispara** de forma confiável. Sempre fazer deploy manual após push.
-
 ### Frontend
 ```bash
-git add frontend/
-git commit -m "feat: ..."
-git push origin main
 cd frontend
-vercel --prod
+npm run build
+scp -r dist/* root@187.77.55.172:/var/www/devops-dashboard/dist/
 ```
 
 ### Backend
 ```bash
-git add backend/
-git commit -m "feat: ..."
-git push origin main
-cd backend
-vercel --prod
+scp backend/server.js root@187.77.55.172:/opt/devops-dashboard/backend/
+ssh root@187.77.55.172 "pm2 restart devops-backend"
 ```
 
 ### Banco de Dados (migrações)
 ```bash
-# Rodar script de migration com .env local
 cd backend
 node run_migration_<nome>.js
 ```
@@ -101,7 +86,7 @@ JWT_SECRET=<secret>
 
 ### Frontend (`frontend/.env`)
 ```env
-VITE_API_URL=https://backend-hazel-three-14.vercel.app
+VITE_API_URL=https://dsmetrics.online
 ```
 
 ---

@@ -1,6 +1,6 @@
 
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 // Fix: Import `subDays` from its submodule `date-fns/subDays` to resolve the export error.
 import { subDays, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { GoogleGenAI } from '@google/genai';
@@ -722,6 +722,34 @@ const App = () => {
       </button>
   );
 
+  // Tabs scroll logic
+  const tabsScrollRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  const checkTabsScroll = useCallback(() => {
+    const el = tabsScrollRef.current;
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 2);
+    setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 2);
+  }, []);
+
+  useEffect(() => {
+    const el = tabsScrollRef.current;
+    if (!el) return;
+    checkTabsScroll();
+    el.addEventListener('scroll', checkTabsScroll, { passive: true });
+    const ro = new ResizeObserver(checkTabsScroll);
+    ro.observe(el);
+    return () => { el.removeEventListener('scroll', checkTabsScroll); ro.disconnect(); };
+  }, [checkTabsScroll]);
+
+  const scrollTabs = (dir: 'left' | 'right') => {
+    const el = tabsScrollRef.current;
+    if (!el) return;
+    el.scrollBy({ left: dir === 'left' ? -200 : 200, behavior: 'smooth' });
+  };
+
   // Tela de loading enquanto verifica autenticação
   if (authLoading) {
     return (
@@ -759,7 +787,17 @@ const App = () => {
       ) : (
       <div className="p-6 md:p-10">
         <div className="mb-6">
-            <div className="flex border-b border-ds-border overflow-x-auto">
+            <div className="flex border-b border-ds-border overflow-x-auto tabs-scrollbar"
+                 ref={tabsScrollRef}>
+                {canScrollLeft && (
+                  <button
+                    onClick={() => scrollTabs('left')}
+                    className="sticky left-0 z-10 flex items-center px-1.5 bg-gradient-to-r from-ds-dark-blue via-ds-dark-blue to-transparent text-ds-text hover:text-ds-green transition-colors shrink-0"
+                    aria-label="Scroll tabs left"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                  </button>
+                )}
                 {tabsConfig
                   .filter(t => t.visible)
                   .filter(t => !user?.tabPermissions || user.tabPermissions.includes(t.id))
@@ -775,6 +813,15 @@ const App = () => {
                 >
                   ⚙️
                 </button>
+                )}
+                {canScrollRight && (
+                  <button
+                    onClick={() => scrollTabs('right')}
+                    className="sticky right-0 z-10 flex items-center px-1.5 bg-gradient-to-l from-ds-dark-blue via-ds-dark-blue to-transparent text-ds-text hover:text-ds-green transition-colors shrink-0"
+                    aria-label="Scroll tabs right"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                  </button>
                 )}
             </div>
         </div>
