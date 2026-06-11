@@ -76,11 +76,9 @@ const TeamPercentilesHistogram: React.FC<TeamPercentilesHistogramProps> = ({ dat
 
   return (
     <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
-      <div className="flex items-start justify-between mb-4">
-        <div>
-          <h3 className="text-ds-light-text font-bold text-lg mb-1">📊 Histograma de Percentis: P50, P85 e P95 por Time</h3>
-          <ChartInfoLamp info="Comparação dos percentis P50 (mediana), P85 e P95 de Cycle Time por time. P85 é a métrica recomendada para SLAs. Times com mínimo de 3 itens." />
-        </div>
+      <div className="mb-4">
+        <h3 className="text-ds-light-text font-bold text-lg mb-1">📊 Histograma de Percentis: P50, P85 e P95 por Time</h3>
+        <ChartInfoLamp info="Comparação dos percentis P50 (mediana), P85 e P95 de Cycle Time por time. P85 é a métrica recomendada para SLAs. Times com mínimo de 3 itens." />
       </div>
 
       <ResponsiveContainer width="100%" height={400}>

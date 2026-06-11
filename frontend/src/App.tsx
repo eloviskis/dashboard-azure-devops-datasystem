@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 // Fix: Import `subDays` from its submodule `date-fns/subDays` to resolve the export error.
-import { subDays, startOfMonth, endOfMonth, subMonths } from 'date-fns';
+import { subDays, subWeeks, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { GoogleGenAI } from '@google/genai';
 
 // Import Auth
@@ -65,6 +65,7 @@ import DocumentationDashboard from './components/DocumentationDashboard.tsx';
 import TeamComparisonDashboard from './components/TeamComparisonDashboard.tsx';
 import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 import DevTrackerDashboard from './components/DevTrackerDashboard.tsx';
+import TeamEvolutionDashboard from './components/TeamEvolutionDashboard.tsx';
 
 // Import Types
 import { WorkItem, WorkItemFilters } from './types.ts';
@@ -72,13 +73,18 @@ import { WorkItem, WorkItemFilters } from './types.ts';
 // Import Metrics
 import { calculatePerformanceMetrics, calculateQualityMetrics, COMPLETED_STATES } from './utils/metrics.ts';
 
-type Tab = 'executive' | 'team-insights' | 'cycle-analytics' | 'performance' | 'quality' | 'kanban' | 'detailed-throughput' | 'bottlenecks' | 'tags' | 'clients' | 'montecarlo' | 'item-list' | 'rootcause' | 'period-comparison' | 'backlog' | 'impedimentos' | 'po-analysis' | 'pull-requests' | 'scrum-ctc' | 'dora' | 'sla' | 'metas' | 'documentation' | 'team-comparison' | 'devtracker';
+type Tab = 'executive' | 'team-insights' | 'team-evolution' | 'cycle-analytics' | 'performance' | 'quality' | 'kanban' | 'detailed-throughput' | 'bottlenecks' | 'tags' | 'clients' | 'montecarlo' | 'item-list' | 'rootcause' | 'period-comparison' | 'backlog' | 'impedimentos' | 'po-analysis' | 'pull-requests' | 'scrum-ctc' | 'dora' | 'sla' | 'metas' | 'documentation' | 'team-comparison' | 'devtracker';
+
+type QuickFilter = 'weekly' | 'biweekly' | 'monthly' | 'global';
+
+const QUICK_FILTER_EXCLUDED_TABS: Tab[] = ['period-comparison', 'team-comparison', 'pull-requests', 'documentation', 'devtracker', 'team-evolution'];
 
 const DEFAULT_TAB_CONFIG = [
   // 🧭 1. Camada Executiva
   { id: 'performance', label: '📈 Performance Geral', visible: true },
   { id: 'executive', label: '🎯 Visão Executiva', visible: true },
   { id: 'team-insights', label: '👥 Insights por Time', visible: true },
+  { id: 'team-evolution', label: '📅 Evolução Times', visible: true },
   { id: 'metas', label: '🏁 Metas por Time', visible: true },
   { id: 'sla', label: '📋 SLA Tracking', visible: true },
   // 🔄 2. Fluxo e Entregas
@@ -213,7 +219,26 @@ const App = () => {
     });
   }, [workItems, workItemFilters, periodDates]);
 
-  
+  // ── Quick Filter (Filtro Rápido) ──
+  const [quickFilter, setQuickFilter] = useState<QuickFilter>('global');
+
+  const quickFilteredWorkItems = useMemo(() => {
+    if (quickFilter === 'global') return filteredWorkItems;
+    const now = new Date();
+    let cutoff: Date;
+    switch (quickFilter) {
+      case 'weekly': cutoff = subWeeks(now, 1); break;
+      case 'biweekly': cutoff = subWeeks(now, 2); break;
+      case 'monthly': cutoff = subMonths(now, 1); break;
+      default: return filteredWorkItems;
+    }
+    return filteredWorkItems.filter(item => {
+      const d = item.closedDate ? new Date(item.closedDate as string)
+        : new Date(item.changedDate || item.createdDate);
+      return d >= cutoff;
+    });
+  }, [filteredWorkItems, quickFilter]);
+
   const handleGenerateInsights = async () => {
       setAiLoading(true);
       setAiError('');
@@ -224,7 +249,7 @@ const App = () => {
         
         let contextData = JSON.stringify({
           filters: workItemFilters,
-          data: filteredWorkItems.slice(0, 30).map(d => ({...d, title: undefined})) // Limita o tamanho e remove o ruído do título
+          data: quickFilteredWorkItems.slice(0, 30).map(d => ({...d, title: undefined})) // Limita o tamanho e remove o ruído do título
         });
         let prompt = `Você é um analista de engenharia de software e agilidade sênior. Analise os seguintes dados (já filtrados) do Azure DevOps em JSON e forneça insights acionáveis em português do Brasil. Formate sua resposta usando markdown.`;
 
@@ -265,8 +290,8 @@ const App = () => {
       }
   };
 
-  const { total, completed, inProgress, avgCycleTime } = useMemo(() => calculatePerformanceMetrics(filteredWorkItems), [filteredWorkItems]);
-  const { openBugs, openIssues, avgResolutionTime } = useMemo(() => calculateQualityMetrics(filteredWorkItems), [filteredWorkItems]);
+  const { total, completed, inProgress, avgCycleTime } = useMemo(() => calculatePerformanceMetrics(quickFilteredWorkItems), [quickFilteredWorkItems]);
+  const { openBugs, openIssues, avgResolutionTime } = useMemo(() => calculateQualityMetrics(quickFilteredWorkItems), [quickFilteredWorkItems]);
 
   // Comparison with previous period
   const previousPeriodComparison = useMemo(() => {
@@ -293,7 +318,7 @@ const App = () => {
       totalDiff: total - prevMetrics.total,
       completedDiff: completed - prevMetrics.completed,
     };
-  }, [filteredWorkItems, workItems, workItemFilters.period, total, completed]);
+  }, [quickFilteredWorkItems, workItems, workItemFilters.period, total, completed]);
   
   const handleTabClick = (tab: Tab) => {
     setActiveTab(tab);
@@ -333,14 +358,21 @@ const App = () => {
         return (
           <>
             <SectionHeader title="Insights por Time" />
-            <TeamInsightsDashboard data={filteredWorkItems} />
+            <TeamInsightsDashboard data={quickFilteredWorkItems} />
+          </>
+        );
+      case 'team-evolution':
+        return (
+          <>
+            <SectionHeader title="Evolução por Time" />
+            <TeamEvolutionDashboard data={quickFilteredWorkItems} />
           </>
         );
       case 'cycle-analytics':
         return (
           <>
             <SectionHeader title="Cycle Time Analytics" />
-            <CycleTimeAnalyticsDashboard data={filteredWorkItems} />
+            <CycleTimeAnalyticsDashboard data={quickFilteredWorkItems} />
           </>
         );
       case 'performance':
@@ -388,22 +420,22 @@ const App = () => {
               <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
                 <ChartInfoLamp info="Este gráfico mostra a distribuição dos status dos itens de trabalho. Ajuda a identificar gargalos e priorizar ações para melhorar o fluxo de trabalho." />
                 <h3 className="text-ds-light-text font-bold text-lg mb-4">Status Geral</h3>
-                <StatusPieChart data={filteredWorkItems} />
+                <StatusPieChart data={quickFilteredWorkItems} />
               </div>
               <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
                 <ChartInfoLamp info="Este gráfico apresenta a performance dos times, mostrando entregas e itens em progresso. Auxilia na comparação entre equipes e na tomada de decisão sobre alocação de recursos." />
                 <h3 className="text-ds-light-text font-bold text-lg mb-4">Performance dos Times</h3>
-                <TeamPerformanceBarChart data={filteredWorkItems} />
+                <TeamPerformanceBarChart data={quickFilteredWorkItems} />
               </div>
               <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
                 <ChartInfoLamp info="A tendência de entregas mostra o ritmo de conclusão dos itens ao longo do tempo. Ajuda a prever entregas futuras e identificar períodos de alta ou baixa produtividade." />
                 <h3 className="text-ds-light-text font-bold text-lg mb-4">Tendência de Entregas</h3>
-                <DeliveryTrendLineChart data={filteredWorkItems} period={workItemFilters.period} />
+                <DeliveryTrendLineChart data={quickFilteredWorkItems} period={workItemFilters.period} />
               </div>
               <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
                 <ChartInfoLamp info="Este gráfico destaca os colaboradores com maior número de entregas. Facilita reconhecer talentos, identificar sobrecarga e promover ações de reconhecimento ou equilíbrio de trabalho." />
                 <h3 className="text-ds-light-text font-bold text-lg mb-4">Top 10 - Performance Individual</h3>
-                <IndividualPerformanceChart data={filteredWorkItems} />
+                <IndividualPerformanceChart data={quickFilteredWorkItems} />
               </div>
             </div>
             
@@ -411,24 +443,24 @@ const App = () => {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
               <div className="h-125">
                 <ChartInfoLamp info="Mostra os itens mais antigos em progresso, ajudando a identificar trabalho estagnado que pode precisar de atenção ou repriorização." />
-                <AgingItemsCard workItems={filteredWorkItems} />
+                <AgingItemsCard workItems={quickFilteredWorkItems} />
               </div>
               <div className="h-125">
                 <ChartInfoLamp info="Exibe os limites de trabalho em progresso (WIP) por coluna, time e pessoa. WIP alto pode indicar sobrecarga e multitasking excessivo." />
-                <WIPLimits workItems={filteredWorkItems} />
+                <WIPLimits workItems={quickFilteredWorkItems} />
               </div>
             </div>
             {/* Activity Heatmap */}
             <div className="mt-6">
               <ChartInfoLamp info="Mapa de calor mostrando os horários e dias com maior atividade de movimentação de itens. Útil para entender padrões de trabalho da equipe." />
-              <ActivityHeatmap data={filteredWorkItems} />
+              <ActivityHeatmap data={quickFilteredWorkItems} />
             </div>
           </>
         );
       case 'quality':
-        const totalQualityItems = filteredWorkItems.length;
-        const bugItems = filteredWorkItems.filter(i => i.type === 'Bug');
-        const issueItems = filteredWorkItems.filter(i => i.type === 'Issue');
+        const totalQualityItems = quickFilteredWorkItems.length;
+        const bugItems = quickFilteredWorkItems.filter(i => i.type === 'Bug');
+        const issueItems = quickFilteredWorkItems.filter(i => i.type === 'Issue');
         const defectRate = totalQualityItems > 0 ? Math.round((bugItems.length / totalQualityItems) * 1000) / 10 : 0;
         const totalDefects = bugItems.length + issueItems.length;
         const devDetectionRate = totalDefects > 0 ? Math.round((bugItems.length / totalDefects) * 1000) / 10 : 0;
@@ -447,29 +479,29 @@ const App = () => {
                 <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
                   <ChartInfoLamp info="Este gráfico compara a quantidade de bugs e issues abertas. Ajuda a entender o perfil dos problemas e priorizar ações corretivas ou preventivas." />
                   <h3 className="text-ds-light-text font-bold text-lg mb-4">Bugs vs. Issues</h3>
-                  <BugVsIssuePieChart data={filteredWorkItems} />
+                  <BugVsIssuePieChart data={quickFilteredWorkItems} />
                 </div>
                 <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
                   <ChartInfoLamp info="Mostra a distribuição de bugs e issues por time. Permite identificar áreas com maior incidência de problemas e direcionar treinamentos ou melhorias." />
                   <h3 className="text-ds-light-text font-bold text-lg mb-4">Bugs e Issues por Time</h3>
-                  <TeamBugChart data={filteredWorkItems} />
+                  <TeamBugChart data={quickFilteredWorkItems} />
                 </div>
                 <div className="col-span-1 lg:col-span-2 bg-ds-navy p-4 rounded-lg border border-ds-border">
                   <ChartInfoLamp info="A tendência de criação mostra o surgimento de bugs e issues ao longo do tempo. Ajuda a identificar picos de problemas e avaliar o impacto de mudanças ou releases." />
                   <h3 className="text-ds-light-text font-bold text-lg mb-4">Tendência de Criação</h3>
-                  <BugCreationTrendChart data={filteredWorkItems} period={workItemFilters.period} />
+                  <BugCreationTrendChart data={quickFilteredWorkItems} period={workItemFilters.period} />
                 </div>
             </div>
             {/* Rework Analysis */}
             <div className="mt-6">
               <ChartInfoLamp info="Analisa a taxa de retrabalho por time e pessoa. Identifica reincidência de bugs, ajudando a priorizar melhorias de qualidade e processo." />
-              <ReworkAnalysisChart data={filteredWorkItems} />
+              <ReworkAnalysisChart data={quickFilteredWorkItems} />
             </div>
             {/* Bugs e Issues por Feature */}
             <div className="mt-6 bg-ds-navy p-4 rounded-lg border border-ds-border">
               <ChartInfoLamp info="Mostra, por feature, quantos bugs foram encontrados antes de ir pra produção (detectados internamente) e quantos issues foram reportados pelo cliente após a entrega. Clique nas barras para ver os itens detalhados." />
               <h3 className="text-ds-light-text font-bold text-lg mb-4">Bugs e Issues por Feature</h3>
-              <BugIssueByFeatureChart data={filteredWorkItems} />
+              <BugIssueByFeatureChart data={quickFilteredWorkItems} />
             </div>
           </>
         );
@@ -481,17 +513,17 @@ const App = () => {
                 <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
                   <ChartInfoLamp info="Mostra a quantidade de itens por cliente, ajudando a identificar clientes mais ativos e oportunidades de relacionamento." />
                   <h3 className="text-ds-light-text font-bold text-lg mb-4">Distribuição de Itens por Cliente</h3>
-                  <ClientItemDistributionChart data={filteredWorkItems} />
+                  <ClientItemDistributionChart data={quickFilteredWorkItems} />
                 </div>
                 <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
                   <ChartInfoLamp info="Exibe o tempo médio de ciclo por cliente, útil para identificar gargalos e oportunidades de melhoria no atendimento." />
                   <h3 className="text-ds-light-text font-bold text-lg mb-4">Cycle Time Médio por Cliente (Dias)</h3>
-                  <ClientCycleTimeChart data={filteredWorkItems} />
+                  <ClientCycleTimeChart data={quickFilteredWorkItems} />
                 </div>
                  <div className="col-span-1 lg:col-span-2 bg-ds-navy p-4 rounded-lg border border-ds-border">
                   <ChartInfoLamp info="Mostra a quantidade de itens concluídos por cliente, facilitando a análise de produtividade e entrega." />
                   <h3 className="text-ds-light-text font-bold text-lg mb-4">Itens Concluídos por Cliente</h3>
-                  <ClientThroughputChart data={filteredWorkItems} />
+                  <ClientThroughputChart data={quickFilteredWorkItems} />
                 </div>
             </div>
           </>
@@ -504,22 +536,22 @@ const App = () => {
                 <div className="lg:col-span-2 bg-ds-navy p-4 rounded-lg border border-ds-border">
                   <ChartInfoLamp info="O diagrama de fluxo cumulativo mostra o volume de trabalho em cada etapa do processo. Ajuda a visualizar gargalos e o andamento do fluxo." />
                   <h3 className="text-ds-light-text font-bold text-lg mb-4">Diagrama de Fluxo Cumulativo (WIP)</h3>
-                  <CumulativeFlowDiagram data={filteredWorkItems} period={workItemFilters.period} />
+                  <CumulativeFlowDiagram data={quickFilteredWorkItems} period={workItemFilters.period} />
                 </div>
                 <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
                   <ChartInfoLamp info="Compara o lead time e o cycle time por time, permitindo identificar equipes mais ágeis e oportunidades de melhoria." />
                   <h3 className="text-ds-light-text font-bold text-lg mb-4">Lead Time vs. Cycle Time por Time (Dias)</h3>
-                  <LeadVsCycleTimeChart data={filteredWorkItems} />
+                  <LeadVsCycleTimeChart data={quickFilteredWorkItems} />
                 </div>
                 <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
                   <ChartInfoLamp info="O histograma de vazão semanal mostra a quantidade de entregas por semana, útil para acompanhar a evolução da produtividade." />
                   <h3 className="text-ds-light-text font-bold text-lg mb-4">Vazão Semanal (Histograma)</h3>
-                  <ThroughputHistogram data={filteredWorkItems} />
+                  <ThroughputHistogram data={quickFilteredWorkItems} />
                 </div>
             </div>
             {/* Flow Efficiency */}
             <ChartInfoLamp info="Mostra a eficiência do fluxo por time: % de tempo que os itens passam em trabalho ativo vs. tempo total em fila. Ajuda a reduzir tempos de espera." />
-            <FlowEfficiencyChart data={filteredWorkItems} />
+            <FlowEfficiencyChart data={quickFilteredWorkItems} />
           </>
         );
       case 'detailed-throughput':
@@ -530,18 +562,18 @@ const App = () => {
                     <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
                       <ChartInfoLamp info="Mostra a tendência de vazão semanal por time, facilitando a análise de desempenho e previsibilidade das equipes." />
                       <h3 className="text-ds-light-text font-bold text-lg mb-4">Tendência de Vazão Semanal por Time</h3>
-                      <TeamThroughputTrendChart data={filteredWorkItems} />
+                      <TeamThroughputTrendChart data={quickFilteredWorkItems} />
                     </div>
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                       <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
                         <ChartInfoLamp info="Apresenta a vazão por responsável, útil para identificar colaboradores mais produtivos e equilibrar demandas." />
                         <h3 className="text-ds-light-text font-bold text-lg mb-4">Vazão por Responsável</h3>
-                        <ThroughputBreakdownChart data={filteredWorkItems} groupBy="assignedTo" />
+                        <ThroughputBreakdownChart data={quickFilteredWorkItems} groupBy="assignedTo" />
                       </div>
                        <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
                         <ChartInfoLamp info="Mostra a vazão por tipo de item, ajudando a entender o perfil das entregas e priorizar tipos de trabalho." />
                         <h3 className="text-ds-light-text font-bold text-lg mb-4">Vazão por Tipo de Item</h3>
-                        <ThroughputBreakdownChart data={filteredWorkItems} groupBy="type" />
+                        <ThroughputBreakdownChart data={quickFilteredWorkItems} groupBy="type" />
                       </div>
                     </div>
                 </div>
@@ -555,7 +587,7 @@ const App = () => {
                         <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
                           <ChartInfoLamp info="Mostra o tempo médio em cada status, facilitando a identificação de gargalos e etapas que precisam de atenção." />
                           <h3 className="text-ds-light-text font-bold text-lg mb-4">Tempo Médio em Cada Status (Dias)</h3>
-                          <BottleneckAnalysisChart data={filteredWorkItems} />
+                          <BottleneckAnalysisChart data={quickFilteredWorkItems} />
                         </div>
                     </div>
                 </>
@@ -568,12 +600,12 @@ const App = () => {
                         <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
                           <ChartInfoLamp info="Exibe as tags mais utilizadas, útil para identificar temas recorrentes e oportunidades de padronização." />
                           <h3 className="text-ds-light-text font-bold text-lg mb-4">Top 10 Tags Mais Utilizadas</h3>
-                          <TopTagsChart data={filteredWorkItems} />
+                          <TopTagsChart data={quickFilteredWorkItems} />
                         </div>
                         <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
                            <ChartInfoLamp info="Mostra o cycle time médio por tag, ajudando a identificar tipos de trabalho que levam mais tempo para serem concluídos." />
                            <h3 className="text-ds-light-text font-bold text-lg mb-4">Cycle Time Médio por Tag (Dias)</h3>
-                          <CycleTimeByTagChart data={filteredWorkItems} />
+                          <CycleTimeByTagChart data={quickFilteredWorkItems} />
                         </div>
                     </div>
                 </>
@@ -582,7 +614,7 @@ const App = () => {
         return (
             <>
                 {/* Monte Carlo não tem um título simples, então não usamos SectionHeader */}
-                <MonteCarloSimulation data={filteredWorkItems} filters={workItemFilters} />
+                <MonteCarloSimulation data={quickFilteredWorkItems} filters={workItemFilters} />
             </>
         );
       case 'item-list':
@@ -590,7 +622,7 @@ const App = () => {
             <>
                 <SectionHeader title="Lista de Itens de Trabalho" />
                 <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
-                    <WorkItemTable data={filteredWorkItems} />
+                    <WorkItemTable data={quickFilteredWorkItems} />
                 </div>
             </>
         );
@@ -601,7 +633,7 @@ const App = () => {
             <div className="mb-6">
               <ChartInfoLamp info="Esta aba avalia as causas raízes mais comuns em ISSUES fechadas, além de métricas e comparativos por tipo, prioridade e pessoa. Facilita a identificação de padrões e oportunidades de melhoria nos processos." />
               <RootCauseDashboardWithErrorBoundary 
-                data={filteredWorkItems} 
+                data={quickFilteredWorkItems} 
                 allData={workItems}
                 periodStartDate={periodDates.startDate}
                 periodEndDate={periodDates.endDate}
@@ -625,7 +657,7 @@ const App = () => {
             <SectionHeader title="Análise de Backlog e Capacidade" />
             <div className="mb-6">
               <ChartInfoLamp info="Esta aba analisa a velocidade dos times (vazão, cycle time, lead time) e calcula quantas tarefas devem ser refinadas por tipo para manter um desenvolvimento saudável baseado no histórico do time." />
-              <BacklogAnalysisDashboard data={filteredWorkItems} />
+              <BacklogAnalysisDashboard data={quickFilteredWorkItems} />
             </div>
           </>
         );
@@ -635,7 +667,7 @@ const App = () => {
             <SectionHeader title="Análise de Impedimentos" />
             <div className="mb-6">
               <ChartInfoLamp info="Esta aba analisa tarefas com o campo Impedimento ativo ou com tag [IMPEDIMENTO], mostrando há quantos dias estão paradas, time responsável e tipo de work item. Clique nas barras para ver detalhes." />
-              <ImpedimentosDashboard data={filteredWorkItems} />
+              <ImpedimentosDashboard data={quickFilteredWorkItems} />
             </div>
           </>
         );
@@ -645,7 +677,7 @@ const App = () => {
             <SectionHeader title="Análise de Demanda" />
             <div className="mb-6">
               <ChartInfoLamp info="Esta aba analisa quem criou os work items no período, quantidade por pessoa e time, taxa de conclusão, qualidade da especificação (bugs gerados por item criado) e ranking de melhor desempenho." />
-              <POAnalysisDashboard data={filteredWorkItems} />
+              <POAnalysisDashboard data={quickFilteredWorkItems} />
             </div>
           </>
         );
@@ -660,10 +692,10 @@ const App = () => {
         return (
           <>
             <SectionHeader title="Scrum Dashboard — CTC/Franquia" />
-            <ScrumCTCDashboard data={filteredWorkItems} />
+            <ScrumCTCDashboard data={quickFilteredWorkItems} />
             {/* Story Points vs Cycle Time — movido para cá pois é métrica Scrum */}
             <div className="mt-6">
-              <StoryPointsVsCycleTimeChart data={filteredWorkItems} />
+              <StoryPointsVsCycleTimeChart data={quickFilteredWorkItems} />
             </div>
           </>
         );
@@ -671,28 +703,28 @@ const App = () => {
         return (
           <>
             <SectionHeader title="Visão Executiva" />
-            <ExecutiveHomeDashboard data={filteredWorkItems} />
+            <ExecutiveHomeDashboard data={quickFilteredWorkItems} />
           </>
         );
       case 'dora':
         return (
           <>
             <SectionHeader title="Indicadores DevOps (Adaptados)" />
-            <DORAMetricsDashboard data={filteredWorkItems} />
+            <DORAMetricsDashboard data={quickFilteredWorkItems} />
           </>
         );
       case 'sla':
         return (
           <>
             <SectionHeader title="SLA Tracking" />
-            <SLATrackingDashboard data={filteredWorkItems} />
+            <SLATrackingDashboard data={quickFilteredWorkItems} />
           </>
         );
       case 'metas':
         return (
           <>
             <SectionHeader title="Metas por Time" />
-            <MetasDashboard data={filteredWorkItems} periodDays={workItemFilters.period || 180} />
+            <MetasDashboard data={quickFilteredWorkItems} periodDays={workItemFilters.period || 180} />
           </>
         );
       case 'team-comparison':
@@ -826,7 +858,7 @@ const App = () => {
             </div>
         </div>
         
-        {activeTab !== 'cycle-analytics' && activeTab !== 'team-insights' && activeTab !== 'pull-requests' && activeTab !== 'scrum-ctc' && activeTab !== 'team-comparison' && activeTab !== 'period-comparison' && activeTab !== 'devtracker' && (
+        {activeTab !== 'cycle-analytics' && activeTab !== 'team-insights' && activeTab !== 'pull-requests' && activeTab !== 'scrum-ctc' && activeTab !== 'team-comparison' && activeTab !== 'period-comparison' && activeTab !== 'devtracker' && activeTab !== 'team-evolution' && (
         <div className="relative">
           <button
             onClick={() => setFilterBarCollapsed(!filterBarCollapsed)}
@@ -881,6 +913,22 @@ const App = () => {
         />
 
         <main className="mt-6">
+            {/* Quick Filter Bar */}
+            {!QUICK_FILTER_EXCLUDED_TABS.includes(activeTab) && (
+              <div className="flex items-center gap-2 mb-4 bg-ds-navy/60 px-4 py-2 rounded-lg border border-ds-border">
+                <span className="text-ds-text text-xs font-semibold mr-1">⚡ Filtro Rápido:</span>
+                {([['weekly', 'Semanal'], ['biweekly', 'Quinzenal'], ['monthly', 'Mensal'], ['global', 'Período Global']] as [QuickFilter, string][]).map(([key, label]) => (
+                  <button
+                    key={key}
+                    onClick={() => setQuickFilter(key)}
+                    className={`px-3 py-1 text-xs rounded-full transition-colors ${quickFilter === key ? 'bg-ds-green text-ds-dark-blue font-bold' : 'bg-ds-dark-blue text-ds-text hover:bg-ds-border'}`}
+                  >
+                    {label}
+                  </button>
+                ))}
+                <span className="ml-auto text-ds-muted text-xs">{quickFilteredWorkItems.length} itens</span>
+              </div>
+            )}
             <ErrorBoundary name={`Dashboard-${activeTab}`}>
               {renderContent()}
             </ErrorBoundary>

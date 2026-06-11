@@ -19,6 +19,7 @@ interface HeaderProps {
 const Header: React.FC<HeaderProps> = ({ lastSyncStatus, onOpenUserManagement, onSync, syncing, workItems = [] }) => {
     const { user, logout, isAdmin } = useAuth();
     const [showAlerts, setShowAlerts] = useState(false);
+    const [dismissedAlertIds, setDismissedAlertIds] = useState<Set<number>>(new Set());
     const [showUserMenu, setShowUserMenu] = useState(false);
     const [showChangePassword, setShowChangePassword] = useState(false);
     const userMenuRef = useRef<HTMLDivElement>(null);
@@ -52,6 +53,13 @@ const Header: React.FC<HeaderProps> = ({ lastSyncStatus, onOpenUserManagement, o
         });
         return critical.sort((a, b) => a.priority - b.priority || b.age - a.age).slice(0, 15);
     }, [workItems]);
+
+    const visibleAlerts = useMemo(() => alerts.filter(a => !dismissedAlertIds.has(a.id)), [alerts, dismissedAlertIds]);
+
+    const handleMarkAllRead = () => {
+        setDismissedAlertIds(new Set(alerts.map(a => a.id)));
+        setShowAlerts(false);
+    };
     
     const syncInfo = useMemo(() => {
         if (!lastSyncStatus) {
@@ -160,25 +168,33 @@ const Header: React.FC<HeaderProps> = ({ lastSyncStatus, onOpenUserManagement, o
                     </button>
                 )}
                 {/* Alert Badge */}
-                {alerts.length > 0 && (
+                {visibleAlerts.length > 0 && (
                     <div className="relative">
                         <button
                             onClick={() => setShowAlerts(!showAlerts)}
                             className="relative flex items-center gap-1 px-3 py-2 bg-red-500/10 text-red-400 hover:bg-red-500/20 rounded-lg transition-colors text-sm"
-                            title={`${alerts.length} alertas de itens críticos`}
+                            title={`${visibleAlerts.length} alertas de itens críticos`}
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                             </svg>
                             <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold">
-                                {alerts.length}
+                                {visibleAlerts.length}
                             </span>
                         </button>
                         {showAlerts && (
                             <div className="absolute right-0 top-12 w-96 max-h-80 overflow-y-auto bg-ds-navy border border-ds-border rounded-lg shadow-xl z-50 p-3">
-                                <h4 className="text-ds-light-text font-semibold text-sm mb-2">🚨 Itens Críticos ({alerts.length})</h4>
+                                <div className="flex items-center justify-between mb-2">
+                                    <h4 className="text-ds-light-text font-semibold text-sm">🚨 Itens Críticos ({visibleAlerts.length})</h4>
+                                    <button
+                                        onClick={handleMarkAllRead}
+                                        className="text-xs text-ds-green hover:text-white transition-colors"
+                                    >
+                                        ✓ Marcar como lidos
+                                    </button>
+                                </div>
                                 <div className="space-y-1">
-                                    {alerts.map((a, i) => (
+                                    {visibleAlerts.map((a, i) => (
                                         <a key={i} href={`https://dev.azure.com/datasystemsoftwares/USE/_workitems/edit/${a.id}`} target="_blank" rel="noopener noreferrer"
                                            className="block p-2 hover:bg-ds-muted/20 rounded text-xs">
                                             <div className="flex items-center gap-2">
