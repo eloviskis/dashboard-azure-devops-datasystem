@@ -1969,6 +1969,9 @@ app.post('/api/ceremonies/calendar-import/ics', authenticateToken, upload.single
     const icsContent = req.file.buffer.toString('utf-8');
     const events = ical.sync.parseICS(icsContent);
     
+    const keywords = ['refinamento', 'review', 'sprint review', 'retrospectiva', 'retro', 'apresentação', 'apresentacao', 'result', 'resultado', 'planning', 'planing', 'daily', 'sprint'];
+    const startDate = new Date('2025-06-01');
+    const endDate = new Date();
     const imported = [];
     
     for (const k in events) {
@@ -1977,6 +1980,15 @@ app.post('/api/ceremonies/calendar-import/ics', authenticateToken, upload.single
       
       // node-ical pode retornar summary como string ou objeto {val: "..."}
       const summaryValue = typeof ev.summary === 'string' ? ev.summary : (ev.summary?.val || '');
+      const summary = summaryValue.toLowerCase();
+      if (!keywords.some(kw => summary.includes(kw))) continue;
+      
+      const date = ev.start ? new Date(ev.start).toISOString().slice(0, 10) : null;
+      if (!date) continue;
+      
+      // Filtrar por data: entre 01/06/2025 e hoje
+      const eventDate = new Date(ev.start);
+      if (eventDate < startDate || eventDate > endDate) continue;
       
       const date = ev.start ? new Date(ev.start).toISOString().slice(0, 10) : null;
       if (!date) continue;

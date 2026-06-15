@@ -226,8 +226,8 @@ const CalendarImportMulti: React.FC<CalendarImportMultiProps> = ({ teams, month,
               {icsLoading && <p className="text-ds-muted text-sm mt-4 text-center">Processando arquivo...</p>}
               {!icsLoading && file && icsEvents.length === 0 && (
                 <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4 text-yellow-400 text-sm mt-4">
-                  <p className="font-semibold">⚠️ Nenhum evento encontrado no arquivo</p>
-                  <p className="mt-1 text-xs">Certifique-se de que o arquivo .ics contém eventos válidos.</p>
+                  <p className="font-semibold">⚠️ Nenhum evento de cerimônia encontrado</p>
+                  <p className="mt-1 text-xs">Buscando eventos de <strong>01/06/2025 até hoje</strong> com palavras: refinamento, review, retrospectiva, daily, planning, apresentação ou resultado.</p>
                 </div>
               )}
             </div>
