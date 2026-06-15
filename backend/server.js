@@ -2011,6 +2011,57 @@ app.post('/api/ceremonies/calendar-import/ics', authenticateToken, upload.single
   }
 });
 
+// POST /api/ceremonies/calendar-import/url — baixar .ics de URL compartilhada
+app.post('/api/ceremonies/calendar-import/url', authenticateToken, async (req, res) => {
+  try {
+    const { url } = req.body;
+    if (!url) {
+      return res.status(400).json({ error: 'URL não fornecida' });
+    }
+    
+    // Baixar o .ics da URL
+    const axios = require('axios');
+    const response = await axios.get(url, { timeout: 10000 });
+    const icsContent = response.data;
+    
+    const events = ical.sync.parseICS(icsContent);
+    
+    const keywords = ['refinamento', 'review', 'sprint review', 'retrospectiva', 'retro', 'apresentação', 'apresentacao', 'result', 'resultado', 'planning', 'planing', 'daily', 'sprint'];
+    const startDate = new Date('2025-06-01');
+    const endDate = new Date();
+    const imported = [];
+    
+    for (const k in events) {
+      const ev = events[k];
+      if (ev.type !== 'VEVENT') continue;
+      
+      const summaryValue = typeof ev.summary === 'string' ? ev.summary : (ev.summary?.val || '');
+      const summary = summaryValue.toLowerCase();
+      if (!keywords.some(kw => summary.includes(kw))) continue;
+      
+      const date = ev.start ? new Date(ev.start).toISOString().slice(0, 10) : null;
+      if (!date) continue;
+      
+      const eventDate = new Date(ev.start);
+      if (eventDate < startDate || eventDate > endDate) continue;
+      
+      const descriptionValue = typeof ev.description === 'string' ? ev.description : (ev.description?.val || null);
+      
+      imported.push({
+        title: summaryValue,
+        date,
+        time: ev.start ? new Date(ev.start).toISOString().slice(11, 16) : null,
+        description: descriptionValue,
+      });
+    }
+    
+    res.json({ events: imported });
+  } catch (err) {
+    console.error('❌ POST /api/ceremonies/calendar-import/url:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/ceremonies/auth/microsoft — iniciar OAuth flow delegado
 app.get('/api/ceremonies/auth/microsoft', authenticateToken, (req, res) => {
   const clientId = process.env.GRAPH_CLIENT_ID;

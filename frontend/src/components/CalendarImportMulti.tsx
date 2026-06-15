@@ -25,6 +25,7 @@ const CalendarImportMulti: React.FC<CalendarImportMultiProps> = ({ teams, month,
   
   // ICS upload
   const [file, setFile] = useState<File | null>(null);
+  const [icsUrl, setIcsUrl] = useState('');
   const [icsEvents, setIcsEvents] = useState<CalendarEvent[]>([]);
   const [icsLoading, setIcsLoading] = useState(false);
   
@@ -78,6 +79,31 @@ const CalendarImportMulti: React.FC<CalendarImportMultiProps> = ({ teams, month,
       setIcsEvents(data.events.map((e: any, i: number) => ({ ...e, id: `ics-${i}` })));
     } catch (err: any) {
       alert('Erro ao processar arquivo: ' + err.message);
+    } finally {
+      setIcsLoading(false);
+    }
+  };
+  
+  const handleUrlFetch = async () => {
+    if (!icsUrl.trim()) {
+      alert('Cole a URL do calendário compartilhado');
+      return;
+    }
+    setIcsLoading(true);
+    
+    try {
+      const res = await fetch(`${API}/api/ceremonies/calendar-import/url`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: icsUrl }),
+      });
+      
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      console.log('📅 Eventos da URL:', data.events);
+      setIcsEvents(data.events.map((e: any, i: number) => ({ ...e, id: `ics-${i}` })));
+    } catch (err: any) {
+      alert('Erro ao buscar calendário: ' + err.message);
     } finally {
       setIcsLoading(false);
     }
@@ -220,11 +246,47 @@ const CalendarImportMulti: React.FC<CalendarImportMultiProps> = ({ teams, month,
         <div className="p-5 flex-1 overflow-y-auto">
           {activeTab === 'ics' && icsEvents.length === 0 && (
             <div>
-              <p className="text-ds-text text-sm mb-3">Faça upload de um arquivo .ics exportado do Outlook/Teams:</p>
-              <input type="file" accept=".ics" onChange={handleFileChange}
-                className="block w-full text-sm text-ds-text file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-ds-green file:text-ds-dark-blue hover:file:bg-ds-green/80 cursor-pointer" />
-              {icsLoading && <p className="text-ds-muted text-sm mt-4 text-center">Processando arquivo...</p>}
-              {!icsLoading && file && icsEvents.length === 0 && (
+              <p className="text-ds-text text-sm mb-3">Escolha uma das opções:</p>
+              
+              {/* Opção 1: Upload de arquivo */}
+              <div className="mb-4">
+                <label className="text-ds-text text-xs font-semibold mb-2 block">📁 Fazer upload de arquivo .ics</label>
+                <input type="file" accept=".ics" onChange={handleFileChange}
+                  className="block w-full text-sm text-ds-text file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-ds-green file:text-ds-dark-blue hover:file:bg-ds-green/80 cursor-pointer" />
+              </div>
+              
+              <div className="relative my-4">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-ds-border"></div>
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-ds-dark-blue px-2 text-ds-muted">ou</span>
+                </div>
+              </div>
+              
+              {/* Opção 2: URL compartilhada */}
+              <div>
+                <label className="text-ds-text text-xs font-semibold mb-2 block">🔗 Colar link do calendário compartilhado</label>
+                <div className="flex gap-2">
+                  <input 
+                    type="url" 
+                    value={icsUrl}
+                    onChange={(e) => setIcsUrl(e.target.value)}
+                    placeholder="https://outlook.office365.com/owa/calendar/..."
+                    className="flex-1 bg-ds-navy border border-ds-border rounded px-3 py-2 text-sm text-ds-light-text focus:outline-none focus:border-ds-green"
+                  />
+                  <button 
+                    onClick={handleUrlFetch}
+                    disabled={icsLoading}
+                    className="px-4 py-2 bg-ds-green text-ds-dark-blue text-sm font-semibold rounded hover:bg-ds-green/80 disabled:opacity-50">
+                    {icsLoading ? 'Buscando...' : 'Buscar'}
+                  </button>
+                </div>
+                <p className="text-ds-muted text-xs mt-2">💡 No Outlook: Compartilhar calendário → Copiar link ICS</p>
+              </div>
+              
+              {icsLoading && <p className="text-ds-muted text-sm mt-4 text-center">Processando...</p>}
+              {!icsLoading && (file || icsUrl) && icsEvents.length === 0 && (
                 <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4 text-yellow-400 text-sm mt-4">
                   <p className="font-semibold">⚠️ Nenhum evento de cerimônia encontrado</p>
                   <p className="mt-1 text-xs">Buscando eventos de <strong>01/06/2025 até hoje</strong> com palavras: refinamento, review, retrospectiva, daily, planning, apresentação ou resultado.</p>
