@@ -2018,8 +2018,10 @@ app.get('/api/ceremonies/records', authenticateToken, async (req, res) => {
     const { team, month } = req.query;
     let rows;
     if (team && month) {
+      const [yr, mo] = month.split('-').map(Number);
       const start = `${month}-01`;
-      const end = `${month}-31`;
+      const lastDay = new Date(yr, mo, 0).getDate(); // dia correto do último dia
+      const end = `${month}-${String(lastDay).padStart(2, '0')}`;
       rows = await sql`
         SELECT * FROM ceremony_records
         WHERE team = ${team} AND scheduled_date BETWEEN ${start}::date AND ${end}::date
@@ -2028,8 +2030,10 @@ app.get('/api/ceremonies/records', authenticateToken, async (req, res) => {
     } else if (team) {
       rows = await sql`SELECT * FROM ceremony_records WHERE team = ${team} ORDER BY scheduled_date DESC, ritual_type`;
     } else if (month) {
+      const [yr, mo] = month.split('-').map(Number);
       const start = `${month}-01`;
-      const end = `${month}-31`;
+      const lastDay = new Date(yr, mo, 0).getDate();
+      const end = `${month}-${String(lastDay).padStart(2, '0')}`;
       rows = await sql`
         SELECT * FROM ceremony_records
         WHERE scheduled_date BETWEEN ${start}::date AND ${end}::date
