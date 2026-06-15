@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import CalendarImportMulti from './CalendarImportMulti';
 
 // ─── types ────────────────────────────────────────────────────────────────────
 type Status = 'done' | 'rescheduled' | 'cancelled' | 'pending';
@@ -355,136 +356,6 @@ const ConfigModal: React.FC<{
   );
 };
 
-// ─── calendar import modal ────────────────────────────────────────────────────
-const CalendarImportModal: React.FC<{
-  month: string;
-  configs: CeremonyConfig[];
-  onClose: () => void;
-  onImported: () => void;
-  token: string;
-}> = ({ month, configs, onClose, onImported, token }) => {
-  const [events, setEvents]     = useState<CalendarEvent[]>([]);
-  const [loading, setLoading]   = useState(true);
-  const [error, setError]       = useState('');
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [mapping, setMapping]   = useState<Record<string, { team: string; ritual_type: string }>>({});
-  const [importing, setImporting] = useState(false);
-
-  const teams = useMemo(() => [...new Set(configs.map(c => c.team))].sort(), [configs]);
-  const rituals = useMemo(() => [...new Set(configs.map(c => c.ritual_type))].sort(), [configs]);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch(`${API}/api/ceremonies/calendar-preview?month=${month}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error);
-        setEvents(data);
-        // auto-map by keyword
-        const m: Record<string, { team: string; ritual_type: string }> = {};
-        data.forEach((ev: CalendarEvent) => {
-          const lower = ev.title.toLowerCase();
-          const rt = rituals.find(r => lower.includes(r.toLowerCase())) || '';
-          m[ev.id] = { team: teams[0] || '', ritual_type: rt };
-        });
-        setMapping(m);
-      } catch (e: any) { setError(e.message); }
-      finally { setLoading(false); }
-    })();
-  }, [month, token, teams, rituals]);
-
-  const toggleSelect = (id: string) => setSelected(prev => {
-    const s = new Set(prev);
-    s.has(id) ? s.delete(id) : s.add(id);
-    return s;
-  });
-
-  const handleImport = async () => {
-    setImporting(true);
-    try {
-      const payload = events
-        .filter(ev => selected.has(ev.id))
-        .map(ev => ({ ...mapping[ev.id], date: ev.date, title: ev.title }))
-        .filter(ev => ev.team && ev.ritual_type);
-      const res = await fetch(`${API}/api/ceremonies/calendar-import/confirm`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ events: payload }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      onImported();
-    } catch (e: any) { setError(e.message); } finally { setImporting(false); }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
-      <div className="bg-ds-dark-blue border border-ds-border rounded-xl shadow-2xl w-full max-w-2xl mx-4 max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-5 py-4 border-b border-ds-border">
-          <h3 className="text-ds-light-text font-bold">📅 Importar do Calendário Microsoft</h3>
-          <button onClick={onClose} className="text-ds-muted hover:text-white text-xl">&times;</button>
-        </div>
-        <div className="p-5 flex-1 overflow-y-auto">
-          {loading && <p className="text-ds-muted text-sm text-center py-8">Buscando eventos...</p>}
-          {error && (
-            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4 text-yellow-400 text-sm">
-              <p className="font-semibold">⚠️ Integração não disponível</p>
-              <p className="mt-1 text-xs">{error}</p>
-              <p className="mt-2 text-xs text-ds-text">Para ativar, defina <code className="bg-ds-border/30 px-1 rounded">GRAPH_CLIENT_ID</code>, <code className="bg-ds-border/30 px-1 rounded">GRAPH_CLIENT_SECRET</code>, <code className="bg-ds-border/30 px-1 rounded">GRAPH_TENANT_ID</code> e <code className="bg-ds-border/30 px-1 rounded">GRAPH_USER_EMAIL</code> no <code className="bg-ds-border/30 px-1 rounded">.env</code> do backend.</p>
-            </div>
-          )}
-          {!loading && !error && events.length === 0 && (
-            <p className="text-ds-muted text-sm text-center py-8">Nenhum evento relacionado a ritos encontrado neste mês.</p>
-          )}
-          {!loading && !error && events.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-ds-text text-xs">{events.length} evento{events.length !== 1 ? 's' : ''} encontrado{events.length !== 1 ? 's' : ''}. Selecione os que deseja importar:</p>
-              {events.map(ev => (
-                <div key={ev.id} className={`flex items-start gap-3 p-3 rounded-lg border transition-colors ${selected.has(ev.id) ? 'border-ds-green bg-ds-green/5' : 'border-ds-border bg-ds-navy'}`}>
-                  <input type="checkbox" checked={selected.has(ev.id)} onChange={() => toggleSelect(ev.id)}
-                    className="mt-0.5 h-4 w-4 accent-ds-green shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-ds-light-text text-sm font-medium truncate">{ev.title}</span>
-                      {ev.isTeams && <span className="text-xs bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded shrink-0">Teams</span>}
-                    </div>
-                    <div className="text-ds-muted text-xs mt-0.5">{ev.date} · {ev.time} · {ev.organizer}</div>
-                    {selected.has(ev.id) && (
-                      <div className="grid grid-cols-2 gap-2 mt-2">
-                        <select value={mapping[ev.id]?.team || ''} onChange={e => setMapping(m => ({ ...m, [ev.id]: { ...m[ev.id], team: e.target.value } }))}
-                          className="bg-ds-dark-blue border border-ds-border rounded px-2 py-1 text-xs text-ds-light-text focus:outline-none focus:border-ds-green">
-                          <option value="">Selecionar time</option>
-                          {teams.map(t => <option key={t} value={t}>{t}</option>)}
-                        </select>
-                        <select value={mapping[ev.id]?.ritual_type || ''} onChange={e => setMapping(m => ({ ...m, [ev.id]: { ...m[ev.id], ritual_type: e.target.value } }))}
-                          className="bg-ds-dark-blue border border-ds-border rounded px-2 py-1 text-xs text-ds-light-text focus:outline-none focus:border-ds-green">
-                          <option value="">Selecionar rito</option>
-                          {rituals.map(r => <option key={r} value={r}>{r}</option>)}
-                        </select>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-        {!loading && !error && selected.size > 0 && (
-          <div className="px-5 py-4 border-t border-ds-border flex justify-end gap-3">
-            <button onClick={onClose} className="px-4 py-2 text-sm bg-ds-border/30 text-ds-text rounded-lg">Cancelar</button>
-            <button onClick={handleImport} disabled={importing}
-              className="px-4 py-2 text-sm bg-ds-green text-ds-dark-blue font-bold rounded-lg hover:bg-ds-green/80 disabled:opacity-50">
-              {importing ? 'Importando...' : `Importar ${selected.size} evento${selected.size !== 1 ? 's' : ''}`}
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
-
 // ─── main dashboard ───────────────────────────────────────────────────────────
 const CeremoniesDashboard: React.FC = () => {
   const { token, isAdmin } = useAuth();
@@ -653,7 +524,7 @@ const CeremoniesDashboard: React.FC = () => {
         <ConfigModal configs={configs} onClose={() => setShowConfig(false)} onSaved={onSaved} token={token!} />
       )}
       {showCalendar && (
-        <CalendarImportModal month={month} configs={configs} onClose={() => setShowCalendar(false)} onImported={onSaved} token={token!} />
+        <CalendarImportMulti teams={teams} month={month} onClose={() => setShowCalendar(false)} onImported={fetchAll} />
       )}
 
       <div className="space-y-6">

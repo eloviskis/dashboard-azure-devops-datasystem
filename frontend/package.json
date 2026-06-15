@@ -11,6 +11,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@azure/msal-browser": "^5.13.0",
     "@google/genai": "^0.15.0",
     "date-fns": "^3.6.0",
     "html2canvas": "^1.4.1",

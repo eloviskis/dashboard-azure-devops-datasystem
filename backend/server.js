@@ -5,6 +5,8 @@ const cors = require('cors');
 const schedule = require('node-schedule');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const multer = require('multer');
+const ical = require('node-ical');
 require('dotenv').config();
 
 // Database driver: PostgreSQL (pg) with connection pooling
@@ -1951,6 +1953,159 @@ app.delete('/api/devtracker/tags', authenticateToken, async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 // Ritos & Cerimônias API
 // ═══════════════════════════════════════════════════════════════════════════════
+
+// Configuração de upload (memória temporária)
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
+
+// OAuth state storage (em produção, usar Redis ou DB)
+const oauthStates = new Map();
+
+// POST /api/ceremonies/calendar-import/ics — upload de arquivo .ics
+app.post('/api/ceremonies/calendar-import/ics', authenticateToken, upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'Nenhum arquivo enviado' });
+    }
+    const icsContent = req.file.buffer.toString('utf-8');
+    const events = ical.sync.parseICS(icsContent);
+    
+    const keywords = ['refinamento', 'review', 'sprint review', 'retrospectiva', 'retro', 'apresentação', 'result', 'planning', 'planing', 'daily'];
+    const imported = [];
+    
+    for (const k in events) {
+      const ev = events[k];
+      if (ev.type !== 'VEVENT') continue;
+      const summary = (ev.summary || '').toLowerCase();
+      if (!keywords.some(kw => summary.includes(kw))) continue;
+      
+      const date = ev.start ? new Date(ev.start).toISOString().slice(0, 10) : null;
+      if (!date) continue;
+      
+      // Por agora, importa todos com status 'done' — no frontend o usuário escolhe o time/ritual_type
+      imported.push({
+        title: ev.summary,
+        date,
+        time: ev.start ? new Date(ev.start).toISOString().slice(11, 16) : null,
+        description: ev.description || null,
+      });
+    }
+    
+    res.json({ events: imported });
+  } catch (err) {
+    console.error('❌ POST /api/ceremonies/calendar-import/ics:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/ceremonies/auth/microsoft — iniciar OAuth flow delegado
+app.get('/api/ceremonies/auth/microsoft', authenticateToken, (req, res) => {
+  const clientId = process.env.GRAPH_CLIENT_ID;
+  const redirectUri = process.env.GRAPH_REDIRECT_URI || 'https://dsmetrics.online/api/ceremonies/auth/callback';
+  const tenantId = process.env.GRAPH_TENANT_ID;
+  
+  if (!clientId || !tenantId) {
+    return res.status(503).json({ error: 'GRAPH_CLIENT_ID e GRAPH_TENANT_ID não configurados' });
+  }
+  
+  const state = Math.random().toString(36).substring(7);
+  oauthStates.set(state, { username: req.user.username, timestamp: Date.now() });
+  
+  // Limpar states antigos (> 10 min)
+  for (const [k, v] of oauthStates.entries()) {
+    if (Date.now() - v.timestamp > 600000) oauthStates.delete(k);
+  }
+  
+  const authUrl = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/authorize?` +
+    `client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}` +
+    `&response_mode=query&scope=${encodeURIComponent('Calendars.Read offline_access')}&state=${state}`;
+  
+  res.json({ authUrl });
+});
+
+// GET /api/ceremonies/auth/callback — callback OAuth
+app.get('/api/ceremonies/auth/callback', async (req, res) => {
+  const { code, state, error } = req.query;
+  
+  if (error) {
+    return res.redirect(`/?oauth_error=${encodeURIComponent(error)}`);
+  }
+  
+  if (!code || !state) {
+    return res.status(400).send('Missing code or state');
+  }
+  
+  const stateData = oauthStates.get(state);
+  if (!stateData) {
+    return res.status(400).send('Invalid or expired state');
+  }
+  oauthStates.delete(state);
+  
+  const clientId = process.env.GRAPH_CLIENT_ID;
+  const clientSecret = process.env.GRAPH_CLIENT_SECRET;
+  const tenantId = process.env.GRAPH_TENANT_ID;
+  const redirectUri = process.env.GRAPH_REDIRECT_URI || 'https://dsmetrics.online/api/ceremonies/auth/callback';
+  
+  try {
+    // Trocar code por access_token
+    const tokenRes = await axios.post(
+      `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`,
+      new URLSearchParams({
+        grant_type: 'authorization_code',
+        client_id: clientId,
+        client_secret: clientSecret,
+        code,
+        redirect_uri: redirectUri,
+      }),
+      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+    );
+    
+    const accessToken = tokenRes.data.access_token;
+    // Armazenar token (em produção, usar DB criptografado ou Redis)
+    // Por enquanto, redirecionar de volta com token em query (não ideal, mas funcional para demo)
+    res.redirect(`/?oauth_success=true&graph_token=${accessToken}`);
+  } catch (err) {
+    console.error('❌ OAuth callback error:', err.response?.data || err.message);
+    res.redirect(`/?oauth_error=${encodeURIComponent(err.message)}`);
+  }
+});
+
+// GET /api/ceremonies/calendar-preview-oauth — busca eventos com token delegado
+app.get('/api/ceremonies/calendar-preview-oauth', authenticateToken, async (req, res) => {
+  const { month, token } = req.query;
+  
+  if (!token) {
+    return res.status(400).json({ error: 'Token delegado não fornecido' });
+  }
+  
+  try {
+    const target = month || new Date().toISOString().slice(0, 7);
+    const [yr, mo] = target.split('-').map(Number);
+    const startDt = new Date(yr, mo - 1, 1).toISOString();
+    const endDt = new Date(yr, mo, 0, 23, 59, 59).toISOString();
+    
+    const eventsRes = await axios.get(
+      `https://graph.microsoft.com/v1.0/me/calendarView?startDateTime=${startDt}&endDateTime=${endDt}&$select=subject,start,end,isOnlineMeeting,onlineMeetingProvider,organizer&$top=100&$orderby=start/dateTime`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    
+    const keywords = ['refinamento', 'review', 'sprint review', 'retrospectiva', 'retro', 'apresentação', 'result', 'planning', 'planing', 'daily'];
+    const events = (eventsRes.data.value || []).filter(ev =>
+      keywords.some(kw => ev.subject?.toLowerCase().includes(kw))
+    ).map(ev => ({
+      id: ev.id,
+      title: ev.subject,
+      date: ev.start?.dateTime?.slice(0, 10),
+      time: ev.start?.dateTime?.slice(11, 16),
+      isTeams: ev.isOnlineMeeting && ev.onlineMeetingProvider === 'teamsForBusiness',
+      organizer: ev.organizer?.emailAddress?.name,
+    }));
+    
+    res.json(events);
+  } catch (err) {
+    console.error('❌ GET /api/ceremonies/calendar-preview-oauth:', err.message);
+    res.status(500).json({ error: err.response?.data?.error?.message || err.message });
+  }
+});
 
 // GET /api/ceremonies/config — lista configuração de ritos (opcional: ?team=)
 app.get('/api/ceremonies/config', authenticateToken, async (req, res) => {
