@@ -1983,16 +1983,14 @@ app.post('/api/ceremonies/calendar-import/ics', authenticateToken, upload.single
       const summary = summaryValue.toLowerCase();
       if (!keywords.some(kw => summary.includes(kw))) continue;
       
-      const date = ev.start ? new Date(ev.start).toISOString().slice(0, 10) : null;
-      if (!date) continue;
+      // Verificar se tem data de início
+      if (!ev.start) continue;
       
       // Filtrar por data: entre 01/06/2025 e hoje
       const eventDate = new Date(ev.start);
       if (eventDate < startDate || eventDate > endDate) continue;
       
-      const date = ev.start ? new Date(ev.start).toISOString().slice(0, 10) : null;
-      if (!date) continue;
-      
+      const date = eventDate.toISOString().slice(0, 10);
       const descriptionValue = typeof ev.description === 'string' ? ev.description : (ev.description?.val || null);
       
       // Por agora, importa todos com status 'done' — no frontend o usuário escolhe o time/ritual_type
@@ -2039,12 +2037,14 @@ app.post('/api/ceremonies/calendar-import/url', authenticateToken, async (req, r
       const summary = summaryValue.toLowerCase();
       if (!keywords.some(kw => summary.includes(kw))) continue;
       
-      const date = ev.start ? new Date(ev.start).toISOString().slice(0, 10) : null;
-      if (!date) continue;
+      // Verificar se tem data de início
+      if (!ev.start) continue;
       
+      // Filtrar por data: entre 01/06/2025 e hoje
       const eventDate = new Date(ev.start);
       if (eventDate < startDate || eventDate > endDate) continue;
       
+      const date = eventDate.toISOString().slice(0, 10);
       const descriptionValue = typeof ev.description === 'string' ? ev.description : (ev.description?.val || null);
       
       imported.push({
