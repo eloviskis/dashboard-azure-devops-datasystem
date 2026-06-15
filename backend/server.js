@@ -2232,6 +2232,64 @@ app.delete('/api/ceremonies/config/:id', authenticateToken, async (req, res) => 
   }
 });
 
+// GET /api/ceremonies/records/overview — visão geral com métricas e filtros
+app.get('/api/ceremonies/records/overview', authenticateToken, async (req, res) => {
+  try {
+    const { from, to, team, ritual_type, status } = req.query;
+    const startDate = from || '2025-06-01';
+    const endDate   = to   || new Date().toISOString().slice(0, 10);
+
+    let rows;
+    if (team && ritual_type && status) {
+      rows = await sql`SELECT * FROM ceremony_records WHERE scheduled_date BETWEEN ${startDate}::date AND ${endDate}::date AND team = ${team} AND ritual_type = ${ritual_type} AND status = ${status} ORDER BY scheduled_date DESC, team, ritual_type`;
+    } else if (team && ritual_type) {
+      rows = await sql`SELECT * FROM ceremony_records WHERE scheduled_date BETWEEN ${startDate}::date AND ${endDate}::date AND team = ${team} AND ritual_type = ${ritual_type} ORDER BY scheduled_date DESC, team, ritual_type`;
+    } else if (team && status) {
+      rows = await sql`SELECT * FROM ceremony_records WHERE scheduled_date BETWEEN ${startDate}::date AND ${endDate}::date AND team = ${team} AND status = ${status} ORDER BY scheduled_date DESC, ritual_type`;
+    } else if (ritual_type && status) {
+      rows = await sql`SELECT * FROM ceremony_records WHERE scheduled_date BETWEEN ${startDate}::date AND ${endDate}::date AND ritual_type = ${ritual_type} AND status = ${status} ORDER BY scheduled_date DESC, team`;
+    } else if (team) {
+      rows = await sql`SELECT * FROM ceremony_records WHERE scheduled_date BETWEEN ${startDate}::date AND ${endDate}::date AND team = ${team} ORDER BY scheduled_date DESC, ritual_type`;
+    } else if (ritual_type) {
+      rows = await sql`SELECT * FROM ceremony_records WHERE scheduled_date BETWEEN ${startDate}::date AND ${endDate}::date AND ritual_type = ${ritual_type} ORDER BY scheduled_date DESC, team`;
+    } else if (status) {
+      rows = await sql`SELECT * FROM ceremony_records WHERE scheduled_date BETWEEN ${startDate}::date AND ${endDate}::date AND status = ${status} ORDER BY scheduled_date DESC, team, ritual_type`;
+    } else {
+      rows = await sql`SELECT * FROM ceremony_records WHERE scheduled_date BETWEEN ${startDate}::date AND ${endDate}::date ORDER BY scheduled_date DESC, team, ritual_type`;
+    }
+
+    const total       = rows.length;
+    const done        = rows.filter(r => r.status === 'done').length;
+    const rescheduled = rows.filter(r => r.status === 'rescheduled').length;
+    const cancelled   = rows.filter(r => r.status === 'cancelled').length;
+    const pending     = rows.filter(r => r.status === 'pending').length;
+
+    const byTeamMap = {};
+    rows.forEach(r => {
+      if (!byTeamMap[r.team]) byTeamMap[r.team] = { team: r.team, done: 0, rescheduled: 0, cancelled: 0, pending: 0, total: 0 };
+      byTeamMap[r.team][r.status] = (byTeamMap[r.team][r.status] || 0) + 1;
+      byTeamMap[r.team].total++;
+    });
+
+    const byRitualMap = {};
+    rows.forEach(r => {
+      if (!byRitualMap[r.ritual_type]) byRitualMap[r.ritual_type] = { ritual_type: r.ritual_type, done: 0, rescheduled: 0, cancelled: 0, pending: 0, total: 0 };
+      byRitualMap[r.ritual_type][r.status] = (byRitualMap[r.ritual_type][r.status] || 0) + 1;
+      byRitualMap[r.ritual_type].total++;
+    });
+
+    res.json({
+      summary: { total, done, rescheduled, cancelled, pending },
+      byTeam:   Object.values(byTeamMap).sort((a, b) => b.total - a.total),
+      byRitual: Object.values(byRitualMap).sort((a, b) => b.total - a.total),
+      records:  rows,
+    });
+  } catch (err) {
+    console.error('❌ GET /api/ceremonies/records/overview:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/ceremonies/records — ocorrências (params: ?team=, ?month=YYYY-MM)
 app.get('/api/ceremonies/records', authenticateToken, async (req, res) => {
   try {

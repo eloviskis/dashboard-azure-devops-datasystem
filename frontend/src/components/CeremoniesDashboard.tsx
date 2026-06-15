@@ -35,6 +35,15 @@ interface CalendarEvent {
   organizer: string;
 }
 
+type DashboardView = 'overview' | 'weekly';
+
+interface OverviewData {
+  summary: { total: number; done: number; rescheduled: number; cancelled: number; pending: number };
+  byTeam: { team: string; done: number; rescheduled: number; cancelled: number; pending: number; total: number }[];
+  byRitual: { ritual_type: string; done: number; rescheduled: number; cancelled: number; pending: number; total: number }[];
+  records: CeremonyRecord[];
+}
+
 // ─── constants ────────────────────────────────────────────────────────────────
 const DEFAULT_RITUALS = [
   { ritual_type: 'Refinamento',               frequency: 'weekly'   as Frequency },
@@ -115,6 +124,18 @@ const PctBar: React.FC<{ value: number; label?: string }> = ({ value, label }) =
       <div className="w-full bg-ds-border/30 rounded-full h-2">
         <div className={`${color} h-2 rounded-full transition-all`} style={{ width: `${value}%` }} />
       </div>
+    </div>
+  );
+};
+
+const MiniPctBar: React.FC<{ value: number }> = ({ value }) => {
+  const color = value >= 80 ? 'bg-green-500' : value >= 60 ? 'bg-yellow-500' : 'bg-red-500';
+  return (
+    <div className="flex items-center gap-2">
+      <div className="flex-1 bg-ds-border/30 rounded-full h-1.5">
+        <div className={`${color} h-1.5 rounded-full`} style={{ width: `${value}%` }} />
+      </div>
+      <span className={`text-xs font-bold w-9 text-right ${value >= 80 ? 'text-green-400' : value >= 60 ? 'text-yellow-400' : 'text-red-400'}`}>{value}%</span>
     </div>
   );
 };
@@ -370,6 +391,18 @@ const CeremoniesDashboard: React.FC = () => {
   const [records, setRecords]   = useState<CeremonyRecord[]>([]);
   const [loading, setLoading]   = useState(true);
 
+  // ── overview state ────────────────────────────────────────────────────────
+  const [view, setView]                     = useState<DashboardView>('overview');
+  const [overviewData, setOverviewData]     = useState<OverviewData | null>(null);
+  const [overviewLoading, setOverviewLoading] = useState(false);
+  const [filterTeam, setFilterTeam]         = useState('');
+  const [filterRitual, setFilterRitual]     = useState('');
+  const [filterStatus, setFilterStatus]     = useState('');
+  const [dateFrom, setDateFrom]             = useState('2025-06-01');
+  const [dateTo, setDateTo]                 = useState(isoDate(new Date()));
+  const [overviewPage, setOverviewPage]     = useState(0);
+  const OVERVIEW_PAGE_SIZE = 30;
+
   const [recordModal, setRecordModal] = useState<{
     record: CeremonyRecord | null;
     prefill: { team: string; ritual_type: string; scheduled_date: string } | null;
@@ -387,6 +420,25 @@ const CeremoniesDashboard: React.FC = () => {
       }
     } catch {}
   }, [token]);
+
+  const fetchOverview = useCallback(async () => {
+    setOverviewLoading(true);
+    try {
+      const params = new URLSearchParams({ from: dateFrom, to: dateTo });
+      if (filterTeam)   params.append('team',         filterTeam);
+      if (filterRitual) params.append('ritual_type',  filterRitual);
+      if (filterStatus) params.append('status',       filterStatus);
+      const res = await fetch(`${API}/api/ceremonies/records/overview?${params}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) setOverviewData(await res.json());
+    } catch {}
+    setOverviewLoading(false);
+  }, [token, dateFrom, dateTo, filterTeam, filterRitual, filterStatus]);
+
+  useEffect(() => {
+    if (view === 'overview') { setOverviewPage(0); fetchOverview(); }
+  }, [view, fetchOverview]);
 
   const fetchConfigs = useCallback(async () => {
     if (!selectedTeam) return;
@@ -498,6 +550,7 @@ const CeremoniesDashboard: React.FC = () => {
     setRecordModal(null);
     setShowConfig(false);
     fetchAll();
+    if (view === 'overview') fetchOverview();
   };
 
   if (loading && teams.length === 0) {
@@ -535,23 +588,16 @@ const CeremoniesDashboard: React.FC = () => {
             <p className="text-ds-muted text-xs mt-0.5">Acompanhamento de realização dos ritos ágeis por time</p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            {/* team selector */}
-            <div className="flex items-center gap-2">
-              <label className="text-ds-text text-sm font-semibold">👥 Time:</label>
-              {teams.length > 0 ? (
-                <select value={selectedTeam} onChange={e => setSelectedTeam(e.target.value)}
-                  className="bg-ds-navy border border-ds-border text-ds-light-text rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-ds-green">
-                  {teams.map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
-              ) : (
-                <span className="text-ds-muted text-sm">Nenhum time — configure primeiro ↓</span>
-              )}
-            </div>
-            {/* month selector */}
-            <div className="flex items-center gap-2">
-              <label className="text-ds-text text-sm font-semibold">📅 Mês:</label>
-              <input type="month" value={month} onChange={e => setMonth(e.target.value)}
-                className="bg-ds-navy border border-ds-border text-ds-light-text rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-ds-green" />
+            {/* view toggle */}
+            <div className="flex rounded-lg border border-ds-border overflow-hidden">
+              <button onClick={() => setView('overview')}
+                className={`px-3 py-1.5 text-sm font-semibold transition-colors ${view === 'overview' ? 'bg-ds-green text-ds-dark-blue' : 'text-ds-text hover:text-ds-light-text'}`}>
+                📊 Visão Geral
+              </button>
+              <button onClick={() => setView('weekly')}
+                className={`px-3 py-1.5 text-sm font-semibold transition-colors border-l border-ds-border ${view === 'weekly' ? 'bg-ds-green text-ds-dark-blue' : 'text-ds-text hover:text-ds-light-text'}`}>
+                📋 Por Time/Semana
+              </button>
             </div>
             {/* action buttons */}
             <button onClick={() => setShowCalendar(true)}
@@ -566,6 +612,247 @@ const CeremoniesDashboard: React.FC = () => {
             )}
           </div>
         </div>
+
+        {/* ── VISÃO GERAL ──────────────────────────────────────────────────── */}
+        {view === 'overview' && (
+          <div className="space-y-5">
+            {/* filters */}
+            <div className="bg-ds-navy rounded-xl border border-ds-border p-4">
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="space-y-1">
+                  <label className="text-ds-text text-xs">De</label>
+                  <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
+                    className="bg-ds-dark-blue border border-ds-border text-ds-light-text rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-ds-green" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-ds-text text-xs">Até</label>
+                  <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
+                    className="bg-ds-dark-blue border border-ds-border text-ds-light-text rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-ds-green" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-ds-text text-xs">Time</label>
+                  <select value={filterTeam} onChange={e => setFilterTeam(e.target.value)}
+                    className="bg-ds-dark-blue border border-ds-border text-ds-light-text rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-ds-green">
+                    <option value="">Todos os times</option>
+                    {teams.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-ds-text text-xs">Cerimônia</label>
+                  <select value={filterRitual} onChange={e => setFilterRitual(e.target.value)}
+                    className="bg-ds-dark-blue border border-ds-border text-ds-light-text rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-ds-green">
+                    <option value="">Todos os tipos</option>
+                    {overviewData && [...new Set(overviewData.byRitual.map(r => r.ritual_type))].map(rt => (
+                      <option key={rt} value={rt}>{rt}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-ds-text text-xs">Status</label>
+                  <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
+                    className="bg-ds-dark-blue border border-ds-border text-ds-light-text rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-ds-green">
+                    <option value="">Todos</option>
+                    <option value="done">✅ Realizado</option>
+                    <option value="rescheduled">🔄 Remarcado</option>
+                    <option value="cancelled">❌ Cancelado</option>
+                    <option value="pending">⏳ Pendente</option>
+                  </select>
+                </div>
+                <button onClick={fetchOverview} disabled={overviewLoading}
+                  className="px-4 py-2 bg-ds-green text-ds-dark-blue text-sm font-bold rounded-lg hover:bg-ds-green/80 disabled:opacity-50 transition-colors">
+                  {overviewLoading ? '⏳' : '🔍 Filtrar'}
+                </button>
+              </div>
+            </div>
+
+            {overviewLoading && (
+              <div className="flex justify-center py-10">
+                <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-ds-green" />
+              </div>
+            )}
+
+            {!overviewLoading && overviewData && (
+              <>
+                {/* summary cards */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="rounded-xl border border-ds-border bg-ds-navy p-4 text-center">
+                    <p className="text-ds-muted text-xs uppercase tracking-wide mb-1">Total</p>
+                    <p className="text-3xl font-black text-ds-light-text">{overviewData.summary.total}</p>
+                    <p className="text-ds-muted text-xs mt-1">registros</p>
+                  </div>
+                  <div className="rounded-xl border border-green-500/30 bg-green-500/5 p-4 text-center">
+                    <p className="text-green-400 text-xs uppercase tracking-wide mb-1">✅ Realizados</p>
+                    <p className="text-3xl font-black text-green-400">{overviewData.summary.done}</p>
+                    <p className="text-green-400/70 text-xs mt-1">{pct(overviewData.summary.done, overviewData.summary.total)}% do total</p>
+                  </div>
+                  <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/5 p-4 text-center">
+                    <p className="text-yellow-400 text-xs uppercase tracking-wide mb-1">🔄 Remarcados</p>
+                    <p className="text-3xl font-black text-yellow-400">{overviewData.summary.rescheduled}</p>
+                    <p className="text-yellow-400/70 text-xs mt-1">{pct(overviewData.summary.rescheduled, overviewData.summary.total)}% do total</p>
+                  </div>
+                  <div className="rounded-xl border border-red-500/30 bg-red-500/5 p-4 text-center">
+                    <p className="text-red-400 text-xs uppercase tracking-wide mb-1">❌ Cancelados</p>
+                    <p className="text-3xl font-black text-red-400">{overviewData.summary.cancelled}</p>
+                    <p className="text-red-400/70 text-xs mt-1">{pct(overviewData.summary.cancelled, overviewData.summary.total)}% do total</p>
+                  </div>
+                </div>
+
+                {/* rankings */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* by team */}
+                  <div className="bg-ds-navy rounded-xl border border-ds-border overflow-hidden">
+                    <div className="px-4 py-3 border-b border-ds-border">
+                      <span className="text-ds-light-text font-bold text-sm">👥 Por Time</span>
+                    </div>
+                    <div className="divide-y divide-ds-border/40">
+                      {overviewData.byTeam.map(t => (
+                        <div key={t.team} className="px-4 py-2.5 space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <button onClick={() => { setFilterTeam(t.team); setOverviewPage(0); fetchOverview(); }}
+                              className="text-ds-light-text text-sm font-medium hover:text-ds-green transition-colors text-left">
+                              {t.team}
+                            </button>
+                            <div className="flex items-center gap-3 text-xs">
+                              <span className="text-green-400">{t.done}</span>
+                              <span className="text-yellow-400">{t.rescheduled}</span>
+                              <span className="text-red-400">{t.cancelled}</span>
+                              <span className="text-ds-muted">/{t.total}</span>
+                            </div>
+                          </div>
+                          <MiniPctBar value={pct(t.done, t.total)} />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* by ritual */}
+                  <div className="bg-ds-navy rounded-xl border border-ds-border overflow-hidden">
+                    <div className="px-4 py-3 border-b border-ds-border">
+                      <span className="text-ds-light-text font-bold text-sm">🎯 Por Cerimônia</span>
+                    </div>
+                    <div className="divide-y divide-ds-border/40">
+                      {overviewData.byRitual.map(r => (
+                        <div key={r.ritual_type} className="px-4 py-2.5 space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <button onClick={() => { setFilterRitual(r.ritual_type); setOverviewPage(0); fetchOverview(); }}
+                              className="text-ds-light-text text-sm font-medium hover:text-ds-green transition-colors text-left">
+                              {r.ritual_type}
+                            </button>
+                            <div className="flex items-center gap-3 text-xs">
+                              <span className="text-green-400">{r.done}</span>
+                              <span className="text-yellow-400">{r.rescheduled}</span>
+                              <span className="text-red-400">{r.cancelled}</span>
+                              <span className="text-ds-muted">/{r.total}</span>
+                            </div>
+                          </div>
+                          <MiniPctBar value={pct(r.done, r.total)} />
+                        </div>
+                      ))}
+                    </div>
+                    <div className="px-4 py-2 border-t border-ds-border flex gap-4 text-xs text-ds-muted">
+                      <span className="text-green-400">✅ realizados</span>
+                      <span className="text-yellow-400">🔄 remarcados</span>
+                      <span className="text-red-400">❌ cancelados</span>
+                      <span>/total</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* records list */}
+                <div className="bg-ds-navy rounded-xl border border-ds-border overflow-hidden">
+                  <div className="px-4 py-3 border-b border-ds-border flex items-center justify-between">
+                    <span className="text-ds-light-text font-bold text-sm">
+                      📋 Todas as Ocorrências
+                      <span className="ml-2 text-ds-muted text-xs font-normal">({overviewData.records.length} registros)</span>
+                    </span>
+                    {overviewData.records.length > OVERVIEW_PAGE_SIZE && (
+                      <div className="flex items-center gap-2 text-xs text-ds-muted">
+                        <button onClick={() => setOverviewPage(p => Math.max(0, p - 1))} disabled={overviewPage === 0}
+                          className="px-2 py-1 border border-ds-border rounded disabled:opacity-40 hover:border-ds-green hover:text-ds-green transition-colors">
+                          ‹
+                        </button>
+                        <span>{overviewPage + 1}/{Math.ceil(overviewData.records.length / OVERVIEW_PAGE_SIZE)}</span>
+                        <button onClick={() => setOverviewPage(p => Math.min(Math.ceil(overviewData.records.length / OVERVIEW_PAGE_SIZE) - 1, p + 1))}
+                          disabled={(overviewPage + 1) * OVERVIEW_PAGE_SIZE >= overviewData.records.length}
+                          className="px-2 py-1 border border-ds-border rounded disabled:opacity-40 hover:border-ds-green hover:text-ds-green transition-colors">
+                          ›
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-ds-border text-ds-muted text-xs">
+                          <th className="text-left px-4 py-2 font-semibold">Data</th>
+                          <th className="text-left px-4 py-2 font-semibold">Time</th>
+                          <th className="text-left px-4 py-2 font-semibold">Cerimônia</th>
+                          <th className="text-left px-4 py-2 font-semibold">Status</th>
+                          <th className="text-left px-4 py-2 font-semibold">Observação / Motivo</th>
+                          <th className="px-4 py-2"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {overviewData.records
+                          .slice(overviewPage * OVERVIEW_PAGE_SIZE, (overviewPage + 1) * OVERVIEW_PAGE_SIZE)
+                          .map((r, i) => {
+                            const dateObj = new Date(r.scheduled_date);
+                            const dateStr = dateObj.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' });
+                            return (
+                              <tr key={r.id} className={`border-b border-ds-border/40 hover:bg-ds-dark-blue/40 transition-colors ${i % 2 === 0 ? '' : 'bg-ds-dark-blue/20'}`}>
+                                <td className="px-4 py-2.5 text-ds-text whitespace-nowrap">{dateStr}</td>
+                                <td className="px-4 py-2.5 text-ds-light-text font-medium">{r.team}</td>
+                                <td className="px-4 py-2.5 text-ds-text">{r.ritual_type}</td>
+                                <td className="px-4 py-2.5">
+                                  <StatusBadge status={r.status} />
+                                </td>
+                                <td className="px-4 py-2.5 text-ds-muted text-xs max-w-xs truncate">
+                                  {r.reason || r.notes || <span className="text-ds-border/50 italic">—</span>}
+                                </td>
+                                <td className="px-4 py-2.5 text-right">
+                                  <button onClick={() => setRecordModal({ record: r, prefill: null })}
+                                    className="text-ds-muted hover:text-ds-green transition-colors text-xs px-2 py-1 border border-ds-border/50 rounded hover:border-ds-green">
+                                    ✏️ Editar
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {!overviewLoading && !overviewData && (
+              <div className="text-center py-16 text-ds-muted">Clique em Filtrar para carregar os dados</div>
+            )}
+          </div>
+        )}
+
+        {/* ── POR TIME/SEMANA ──────────────────────────────────────────────── */}
+        {view === 'weekly' && (
+          <div className="space-y-6">
+            {/* controls */}
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2">
+                <label className="text-ds-text text-sm font-semibold">👥 Time:</label>
+                {teams.length > 0 ? (
+                  <select value={selectedTeam} onChange={e => setSelectedTeam(e.target.value)}
+                    className="bg-ds-navy border border-ds-border text-ds-light-text rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-ds-green">
+                    {teams.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                ) : (
+                  <span className="text-ds-muted text-sm">Nenhum time</span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="text-ds-text text-sm font-semibold">📅 Mês:</label>
+                <input type="month" value={month} onChange={e => setMonth(e.target.value)}
+                  className="bg-ds-navy border border-ds-border text-ds-light-text rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-ds-green" />
+              </div>
+            </div>
 
         {/* no config state */}
         {teams.length === 0 && (
@@ -707,6 +994,8 @@ const CeremoniesDashboard: React.FC = () => {
               </div>
             )}
           </>
+        )}
+          </div>
         )}
       </div>
     </>
