@@ -432,6 +432,30 @@ const initDatabase = async () => {
     `;
     console.log('✅ ceremony_records table ready');
 
+    // Seed cerimônias padrão por time (roda somente se ceremony_config estiver vazio)
+    const cfgCount = await sql`SELECT COUNT(*) AS cnt FROM ceremony_config`;
+    if (parseInt(cfgCount[0].cnt) === 0) {
+      const teams = await sql`SELECT DISTINCT team FROM work_items WHERE team IS NOT NULL AND team <> '' ORDER BY team`;
+      const defaults = [
+        { ritual_type: 'Daily', frequency: 'daily' },
+        { ritual_type: 'Refinamento', frequency: 'weekly' },
+        { ritual_type: 'Review', frequency: 'weekly' },
+        { ritual_type: 'Retrospectiva', frequency: 'biweekly' },
+      ];
+      for (const t of teams) {
+        const rituals = [...defaults];
+        if (t.team === 'Franquia') rituals.push({ ritual_type: 'Planning', frequency: 'biweekly' });
+        for (const r of rituals) {
+          await sql`
+            INSERT INTO ceremony_config (team, ritual_type, frequency, active)
+            VALUES (${t.team}, ${r.ritual_type}, ${r.frequency}, true)
+            ON CONFLICT (team, ritual_type) DO NOTHING
+          `;
+        }
+      }
+      console.log(`✅ Seeded default ceremonies for ${teams.length} teams`);
+    }
+
     // Criar usuário admin padrão se não existir
     const adminExists = await sql`SELECT id FROM users WHERE username = 'admin'`;
     if (adminExists.length === 0) {
@@ -1924,49 +1948,6 @@ app.delete('/api/devtracker/tags', authenticateToken, async (req, res) => {
   }
 });
 
-// 404 Handler
-app.use((req, res) => {
-  res.status(404).json({ 
-    error: 'Route not found',
-    path: req.path,
-    method: req.method
-  });
-});
-
-// Error Handler
-app.use((err, req, res, next) => {
-  console.error('❌ Server error:', err);
-  res.status(500).json({ error: 'Internal server error' });
-});
-
-// Schedule sync every 30 minutes
-if (isConfigured()) {
-  schedule.scheduleJob('*/30 * * * *', () => {
-    console.log('🔄 Running scheduled sync...');
-    syncData().catch(e => console.error('❌ Scheduled sync error (non-fatal):', e.message));
-    syncPullRequests().catch(e => console.error('❌ Scheduled PR sync error (non-fatal):', e.message));
-  });
-  console.log('⏰ Scheduled sync every 30 minutes');
-}
-
-// Previne crash do processo por erros não capturados (ex: timeout VPS)
-process.on('unhandledRejection', (reason) => {
-  console.error('⚠️ Unhandled rejection (non-fatal):', reason instanceof Error ? reason.message : reason);
-});
-process.on('uncaughtException', (err) => {
-  console.error('⚠️ Uncaught exception (non-fatal):', err.message);
-});
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Global error handler — always include CORS headers even on 500 errors
-// Must be AFTER all route definitions for Express to use it as error middleware
-// ═══════════════════════════════════════════════════════════════════════════════
-app.use((err, req, res, _next) => {
-  setCorsHeaders(req, res);
-  console.error('Unhandled error:', err);
-  res.status(500).json({ error: 'Internal Server Error' });
-});
-
 // ═══════════════════════════════════════════════════════════════════════════════
 // Ritos & Cerimônias API
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -2003,7 +1984,7 @@ app.post('/api/ceremonies/config', authenticateToken, async (req, res) => {
     if (!team || !ritual_type || !frequency) {
       return res.status(400).json({ error: 'team, ritual_type e frequency são obrigatórios' });
     }
-    const validFreqs = ['weekly', 'biweekly', 'monthly'];
+    const validFreqs = ['daily', 'weekly', 'biweekly', 'monthly'];
     if (!validFreqs.includes(frequency)) {
       return res.status(400).json({ error: 'frequency deve ser weekly, biweekly ou monthly' });
     }
@@ -2202,6 +2183,49 @@ app.post('/api/ceremonies/calendar-import/confirm', authenticateToken, async (re
     console.error('❌ POST /api/ceremonies/calendar-import/confirm:', err.message);
     res.status(500).json({ error: err.message });
   }
+});
+
+// 404 Handler
+app.use((req, res) => {
+  res.status(404).json({ 
+    error: 'Route not found',
+    path: req.path,
+    method: req.method
+  });
+});
+
+// Error Handler
+app.use((err, req, res, next) => {
+  console.error('❌ Server error:', err);
+  res.status(500).json({ error: 'Internal server error' });
+});
+
+// Schedule sync every 30 minutes
+if (isConfigured()) {
+  schedule.scheduleJob('*/30 * * * *', () => {
+    console.log('🔄 Running scheduled sync...');
+    syncData().catch(e => console.error('❌ Scheduled sync error (non-fatal):', e.message));
+    syncPullRequests().catch(e => console.error('❌ Scheduled PR sync error (non-fatal):', e.message));
+  });
+  console.log('⏰ Scheduled sync every 30 minutes');
+}
+
+// Previne crash do processo por erros não capturados (ex: timeout VPS)
+process.on('unhandledRejection', (reason) => {
+  console.error('⚠️ Unhandled rejection (non-fatal):', reason instanceof Error ? reason.message : reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('⚠️ Uncaught exception (non-fatal):', err.message);
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Global error handler — always include CORS headers even on 500 errors
+// Must be AFTER all route definitions for Express to use it as error middleware
+// ═══════════════════════════════════════════════════════════════════════════════
+app.use((err, req, res, _next) => {
+  setCorsHeaders(req, res);
+  console.error('Unhandled error:', err);
+  res.status(500).json({ error: 'Internal Server Error' });
 });
 
 // Start server
