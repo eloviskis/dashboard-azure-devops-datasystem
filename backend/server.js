@@ -1975,18 +1975,23 @@ app.post('/api/ceremonies/calendar-import/ics', authenticateToken, upload.single
     for (const k in events) {
       const ev = events[k];
       if (ev.type !== 'VEVENT') continue;
-      const summary = (ev.summary || '').toLowerCase();
+      
+      // node-ical pode retornar summary como string ou objeto {val: "..."}
+      const summaryValue = typeof ev.summary === 'string' ? ev.summary : (ev.summary?.val || '');
+      const summary = summaryValue.toLowerCase();
       if (!keywords.some(kw => summary.includes(kw))) continue;
       
       const date = ev.start ? new Date(ev.start).toISOString().slice(0, 10) : null;
       if (!date) continue;
       
+      const descriptionValue = typeof ev.description === 'string' ? ev.description : (ev.description?.val || null);
+      
       // Por agora, importa todos com status 'done' — no frontend o usuário escolhe o time/ritual_type
       imported.push({
-        title: ev.summary,
+        title: summaryValue,
         date,
         time: ev.start ? new Date(ev.start).toISOString().slice(11, 16) : null,
-        description: ev.description || null,
+        description: descriptionValue,
       });
     }
     
