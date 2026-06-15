@@ -74,7 +74,11 @@ const CalendarImportMulti: React.FC<CalendarImportMultiProps> = ({ teams, month,
       
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
+      console.log('📅 Eventos parseados:', data.events);
       setIcsEvents(data.events.map((e: any, i: number) => ({ ...e, id: `ics-${i}` })));
+      if (data.events.length === 0) {
+        alert('Nenhum evento de cerimônia encontrado no arquivo. Certifique-se que os títulos contêm palavras como: refinamento, review, retrospectiva, daily, planning.');
+      }
     } catch (err: any) {
       alert('Erro ao processar arquivo: ' + err.message);
     } finally {
@@ -223,6 +227,12 @@ const CalendarImportMulti: React.FC<CalendarImportMultiProps> = ({ teams, month,
               <input type="file" accept=".ics" onChange={handleFileChange}
                 className="block w-full text-sm text-ds-text file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-ds-green file:text-ds-dark-blue hover:file:bg-ds-green/80 cursor-pointer" />
               {icsLoading && <p className="text-ds-muted text-sm mt-4 text-center">Processando arquivo...</p>}
+              {!icsLoading && file && icsEvents.length === 0 && (
+                <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4 text-yellow-400 text-sm mt-4">
+                  <p className="font-semibold">⚠️ Nenhum evento encontrado</p>
+                  <p className="mt-1 text-xs">Os títulos dos eventos devem conter: refinamento, review, retrospectiva, daily, planning, apresentação ou result.</p>
+                </div>
+              )}
             </div>
           )}
           
