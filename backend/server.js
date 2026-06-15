@@ -400,6 +400,38 @@ const initDatabase = async () => {
     `;
     console.log('✅ devtracker_tags table ready');
 
+    // Ritos & Cerimônias: configuração de ritos por time
+    await sql`
+      CREATE TABLE IF NOT EXISTS ceremony_config (
+        id SERIAL PRIMARY KEY,
+        team TEXT NOT NULL,
+        ritual_type TEXT NOT NULL,
+        frequency TEXT NOT NULL DEFAULT 'weekly',
+        active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(team, ritual_type)
+      )
+    `;
+    console.log('✅ ceremony_config table ready');
+
+    // Ritos & Cerimônias: ocorrências registradas
+    await sql`
+      CREATE TABLE IF NOT EXISTS ceremony_records (
+        id SERIAL PRIMARY KEY,
+        team TEXT NOT NULL,
+        ritual_type TEXT NOT NULL,
+        scheduled_date DATE NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        reason TEXT,
+        notes TEXT,
+        imported_from TEXT,
+        created_by TEXT,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `;
+    console.log('✅ ceremony_records table ready');
+
     // Criar usuário admin padrão se não existir
     const adminExists = await sql`SELECT id FROM users WHERE username = 'admin'`;
     if (adminExists.length === 0) {
@@ -1933,6 +1965,243 @@ app.use((err, req, res, _next) => {
   setCorsHeaders(req, res);
   console.error('Unhandled error:', err);
   res.status(500).json({ error: 'Internal Server Error' });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Ritos & Cerimônias API
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// GET /api/ceremonies/config — lista configuração de ritos (opcional: ?team=)
+app.get('/api/ceremonies/config', authenticateToken, async (req, res) => {
+  try {
+    const { team } = req.query;
+    const rows = team
+      ? await sql`SELECT * FROM ceremony_config WHERE team = ${team} AND active = true ORDER BY team, ritual_type`
+      : await sql`SELECT * FROM ceremony_config WHERE active = true ORDER BY team, ritual_type`;
+    res.json(rows);
+  } catch (err) {
+    console.error('❌ GET /api/ceremonies/config:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/ceremonies/teams — times cadastrados na config
+app.get('/api/ceremonies/teams', authenticateToken, async (req, res) => {
+  try {
+    const rows = await sql`SELECT DISTINCT team FROM ceremony_config WHERE active = true ORDER BY team`;
+    res.json(rows.map(r => r.team));
+  } catch (err) {
+    console.error('❌ GET /api/ceremonies/teams:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/ceremonies/config — criar ou atualizar rito de um time (upsert)
+app.post('/api/ceremonies/config', authenticateToken, async (req, res) => {
+  try {
+    const { team, ritual_type, frequency } = req.body;
+    if (!team || !ritual_type || !frequency) {
+      return res.status(400).json({ error: 'team, ritual_type e frequency são obrigatórios' });
+    }
+    const validFreqs = ['weekly', 'biweekly', 'monthly'];
+    if (!validFreqs.includes(frequency)) {
+      return res.status(400).json({ error: 'frequency deve ser weekly, biweekly ou monthly' });
+    }
+    const rows = await sql`
+      INSERT INTO ceremony_config (team, ritual_type, frequency, active)
+      VALUES (${team}, ${ritual_type}, ${frequency}, true)
+      ON CONFLICT (team, ritual_type) DO UPDATE SET frequency = ${frequency}, active = true
+      RETURNING *
+    `;
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    console.error('❌ POST /api/ceremonies/config:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/ceremonies/config/:id — desativa rito de um time
+app.delete('/api/ceremonies/config/:id', authenticateToken, async (req, res) => {
+  try {
+    await sql`UPDATE ceremony_config SET active = false WHERE id = ${req.params.id}`;
+    res.json({ success: true });
+  } catch (err) {
+    console.error('❌ DELETE /api/ceremonies/config/:id:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/ceremonies/records — ocorrências (params: ?team=, ?month=YYYY-MM)
+app.get('/api/ceremonies/records', authenticateToken, async (req, res) => {
+  try {
+    const { team, month } = req.query;
+    let rows;
+    if (team && month) {
+      const start = `${month}-01`;
+      const end = `${month}-31`;
+      rows = await sql`
+        SELECT * FROM ceremony_records
+        WHERE team = ${team} AND scheduled_date BETWEEN ${start}::date AND ${end}::date
+        ORDER BY scheduled_date, ritual_type
+      `;
+    } else if (team) {
+      rows = await sql`SELECT * FROM ceremony_records WHERE team = ${team} ORDER BY scheduled_date DESC, ritual_type`;
+    } else if (month) {
+      const start = `${month}-01`;
+      const end = `${month}-31`;
+      rows = await sql`
+        SELECT * FROM ceremony_records
+        WHERE scheduled_date BETWEEN ${start}::date AND ${end}::date
+        ORDER BY team, scheduled_date, ritual_type
+      `;
+    } else {
+      rows = await sql`SELECT * FROM ceremony_records ORDER BY scheduled_date DESC LIMIT 200`;
+    }
+    res.json(rows);
+  } catch (err) {
+    console.error('❌ GET /api/ceremonies/records:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/ceremonies/records — registrar ocorrência
+app.post('/api/ceremonies/records', authenticateToken, async (req, res) => {
+  try {
+    const { team, ritual_type, scheduled_date, status, reason, notes, imported_from } = req.body;
+    if (!team || !ritual_type || !scheduled_date || !status) {
+      return res.status(400).json({ error: 'team, ritual_type, scheduled_date e status são obrigatórios' });
+    }
+    const validStatuses = ['done', 'rescheduled', 'cancelled', 'pending'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ error: 'status inválido' });
+    }
+    const rows = await sql`
+      INSERT INTO ceremony_records (team, ritual_type, scheduled_date, status, reason, notes, imported_from, created_by)
+      VALUES (${team}, ${ritual_type}, ${scheduled_date}::date, ${status}, ${reason || null}, ${notes || null}, ${imported_from || null}, ${req.user.username})
+      RETURNING *
+    `;
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    console.error('❌ POST /api/ceremonies/records:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/ceremonies/records/:id — atualizar ocorrência
+app.put('/api/ceremonies/records/:id', authenticateToken, async (req, res) => {
+  try {
+    const { status, reason, notes, scheduled_date } = req.body;
+    const validStatuses = ['done', 'rescheduled', 'cancelled', 'pending'];
+    if (status && !validStatuses.includes(status)) {
+      return res.status(400).json({ error: 'status inválido' });
+    }
+    const rows = await sql`
+      UPDATE ceremony_records SET
+        status = COALESCE(${status || null}, status),
+        reason = COALESCE(${reason !== undefined ? reason : null}, reason),
+        notes  = COALESCE(${notes  !== undefined ? notes  : null}, notes),
+        scheduled_date = COALESCE(${scheduled_date ? scheduled_date + '::date' : null}::date, scheduled_date),
+        updated_at = NOW()
+      WHERE id = ${req.params.id}
+      RETURNING *
+    `;
+    if (rows.length === 0) return res.status(404).json({ error: 'Registro não encontrado' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('❌ PUT /api/ceremonies/records/:id:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/ceremonies/records/:id — remover ocorrência
+app.delete('/api/ceremonies/records/:id', authenticateToken, async (req, res) => {
+  try {
+    await sql`DELETE FROM ceremony_records WHERE id = ${req.params.id}`;
+    res.json({ success: true });
+  } catch (err) {
+    console.error('❌ DELETE /api/ceremonies/records/:id:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/ceremonies/calendar-preview — busca eventos do MS Graph (requer GRAPH_* vars)
+app.get('/api/ceremonies/calendar-preview', authenticateToken, async (req, res) => {
+  const { month } = req.query; // YYYY-MM
+  const clientId = process.env.GRAPH_CLIENT_ID;
+  const clientSecret = process.env.GRAPH_CLIENT_SECRET;
+  const tenantId = process.env.GRAPH_TENANT_ID;
+  const userEmail = process.env.GRAPH_USER_EMAIL;
+
+  if (!clientId || !clientSecret || !tenantId || !userEmail) {
+    return res.status(503).json({ error: 'Integração com Microsoft Graph não configurada. Defina GRAPH_CLIENT_ID, GRAPH_CLIENT_SECRET, GRAPH_TENANT_ID e GRAPH_USER_EMAIL no .env do backend.' });
+  }
+
+  try {
+    // Client credentials flow (app-only) — requer permissão Calendars.Read do tipo Application
+    const tokenRes = await axios.post(
+      `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`,
+      new URLSearchParams({
+        grant_type: 'client_credentials',
+        client_id: clientId,
+        client_secret: clientSecret,
+        scope: 'https://graph.microsoft.com/.default',
+      }),
+      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+    );
+    const accessToken = tokenRes.data.access_token;
+
+    const target = month || new Date().toISOString().slice(0, 7);
+    const [yr, mo] = target.split('-').map(Number);
+    const startDt = new Date(yr, mo - 1, 1).toISOString();
+    const endDt   = new Date(yr, mo, 0, 23, 59, 59).toISOString();
+
+    const eventsRes = await axios.get(
+      `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(userEmail)}/calendarView?startDateTime=${startDt}&endDateTime=${endDt}&$select=subject,start,end,isOnlineMeeting,onlineMeetingProvider,organizer&$top=100&$orderby=start/dateTime`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
+
+    const keywords = ['refinamento', 'review', 'sprint review', 'retrospectiva', 'retro', 'apresentação', 'result', 'planning', 'planing'];
+    const events = (eventsRes.data.value || []).filter(ev =>
+      keywords.some(kw => ev.subject?.toLowerCase().includes(kw))
+    ).map(ev => ({
+      id: ev.id,
+      title: ev.subject,
+      date: ev.start?.dateTime?.slice(0, 10),
+      time: ev.start?.dateTime?.slice(11, 16),
+      isTeams: ev.isOnlineMeeting && ev.onlineMeetingProvider === 'teamsForBusiness',
+      organizer: ev.organizer?.emailAddress?.name,
+    }));
+
+    res.json(events);
+  } catch (err) {
+    console.error('❌ GET /api/ceremonies/calendar-preview:', err.message);
+    res.status(500).json({ error: err.response?.data?.error?.message || err.message });
+  }
+});
+
+// POST /api/ceremonies/calendar-import/confirm — importa eventos selecionados como records
+app.post('/api/ceremonies/calendar-import/confirm', authenticateToken, async (req, res) => {
+  try {
+    const { events } = req.body; // [{ team, ritual_type, date, title }]
+    if (!Array.isArray(events) || events.length === 0) {
+      return res.status(400).json({ error: 'events é obrigatório' });
+    }
+    const inserted = [];
+    for (const ev of events) {
+      if (!ev.team || !ev.ritual_type || !ev.date) continue;
+      const rows = await sql`
+        INSERT INTO ceremony_records (team, ritual_type, scheduled_date, status, notes, imported_from, created_by)
+        VALUES (${ev.team}, ${ev.ritual_type}, ${ev.date}::date, 'done', ${ev.title || null}, 'calendar', ${req.user.username})
+        ON CONFLICT DO NOTHING
+        RETURNING *
+      `;
+      if (rows[0]) inserted.push(rows[0]);
+    }
+    res.status(201).json({ imported: inserted.length, records: inserted });
+  } catch (err) {
+    console.error('❌ POST /api/ceremonies/calendar-import/confirm:', err.message);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Start server

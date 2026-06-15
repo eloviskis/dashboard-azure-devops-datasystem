@@ -66,6 +66,7 @@ import TeamComparisonDashboard from './components/TeamComparisonDashboard.tsx';
 import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 import DevTrackerDashboard from './components/DevTrackerDashboard.tsx';
 import TeamEvolutionDashboard from './components/TeamEvolutionDashboard.tsx';
+import CeremoniesDashboard from './components/CeremoniesDashboard.tsx';
 
 // Import Types
 import { WorkItem, WorkItemFilters } from './types.ts';
@@ -73,11 +74,11 @@ import { WorkItem, WorkItemFilters } from './types.ts';
 // Import Metrics
 import { calculatePerformanceMetrics, calculateQualityMetrics, COMPLETED_STATES } from './utils/metrics.ts';
 
-type Tab = 'executive' | 'team-insights' | 'team-evolution' | 'cycle-analytics' | 'performance' | 'quality' | 'kanban' | 'detailed-throughput' | 'bottlenecks' | 'tags' | 'clients' | 'montecarlo' | 'item-list' | 'rootcause' | 'period-comparison' | 'backlog' | 'impedimentos' | 'po-analysis' | 'pull-requests' | 'scrum-ctc' | 'dora' | 'sla' | 'metas' | 'documentation' | 'team-comparison' | 'devtracker';
+type Tab = 'executive' | 'team-insights' | 'team-evolution' | 'cycle-analytics' | 'performance' | 'quality' | 'kanban' | 'detailed-throughput' | 'bottlenecks' | 'tags' | 'clients' | 'montecarlo' | 'item-list' | 'rootcause' | 'period-comparison' | 'backlog' | 'impedimentos' | 'po-analysis' | 'pull-requests' | 'scrum-ctc' | 'dora' | 'sla' | 'metas' | 'documentation' | 'team-comparison' | 'devtracker' | 'rituals';
 
 type QuickFilter = 'weekly' | 'biweekly' | 'monthly' | 'global';
 
-const QUICK_FILTER_EXCLUDED_TABS: Tab[] = ['period-comparison', 'team-comparison', 'pull-requests', 'documentation', 'devtracker', 'team-evolution'];
+const QUICK_FILTER_EXCLUDED_TABS: Tab[] = ['period-comparison', 'team-comparison', 'pull-requests', 'documentation', 'devtracker', 'team-evolution', 'rituals'];
 
 const DEFAULT_TAB_CONFIG = [
   // 🧭 1. Camada Executiva
@@ -114,6 +115,8 @@ const DEFAULT_TAB_CONFIG = [
   { id: 'documentation', label: '📖 Documentação', visible: true },
   // 👤 8. Gestão do Time
   { id: 'devtracker', label: '🗂️ DevTracker', visible: true },
+  // 🏛️ 9. Governança Ágil
+  { id: 'rituals', label: '🗓️ Ritos & Cerimônias', visible: true },
 ];
 
 const App = () => {
@@ -743,6 +746,8 @@ const App = () => {
         );
       case 'devtracker':
         return <DevTrackerDashboard />;
+      case 'rituals':
+        return <CeremoniesDashboard />;
       default:
         return null;
     }
@@ -858,7 +863,7 @@ const App = () => {
             </div>
         </div>
         
-        {activeTab !== 'cycle-analytics' && activeTab !== 'team-insights' && activeTab !== 'pull-requests' && activeTab !== 'scrum-ctc' && activeTab !== 'team-comparison' && activeTab !== 'period-comparison' && activeTab !== 'devtracker' && activeTab !== 'team-evolution' && (
+        {activeTab !== 'cycle-analytics' && activeTab !== 'team-insights' && activeTab !== 'pull-requests' && activeTab !== 'scrum-ctc' && activeTab !== 'team-comparison' && activeTab !== 'period-comparison' && activeTab !== 'devtracker' && activeTab !== 'team-evolution' && activeTab !== 'rituals' && (
         <div className="relative">
           <button
             onClick={() => setFilterBarCollapsed(!filterBarCollapsed)}
