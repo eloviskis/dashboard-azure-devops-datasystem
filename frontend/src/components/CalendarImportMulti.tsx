@@ -221,7 +221,7 @@ const CalendarImportMulti: React.FC<CalendarImportMultiProps> = ({ teams, month,
         </div>
         
         <div className="p-5 flex-1 overflow-y-auto">
-          {activeTab === 'ics' && (
+          {activeTab === 'ics' && icsEvents.length === 0 && (
             <div>
               <p className="text-ds-text text-sm mb-3">Faça upload de um arquivo .ics exportado do Outlook/Teams:</p>
               <input type="file" accept=".ics" onChange={handleFileChange}
@@ -271,8 +271,12 @@ const CalendarImportMulti: React.FC<CalendarImportMultiProps> = ({ teams, month,
           
           {/* Event list */}
           {!currentLoading && currentEvents.length > 0 && (
-            <div className="space-y-2 mt-4">
-              <p className="text-ds-text text-xs">{currentEvents.length} evento(s) encontrado(s). Selecione os que deseja importar:</p>
+            <>
+              <div className="bg-ds-green/10 border border-ds-green/30 rounded-lg p-4 mb-4">
+                <h4 className="text-ds-green font-semibold text-sm mb-1">✅ {currentEvents.length} evento(s) encontrado(s)!</h4>
+                <p className="text-ds-text text-xs">Marque os eventos que deseja importar e escolha o time e tipo de rito para cada um:</p>
+              </div>
+              <div className="space-y-2">
               {currentEvents.map(ev => (
                 <div key={ev.id} className={`flex items-start gap-3 p-3 rounded-lg border transition-colors ${selected.has(ev.id) ? 'border-ds-green bg-ds-green/5' : 'border-ds-border bg-ds-navy'}`}>
                   <input type="checkbox" checked={selected.has(ev.id)} onChange={() => toggleSelect(ev.id)}
@@ -301,6 +305,7 @@ const CalendarImportMulti: React.FC<CalendarImportMultiProps> = ({ teams, month,
                 </div>
               ))}
             </div>
+            </>
           )}
         </div>
         
