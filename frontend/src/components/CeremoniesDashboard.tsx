@@ -199,12 +199,17 @@ const RecordModal: React.FC<RecordModalProps> = ({ record, prefill, onClose, onS
   const handleDelete = async () => {
     if (!record || !confirm('Remover este registro?')) return;
     setSaving(true);
+    setError('');
     try {
-      await fetch(`${API}/api/ceremonies/records/${record.id}`, {
+      const res = await fetch(`${API}/api/ceremonies/records/${record.id}`, {
         method: 'DELETE', headers: { Authorization: `Bearer ${token}` },
       });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+        throw new Error(d.error || `Erro ${res.status}`);
+      }
       onSaved();
-    } catch (e: any) { setError(e.message); } finally { setSaving(false); }
+    } catch (e: any) { setError(e.message); setSaving(false); }
   };
 
   return (
@@ -384,6 +389,8 @@ const CeremoniesDashboard: React.FC = () => {
   const now = new Date();
   const defaultMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
+  const overviewLoadedRef = React.useRef(false);
+
   const [teams, setTeams]       = useState<string[]>([]);
   const [selectedTeam, setSelectedTeam] = useState('');
   const [month, setMonth]       = useState(defaultMonth);
@@ -431,7 +438,11 @@ const CeremoniesDashboard: React.FC = () => {
       const res = await fetch(`${API}/api/ceremonies/records/overview?${params}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (res.ok) setOverviewData(await res.json());
+    if (res.ok) {
+        const data = await res.json();
+        setOverviewData(data);
+        overviewLoadedRef.current = true;
+      }
     } catch {}
     setOverviewLoading(false);
   }, [token, dateFrom, dateTo, filterTeam, filterRitual, filterStatus]);
@@ -550,7 +561,7 @@ const CeremoniesDashboard: React.FC = () => {
     setRecordModal(null);
     setShowConfig(false);
     fetchAll();
-    if (view === 'overview') fetchOverview();
+    if (overviewLoadedRef.current) fetchOverview();
   };
 
   if (loading && teams.length === 0) {
