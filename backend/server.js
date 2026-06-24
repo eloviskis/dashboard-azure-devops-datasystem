@@ -2236,6 +2236,21 @@ app.delete('/api/ceremonies/config/:id', authenticateToken, async (req, res) => 
 // QA TRACKER — endpoints
 // ══════════════════════════════════════════════════════════════════════
 
+// GET /api/qa-tracker/qa-persons — nomes únicos de QA (Custom.QA.displayName)
+app.get('/api/qa-tracker/qa-persons', authenticateToken, async (req, res) => {
+  try {
+    const rows = await sql`
+      SELECT DISTINCT qa FROM work_items
+      WHERE qa IS NOT NULL AND qa != ''
+      ORDER BY qa ASC
+    `;
+    res.json(rows.map(r => r.qa));
+  } catch (err) {
+    console.error('❌ GET /api/qa-tracker/qa-persons:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/qa-tracker/versions — versões únicas disponíveis no DevOps
 app.get('/api/qa-tracker/versions', authenticateToken, async (req, res) => {
   try {
