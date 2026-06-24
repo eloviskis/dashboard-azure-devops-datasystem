@@ -66,10 +66,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else {
         setToken(savedToken);
         setUser(JSON.parse(savedUser));
+        // Refrescar tab_permissions do servidor em background (pega a versão mais recente do banco)
+        fetch(`${API_URL}/api/auth/verify`, {
+          headers: { 'Authorization': `Bearer ${savedToken}` }
+        }).then(r => r.ok ? r.json() : null).then(data => {
+          if (data?.user) {
+            const freshUser: User = {
+              id: data.user.id,
+              username: data.user.username,
+              email: data.user.email,
+              role: data.user.role,
+              tabPermissions: data.user.tab_permissions ?? null,
+            };
+            setUser(freshUser);
+            localStorage.setItem('auth_user', JSON.stringify(freshUser));
+          }
+        }).catch(() => {}); // sem conexão: mantém dados do localStorage
       }
     }
     setIsLoading(false);
-  }, [clearAuth]);
+  }, [clearAuth, API_URL]);
 
   // Ouve evento disparado pelo service quando recebe 401 durante uma chamada de API
   useEffect(() => {

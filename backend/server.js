@@ -961,8 +961,24 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-app.get('/api/auth/verify', authenticateToken, (req, res) => {
-  res.json({ valid: true, user: req.user });
+app.get('/api/auth/verify', authenticateToken, async (req, res) => {
+  try {
+    const rows = await sql`SELECT id, username, email, role, tab_permissions FROM users WHERE id = ${req.user.id}`;
+    const u = rows[0];
+    if (!u) return res.status(401).json({ error: 'Usuário não encontrado' });
+    res.json({
+      valid: true,
+      user: {
+        id: u.id,
+        username: u.username,
+        email: u.email,
+        role: u.role,
+        tab_permissions: u.tab_permissions ? JSON.parse(u.tab_permissions) : null,
+      }
+    });
+  } catch {
+    res.json({ valid: true, user: req.user });
+  }
 });
 
 app.get('/api/auth/validate', authenticateToken, (req, res) => {
@@ -2282,20 +2298,20 @@ app.get('/api/qa-tracker/items-by-qa', authenticateToken, async (req, res) => {
   }
 });
 
-// GET /api/qa-tracker/versions — versões únicas disponíveis no DevOps
+// GET /api/qa-tracker/versions — versões únicas disponíveis no DevOps (com pelo menos 1 item)
 app.get('/api/qa-tracker/versions', authenticateToken, async (req, res) => {
   try {
+    // Extrai versões apenas no formato [X.X.X.X] (mesmo padrão usado pelo endpoint /items)
     const tagRows = await sql`
       SELECT tags FROM work_items
-      WHERE tags IS NOT NULL AND tags != ''
+      WHERE tags IS NOT NULL AND tags LIKE '%[%'
     `;
     const versionSet = new Set();
-    const versionPattern = /\[?(\d+\.\d+\.\d+\.\d+)\]?/g;
+    const versionPattern = /\[(\d+\.\d+\.\d+\.\d+)\]/g;
     for (const row of tagRows) {
       let m;
       while ((m = versionPattern.exec(row.tags || '')) !== null) {
         versionSet.add(m[1]);
-        versionPattern.lastIndex = m.index + 1; // avoid infinite loop
       }
       versionPattern.lastIndex = 0;
     }
@@ -2304,13 +2320,20 @@ app.get('/api/qa-tracker/versions', authenticateToken, async (req, res) => {
       WHERE delivered_version IS NOT NULL AND delivered_version != ''
     `;
     dvRows.forEach(r => { if (/^\d+\.\d+\.\d+\.\d+$/.test(r.delivered_version)) versionSet.add(r.delivered_version); });
-    const sorted = [...versionSet].sort((a, b) => {
+    const candidates = [...versionSet].sort((a, b) => {
       const pa = a.split('.').map(Number);
       const pb = b.split('.').map(Number);
       for (let i = 0; i < 4; i++) { if (pa[i] !== pb[i]) return pb[i] - pa[i]; }
       return 0;
     });
-    res.json(sorted);
+    // Filtra versões sem nenhum item (usa a mesma condição do endpoint /items)
+    const withItems = [];
+    for (const v of candidates) {
+      const tagPattern = `%[${v}]%`;
+      const cnt = await sql`SELECT COUNT(*) AS c FROM work_items WHERE tags ILIKE ${tagPattern} OR delivered_version = ${v}`;
+      if (Number(cnt[0].c) > 0) withItems.push(v);
+    }
+    res.json(withItems);
   } catch (err) {
     console.error('❌ GET /api/qa-tracker/versions:', err.message);
     res.status(500).json({ error: err.message });
