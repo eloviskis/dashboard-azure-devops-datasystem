@@ -51,6 +51,7 @@ interface MergedItem extends DevOpsItem {
   display_client: string;
   display_tipo: string;
   display_area: string;
+  _globalVersion?: string;
 }
 
 // ─── constants ────────────────────────────────────────────────────────────────
@@ -441,6 +442,10 @@ const QATrackerDashboard: React.FC = () => {
 
   const [editingItem, setEditingItem] = useState<MergedItem | null>(null);
 
+  const [qaGlobal,      setQaGlobal]      = useState('');
+  const [globalMerged,  setGlobalMerged]  = useState<MergedItem[]>([]);
+  const [globalLoading, setGlobalLoading] = useState(false);
+
   // ── Fetch versions + QA persons on mount ──
   useEffect(() => {
     if (!token) return;
@@ -479,6 +484,53 @@ const QATrackerDashboard: React.FC = () => {
     if (version) localStorage.setItem('qa_tracker_version', version);
   }, [fetchData, version]);
 
+  // ── Fetch all versions for a QA person (global mode) ──
+  useEffect(() => {
+    if (!qaGlobal || !token) { setGlobalMerged([]); return; }
+    setGlobalLoading(true);
+    fetch(`${API}/api/qa-tracker/items-by-qa?qa=${encodeURIComponent(qaGlobal)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .then(r => r.json()).then((rows: any[]) => {
+        setGlobalMerged(rows.map(r => ({
+          work_item_id:      r.work_item_id,
+          title:             r.title,
+          type:              r.type,
+          area_path:         r.area_path,
+          assigned_to:       r.assigned_to,
+          qa:                r.qa,
+          state:             r.state,
+          priority:          r.priority,
+          tags:              r.tags,
+          delivered_version: r.delivered_version,
+          tipo_cliente:      r.tipo_cliente,
+          url:               r.url,
+          record: r.rec_id ? {
+            id:              r.rec_id,
+            work_item_id:    r.work_item_id,
+            version:         r.qtr_version,
+            qa_person:       r.qa_person,
+            status:          r.status ?? 'pending',
+            obs:             r.obs,
+            cts:             r.cts ?? [],
+            attachments:     r.attachments ?? [],
+            override_desc:   r.override_desc,
+            override_client: r.override_client,
+            override_tipo:   r.override_tipo,
+            override_area:   r.override_area,
+          } : undefined,
+          display_desc:   r.override_desc   || r.title,
+          display_client: r.override_client || r.tipo_cliente || (r.area_path as string)?.split('\\').pop() || '',
+          display_tipo:   r.override_tipo   || r.type || 'Melhoria',
+          display_area:   r.override_area   || (r.area_path as string)?.split('\\').pop() || '',
+          _globalVersion: r.qtr_version,
+        } as MergedItem)));
+      })
+      .catch(() => setGlobalMerged([]))
+      .finally(() => setGlobalLoading(false));
+  }, [qaGlobal, token]);
+
   // ── Merge items + records ──
   const merged: MergedItem[] = items.map(wi => {
     const rec = records.find(r => r.work_item_id === wi.work_item_id);
@@ -492,15 +544,18 @@ const QATrackerDashboard: React.FC = () => {
     };
   });
 
+  // ── Active list (global QA mode or version mode) ──
+  const activeList = qaGlobal ? globalMerged : merged;
+
   // ── Derived options for dropdowns ──
-  const tiposDisponiveis = [...new Set(merged.map(m => m.display_tipo).filter(Boolean))].sort();
-  const areasDisponiveis = [...new Set(merged.map(m => m.display_area).filter(Boolean))].sort();
+  const tiposDisponiveis = [...new Set(activeList.map(m => m.display_tipo).filter(Boolean))].sort();
+  const areasDisponiveis = [...new Set(activeList.map(m => m.display_area).filter(Boolean))].sort();
 
   // ── Filtered ──
-  const filtered = merged.filter(m => {
+  const displayList = activeList.filter(m => {
     const s = search.toLowerCase();
     if (s && !m.display_desc.toLowerCase().includes(s) && !String(m.work_item_id).includes(s) && !m.display_client.toLowerCase().includes(s)) return false;
-    if (filterQA && (m.record?.qa_person ?? m.qa ?? '') !== filterQA) return false;
+    if (!qaGlobal && filterQA && (m.record?.qa_person ?? m.qa ?? '') !== filterQA) return false;
     if (filterStatus && (m.record?.status ?? 'pending') !== filterStatus) return false;
     if (filterTipo && m.display_tipo !== filterTipo) return false;
     if (filterArea && m.display_area !== filterArea) return false;
@@ -509,9 +564,9 @@ const QATrackerDashboard: React.FC = () => {
   });
 
   // ── Metrics ──
-  const total = merged.length;
-  const done = merged.filter(m => (m.record?.status ?? 'pending') === 'done').length;
-  const blocked = merged.filter(m => (m.record?.status ?? 'pending') === 'blocked').length;
+  const total = activeList.length;
+  const done = activeList.filter(m => (m.record?.status ?? 'pending') === 'done').length;
+  const blocked = activeList.filter(m => (m.record?.status ?? 'pending') === 'blocked').length;
   const pending = total - done - blocked;
 
   // ── QA grouping for sidebar ──
@@ -556,7 +611,7 @@ const QATrackerDashboard: React.FC = () => {
         {/* Version selector */}
         <div className="px-3 py-3 border-b border-ds-border">
           <label className="text-[10px] font-semibold uppercase tracking-wider text-ds-text block mb-1.5">Versão</label>
-          <select value={version} onChange={e => setVersion(e.target.value)}
+          <select value={version} onChange={e => { setVersion(e.target.value); setQaGlobal(''); }}
             title="Selecionar versão"
             className="w-full bg-ds-navy border border-ds-border text-ds-light-text rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:border-ds-green font-mono">
             {versions.length === 0 && <option value="">Carregando...</option>}
@@ -567,17 +622,37 @@ const QATrackerDashboard: React.FC = () => {
         {/* QA nav */}
         <nav className="flex-1 px-2 py-3 space-y-1">
           <div className="text-[10px] font-semibold uppercase tracking-wider text-ds-text px-2 mb-1.5">Por QA</div>
-          <button onClick={() => setFilterQA('')}
-            className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-sm transition-colors ${!filterQA ? 'bg-ds-green/15 text-ds-green font-medium' : 'text-ds-text hover:bg-ds-muted/30 hover:text-ds-light-text'}`}>
+          <button onClick={() => { setFilterQA(''); setQaGlobal(''); }}
+            className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-sm transition-colors ${!filterQA && !qaGlobal ? 'bg-ds-green/15 text-ds-green font-medium' : 'text-ds-text hover:bg-ds-muted/30 hover:text-ds-light-text'}`}>
             <span>Todos</span>
-            <span className={`text-xs px-1.5 py-0.5 rounded-full ${!filterQA ? 'bg-ds-green/20 text-ds-green' : 'bg-ds-muted/30 text-ds-text'}`}>{total}</span>
+            <span className={`text-xs px-1.5 py-0.5 rounded-full ${!filterQA && !qaGlobal ? 'bg-ds-green/20 text-ds-green' : 'bg-ds-muted/30 text-ds-text'}`}>{merged.length}</span>
           </button>
           {Object.entries(qaGroups).sort((a, b) => b[1] - a[1]).map(([name, count]) => (
-            <button key={name} onClick={() => setFilterQA(name === filterQA ? '' : name)}
-              className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-sm transition-colors ${filterQA === name ? 'bg-ds-green/15 text-ds-green font-medium' : 'text-ds-text hover:bg-ds-muted/30 hover:text-ds-light-text'}`}>
-              <span className="truncate">{name}</span>
-              <span className={`text-xs px-1.5 py-0.5 rounded-full shrink-0 ${filterQA === name ? 'bg-ds-green/20 text-ds-green' : 'bg-ds-muted/30 text-ds-text'}`}>{count}</span>
-            </button>
+            <div key={name}
+              className={`group w-full flex items-center gap-1 px-2.5 py-2 rounded-lg text-sm transition-colors ${
+                qaGlobal === name ? 'bg-ds-cyan/10 text-ds-cyan font-medium' :
+                filterQA === name ? 'bg-ds-green/15 text-ds-green font-medium' :
+                'text-ds-text hover:bg-ds-muted/30 hover:text-ds-light-text'
+              }`}>
+              <button onClick={() => setFilterQA(name === filterQA ? '' : name)}
+                className="flex-1 flex items-center justify-between gap-1 text-left min-w-0">
+                <span className="truncate">{name}</span>
+                <span className={`text-xs px-1.5 py-0.5 rounded-full shrink-0 ${
+                  qaGlobal === name ? 'bg-ds-cyan/20 text-ds-cyan' :
+                  filterQA === name ? 'bg-ds-green/20 text-ds-green' :
+                  'bg-ds-muted/30 text-ds-text'
+                }`}>{count}</span>
+              </button>
+              <button
+                onClick={() => setQaGlobal(name === qaGlobal ? '' : name)}
+                title={qaGlobal === name ? 'Voltar à visão por versão' : 'Ver todas as versões deste QA'}
+                className={`shrink-0 w-5 h-5 rounded flex items-center justify-center text-[10px] transition-all ${
+                  qaGlobal === name ? 'text-ds-cyan opacity-100' :
+                  'text-ds-text opacity-0 group-hover:opacity-100 hover:text-ds-cyan hover:bg-ds-cyan/10'
+                }`}>
+                🌐
+              </button>
+            </div>
           ))}
         </nav>
 
@@ -610,6 +685,15 @@ const QATrackerDashboard: React.FC = () => {
             )}
           </div>
         </div>
+
+        {/* Global QA mode banner */}
+        {qaGlobal && (
+          <div className="bg-ds-cyan/8 border-b border-ds-cyan/20 px-5 py-2 flex items-center gap-2 text-xs text-ds-cyan">
+            <span>🌐</span>
+            <span>Modo global · todos os itens de <strong className="font-semibold">{qaGlobal}</strong> em todas as versões</span>
+            <button onClick={() => setQaGlobal('')} className="ml-auto text-ds-cyan/60 hover:text-ds-cyan transition-colors">✕ Sair</button>
+          </div>
+        )}
 
         {/* Filter bar */}
         <div className="bg-ds-dark-blue border-b border-ds-border px-5 py-2.5 flex flex-wrap items-center gap-2">
@@ -668,20 +752,20 @@ const QATrackerDashboard: React.FC = () => {
 
         {/* Item list */}
         <div className="flex-1 overflow-y-auto px-5 py-3 space-y-2">
-          {loading && (
+          {(loading || globalLoading) && (
             <div className="flex justify-center py-16">
               <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-ds-green" />
             </div>
           )}
-          {!loading && error && <div className="text-center py-12 text-red-400 text-sm">{error}</div>}
-          {!loading && !error && filtered.length === 0 && (
+          {!loading && !globalLoading && error && <div className="text-center py-12 text-red-400 text-sm">{error}</div>}
+          {!loading && !globalLoading && !error && displayList.length === 0 && (
             <div className="flex flex-col items-center justify-center py-16 text-ds-text gap-3">
               <span className="text-4xl opacity-30">🧪</span>
-              <p className="text-sm">{version ? `Nenhum item encontrado para v${version}` : 'Selecione uma versão'}</p>
+              <p className="text-sm">{qaGlobal ? `Nenhum item encontrado para ${qaGlobal}` : version ? `Nenhum item encontrado para v${version}` : 'Selecione uma versão'}</p>
               {hasActiveFilters && <p className="text-xs text-ds-text/60">Verifique os filtros ativos</p>}
             </div>
           )}
-          {!loading && filtered.map(item => {
+          {!loading && !globalLoading && displayList.map(item => {
             const rec  = item.record;
             const st: QAStatus = rec?.status ?? 'pending';
             const scfg = STATUS_CFG[st];
@@ -698,6 +782,7 @@ const QATrackerDashboard: React.FC = () => {
                       <span className="font-mono text-xs text-ds-green font-semibold">#{item.work_item_id}</span>
                       <span className={`text-[10px] px-2 py-0.5 rounded-md font-medium ${tcfg.bg} ${tcfg.text}`}>{item.display_tipo}</span>
                       {(item.priority ?? 99) <= 2 && <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/20">🔴 Alta</span>}
+                      {qaGlobal && item._globalVersion && <span className="text-[10px] px-1.5 py-0.5 rounded bg-ds-cyan/10 text-ds-cyan border border-ds-cyan/20 font-mono">v{item._globalVersion}</span>}
                     </div>
                     <p className="text-sm text-ds-light-text leading-snug mb-2 line-clamp-2">{item.display_desc}</p>
                     <div className="flex flex-wrap gap-3 text-xs text-ds-text">
@@ -731,7 +816,7 @@ const QATrackerDashboard: React.FC = () => {
       {editingItem && (
         <EditModal
           item={editingItem}
-          version={version}
+          version={editingItem._globalVersion || version}
           token={token!}
           qaPersons={qaPersons}
           onClose={() => setEditingItem(null)}

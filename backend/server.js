@@ -2251,6 +2251,37 @@ app.get('/api/qa-tracker/qa-persons', authenticateToken, async (req, res) => {
   }
 });
 
+// GET /api/qa-tracker/items-by-qa?qa=name — todos os itens de um QA em todas as versões
+app.get('/api/qa-tracker/items-by-qa', authenticateToken, async (req, res) => {
+  try {
+    const { qa } = req.query;
+    if (!qa) return res.status(400).json({ error: 'qa obrigatório' });
+    const rows = await sql`
+      SELECT
+        wi.work_item_id, wi.title, wi.type, wi.area_path, wi.assigned_to, wi.qa,
+        wi.state, wi.priority, wi.tags, wi.delivered_version, wi.tipo_cliente,
+        wi.story_points, wi.url,
+        qtr.id          AS rec_id,
+        qtr.version     AS qtr_version,
+        qtr.qa_person, qtr.status, qtr.obs, qtr.cts, qtr.attachments,
+        qtr.override_desc, qtr.override_client, qtr.override_tipo, qtr.override_area
+      FROM work_items wi
+      LEFT JOIN LATERAL (
+        SELECT * FROM qa_test_records r
+        WHERE r.work_item_id = wi.work_item_id AND r.qa_person = ${qa}
+        ORDER BY r.version DESC
+        LIMIT 1
+      ) qtr ON true
+      WHERE wi.qa = ${qa} OR qtr.id IS NOT NULL
+      ORDER BY wi.priority ASC NULLS LAST, wi.work_item_id ASC
+    `;
+    res.json(rows);
+  } catch (err) {
+    console.error('❌ GET /api/qa-tracker/items-by-qa:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/qa-tracker/versions — versões únicas disponíveis no DevOps
 app.get('/api/qa-tracker/versions', authenticateToken, async (req, res) => {
   try {
