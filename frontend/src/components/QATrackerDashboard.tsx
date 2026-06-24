@@ -623,6 +623,7 @@ const QATrackerDashboard: React.FC = () => {
   const [globalMerged,  setGlobalMerged]  = useState<MergedItem[]>([]);
   const [globalLoading, setGlobalLoading] = useState(false);
   const [exporting,     setExporting]     = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   // ── Fetch versions + QA persons on mount ──
   useEffect(() => {
@@ -781,19 +782,36 @@ const QATrackerDashboard: React.FC = () => {
   return (
     <div className="flex min-h-[80vh] h-full">
       {/* ── Sidebar ── */}
-      <aside className="w-56 shrink-0 bg-ds-dark-blue border-r border-ds-border flex flex-col overflow-y-auto">
+      <aside className={`shrink-0 bg-ds-dark-blue border-r border-ds-border flex flex-col overflow-y-auto transition-all duration-200 ${sidebarCollapsed ? 'w-12' : 'w-56'}`}>
         {/* Logo */}
-        <div className="px-4 py-4 border-b border-ds-border">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center text-ds-dark-blue font-bold text-sm bg-gradient-to-br from-ds-green to-ds-cyan">QA</div>
-            <div>
-              <div className="text-sm font-semibold text-ds-light-text">QA Tracker</div>
-              <div className="text-xs text-ds-text">Evidências de Teste</div>
+        <div className={`border-b border-ds-border flex items-center ${sidebarCollapsed ? 'justify-center px-2 py-4' : 'px-4 py-4'}`}>
+          {sidebarCollapsed ? (
+            <button
+              type="button"
+              onClick={() => setSidebarCollapsed(false)}
+              title="Expandir sidebar"
+              className="w-9 h-9 rounded-xl flex items-center justify-center text-ds-dark-blue font-bold text-sm bg-gradient-to-br from-ds-green to-ds-cyan hover:opacity-90 transition-opacity"
+            >QA</button>
+          ) : (
+            <div className="flex items-center gap-2.5 w-full">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center text-ds-dark-blue font-bold text-sm bg-gradient-to-br from-ds-green to-ds-cyan">QA</div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-semibold text-ds-light-text">QA Tracker</div>
+                <div className="text-xs text-ds-text">Evidências de Teste</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSidebarCollapsed(true)}
+                title="Recolher sidebar"
+                className="shrink-0 w-6 h-6 flex items-center justify-center rounded text-ds-text hover:text-ds-light-text hover:bg-ds-muted/30 transition-colors text-xs"
+              >◀</button>
             </div>
-          </div>
+          )}
         </div>
+        {sidebarCollapsed && <div className="flex-1" />}
 
         {/* Version selector */}
+        {!sidebarCollapsed && (
         <div className="px-3 py-3 border-b border-ds-border">
           <label className="text-[10px] font-semibold uppercase tracking-wider text-ds-text block mb-1.5">Versão</label>
           <select value={version} onChange={e => { setVersion(e.target.value); setQaGlobal(''); }}
@@ -803,8 +821,10 @@ const QATrackerDashboard: React.FC = () => {
             {versions.map(v => <option key={v} value={v}>{v}</option>)}
           </select>
         </div>
+        )}
 
         {/* QA nav */}
+        {!sidebarCollapsed && (
         <nav className="flex-1 px-2 py-3 space-y-1">
           <div className="text-[10px] font-semibold uppercase tracking-wider text-ds-text px-2 mb-1.5">Por QA</div>
           <button onClick={() => { setFilterQA(''); setQaGlobal(''); }}
@@ -840,8 +860,10 @@ const QATrackerDashboard: React.FC = () => {
             </div>
           ))}
         </nav>
+        )}
 
         {/* Legend */}
+        {!sidebarCollapsed && (
         <div className="px-3 py-3 border-t border-ds-border space-y-1.5">
           {(Object.entries(STATUS_CFG) as [QAStatus, typeof STATUS_CFG[QAStatus]][]).map(([, cfg]) => (
             <div key={cfg.label} className={`flex items-center gap-2 text-xs ${cfg.text}`}>
@@ -849,6 +871,7 @@ const QATrackerDashboard: React.FC = () => {
             </div>
           ))}
         </div>
+        )}
       </aside>
 
       {/* ── Main ── */}
