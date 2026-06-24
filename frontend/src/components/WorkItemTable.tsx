@@ -46,6 +46,37 @@ const WorkItemTable: React.FC<WorkItemTableProps> = ({ data }) => {
   const [sortConfig, setSortConfig] = useState<SortConfig | null>({ key: 'createdDate', direction: 'descending' });
   const [searchText, setSearchText] = useState('');
 
+  // Sugestões para autocompletar
+  const suggestions = useMemo(() => {
+    const q = searchText.toLowerCase().trim();
+    if (!q || q.length < 2) return [];
+    const results: { label: string; type: string }[] = [];
+    const seen = new Set<string>();
+    const add = (label: string, type: string) => {
+      if (!label) return;
+      const key = `${type}:${label}`;
+      if (!seen.has(key) && label.toLowerCase().includes(q)) {
+        seen.add(key);
+        results.push({ label, type });
+      }
+    };
+    data.forEach(item => {
+      const idStr = String(item.workItemId);
+      const idKey = `ID:${idStr}`;
+      if (idStr.includes(q) && !seen.has(idKey)) {
+        seen.add(idKey);
+        results.push({ label: idStr, type: 'ID' });
+      }
+      if (item.assignedTo) add(item.assignedTo, 'Responsável');
+      if (item.team) add(item.team, 'Time');
+      if (item.type) add(item.type, 'Tipo');
+      if (item.state) add(item.state, 'Status');
+      if (item.codeReviewLevel1) add(item.codeReviewLevel1, 'CR N1');
+      if (item.codeReviewLevel2) add(item.codeReviewLevel2, 'CR N2');
+    });
+    return results.slice(0, 10);
+  }, [data, searchText]);
+
   // Export CSV function
   const exportCSV = useCallback(() => {
     const headers = ['ID', 'Título', 'Status', 'Responsável', 'Time', 'CR Nível 1', 'CR Nível 2', 'Tipo', 'Criado em', 'Cycle Time (dias)', 'Tags'];
@@ -179,11 +210,18 @@ const WorkItemTable: React.FC<WorkItemTableProps> = ({ data }) => {
           <div className="flex-1">
             <input
               type="text"
+              id="work-item-search"
+              list="work-item-suggestions"
               placeholder="🔍 Buscar por título, responsável, time, ID..."
               value={searchText}
               onChange={e => { setSearchText(e.target.value); setCurrentPage(1); }}
               className="bg-ds-dark-blue border border-ds-border text-ds-light-text text-sm rounded-md p-2 w-full max-w-md placeholder-ds-muted"
             />
+            <datalist id="work-item-suggestions">
+              {suggestions.map(s => (
+                <option key={`${s.type}-${s.label}`} value={s.label} label={`[${s.type}] ${s.label}`} />
+              ))}
+            </datalist>
           </div>
           <button
             onClick={exportCSV}
