@@ -450,7 +450,7 @@ async function exportQATrackerXlsx(
   // Group by QA person
   const groups = new Map<string, MergedItem[]>();
   for (const item of items) {
-    const qa = item.record?.qa_person ?? item.qa ?? '—';
+    const qa = item.record?.qa_person || item.qa || 'Sem QA';
     if (!groups.has(qa)) groups.set(qa, []);
     groups.get(qa)!.push(item);
   }
