@@ -421,6 +421,183 @@ const EditModal: React.FC<{
   );
 };
 
+// ─── XLSX Export ──────────────────────────────────────────────────────────────
+async function exportQATrackerXlsx(
+  items: MergedItem[],
+  version: string,
+  qaGlobal: string,
+): Promise<void> {
+  // Buffer polyfill required by ExcelJS in browser
+  if (typeof (globalThis as Record<string, unknown>).Buffer === 'undefined') {
+    const { Buffer: Buf } = await import('buffer');
+    (globalThis as Record<string, unknown>).Buffer = Buf;
+  }
+  const ExcelJS = await import('exceljs');
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'DS Metrics · QA Tracker';
+  wb.created = new Date();
+
+  const C = {
+    hdrBg: 'FF061526', hdrText: 'FF7FD320',
+    rowA:  'FF0A1E35', rowB:   'FF071828',
+    body:  'FFD8EBF5', border: 'FF163050',
+    green: 'FF7FD320', cyan:   'FF00C4B4',
+    yellow:'FFF59E0B', red:    'FFEF4444',
+  };
+  const thin  = (c: string) => ({ style: 'thin'   as const, color: { argb: c } });
+  const thick = (c: string) => ({ style: 'medium' as const, color: { argb: c } });
+
+  // Group by QA person
+  const groups = new Map<string, MergedItem[]>();
+  for (const item of items) {
+    const qa = item.record?.qa_person ?? item.qa ?? '—';
+    if (!groups.has(qa)) groups.set(qa, []);
+    groups.get(qa)!.push(item);
+  }
+
+  for (const [qaName, qaItems] of groups) {
+    const sheetName = qaName.slice(0, 31).replace(/[*?:/\\[\]]/g, '-');
+    const ws = wb.addWorksheet(sheetName, {
+      pageSetup: { fitToPage: true, fitToWidth: 1, orientation: 'landscape' },
+    });
+    ws.views = [{ state: 'frozen', ySplit: 1 }];
+
+    const showVer = !!qaGlobal;
+    const hasImgs = qaItems.some(i =>
+      (i.record?.attachments?.filter(a => a.type.startsWith('image/')) ?? []).length > 0
+    );
+
+    type ColDef = { key: string; width: number; header: string };
+    const cols: ColDef[] = [
+      { key: 'qa',     width: 16,  header: 'QA'             },
+      { key: 'id',     width: 10,  header: 'Tarefa'         },
+      { key: 'desc',   width: 45,  header: 'Descrição'      },
+      { key: 'client', width: 20,  header: 'Cliente'        },
+      { key: 'tipo',   width: 14,  header: 'Tipo'           },
+      { key: 'area',   width: 22,  header: 'Área'           },
+      { key: 'status', width: 16,  header: 'Status'         },
+      { key: 'cts',    width: 40,  header: 'Casos de Teste' },
+      { key: 'obs',    width: 30,  header: 'Observações'    },
+    ];
+    if (showVer) cols.splice(1, 0, { key: 'ver', width: 14, header: 'Versão' });
+    if (hasImgs) cols.push({ key: 'imgs', width: 72, header: 'Evidência - Testes' });
+
+    ws.columns = cols.map(c => ({ key: c.key, width: c.width }));
+
+    // Header
+    const hdrRow = ws.addRow(cols.map(c => c.header));
+    hdrRow.height = 28;
+    hdrRow.eachCell(cell => {
+      cell.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: C.hdrBg } };
+      cell.font      = { color: { argb: C.hdrText }, bold: true, size: 11, name: 'Calibri' };
+      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+      cell.border    = { top: thick(C.green), bottom: thick(C.green), left: thin(C.border), right: thin(C.border) };
+    });
+
+    // Data rows
+    for (let i = 0; i < qaItems.length; i++) {
+      const item   = qaItems[i];
+      const rec    = item.record;
+      const imgs   = rec?.attachments?.filter(a => a.type.startsWith('image/')) ?? [];
+      const bg     = i % 2 === 0 ? C.rowA : C.rowB;
+      const rowH   = imgs.length > 0 ? Math.min(75 + imgs.length * 30, 190) : 50;
+      const excelRowNum = i + 2;
+
+      const statusLabel = rec?.status === 'done'    ? '✅  Testado'
+                        : rec?.status === 'blocked' ? '🔒  Bloqueado'
+                        :                             '⏳  Pendente';
+      const statusColor = rec?.status === 'done'    ? C.green
+                        : rec?.status === 'blocked' ? C.red
+                        :                             C.yellow;
+      const tipoColor   = ['Bug', 'Issue'].includes(item.display_tipo) ? C.red
+                        : item.display_tipo === 'Melhoria'             ? C.green
+                        :                                                 C.cyan;
+
+      const vals: unknown[] = [];
+      vals.push(rec?.qa_person ?? item.qa ?? '');
+      if (showVer) vals.push(item._globalVersion ?? '');
+      vals.push(`#${item.work_item_id}`);
+      vals.push(item.display_desc);
+      vals.push(item.display_client);
+      vals.push(item.display_tipo);
+      vals.push(item.display_area);
+      vals.push(statusLabel);
+      vals.push(rec?.cts?.map((ct, idx) => `CT-${String(idx + 1).padStart(2, '0')}: ${ct}`).join('\n') ?? '');
+      vals.push(rec?.obs ?? '');
+      if (hasImgs) vals.push('');
+
+      const row = ws.addRow(vals);
+      row.height = rowH;
+
+      const idCol  = showVer ? 3 : 2;
+      const tipCol = showVer ? 6 : 5;
+      const stCol  = showVer ? 8 : 7;
+      const imgCol = cols.length;
+
+      row.eachCell((cell, colNum) => {
+        cell.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
+        cell.font      = { color: { argb: C.body }, size: 10, name: 'Calibri' };
+        cell.alignment = { vertical: 'top', wrapText: true };
+        cell.border    = { bottom: thin(C.border), right: thin(C.border), left: thin(C.border) };
+
+        if (colNum === idCol) {
+          cell.font      = { color: { argb: C.green }, bold: true, size: 10, name: 'Courier New', underline: !!item.url };
+          cell.alignment = { horizontal: 'center', vertical: 'top' };
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          if (item.url) cell.value = { text: `#${item.work_item_id}`, hyperlink: item.url } as any;
+        }
+        if (colNum === tipCol) {
+          cell.font      = { color: { argb: tipoColor }, bold: true, size: 10, name: 'Calibri' };
+          cell.alignment = { horizontal: 'center', vertical: 'top' };
+        }
+        if (colNum === stCol) {
+          cell.font      = { color: { argb: statusColor }, bold: true, size: 10, name: 'Calibri' };
+          cell.alignment = { horizontal: 'center', vertical: 'top' };
+        }
+        if (showVer && colNum === 2) {
+          cell.font      = { color: { argb: C.cyan }, size: 9, name: 'Courier New' };
+          cell.alignment = { horizontal: 'center', vertical: 'top' };
+        }
+      });
+
+      // Embed screenshots
+      if (hasImgs && imgs.length > 0) {
+        const imgW   = 175;
+        const imgH   = Math.round(rowH * 1.3) - 6;
+        const evCol0 = imgCol - 1; // 0-based
+        for (let j = 0; j < Math.min(imgs.length, 3); j++) {
+          try {
+            const att   = imgs[j];
+            const b64   = att.data.includes(',') ? att.data.split(',')[1] : att.data;
+            const ext   = att.type === 'image/png' ? 'png' as const : 'jpeg' as const;
+            const imgId = wb.addImage({ base64: b64, extension: ext });
+            ws.addImage(imgId, {
+              tl:  { col: evCol0 + j * 0.37, row: excelRowNum - 1 },
+              ext: { width: imgW, height: imgH },
+            });
+          } catch { /* skip corrupt image */ }
+        }
+      }
+    }
+
+    ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: cols.length } };
+  }
+
+  // Download
+  const buf  = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = qaGlobal
+    ? `QA-${qaGlobal.replace(/\s+/g, '_')}-todas-versoes.xlsx`
+    : `QA-Tracker-v${version}-${new Date().toISOString().slice(0, 10)}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 // ─── Main Dashboard ────────────────────────────────────────────────────────────
 const QATrackerDashboard: React.FC = () => {
   const { token } = useAuth();
@@ -445,6 +622,7 @@ const QATrackerDashboard: React.FC = () => {
   const [qaGlobal,      setQaGlobal]      = useState('');
   const [globalMerged,  setGlobalMerged]  = useState<MergedItem[]>([]);
   const [globalLoading, setGlobalLoading] = useState(false);
+  const [exporting,     setExporting]     = useState(false);
 
   // ── Fetch versions + QA persons on mount ──
   useEffect(() => {
@@ -593,6 +771,13 @@ const QATrackerDashboard: React.FC = () => {
   const hasActiveFilters = filterStatus || filterTipo || filterArea || filterHighPrio || search;
   const selectCls = 'bg-ds-dark-blue border border-ds-border text-ds-text rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-ds-green';
 
+  const handleExport = useCallback(async () => {
+    setExporting(true);
+    try { await exportQATrackerXlsx(displayList, version, qaGlobal); }
+    catch (e) { console.error('Export failed:', e); }
+    finally { setExporting(false); }
+  }, [displayList, version, qaGlobal]);
+
   return (
     <div className="flex min-h-[80vh] h-full">
       {/* ── Sidebar ── */}
@@ -675,6 +860,13 @@ const QATrackerDashboard: React.FC = () => {
             {version ? <>v<span className="text-ds-green font-mono">{version}</span></> : 'Selecione uma versão'}
           </h2>
           <div className="flex-1" />
+          <button
+            onClick={handleExport}
+            disabled={exporting || displayList.length === 0}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-ds-green/15 text-ds-green border border-ds-green/30 rounded-lg hover:bg-ds-green/25 disabled:opacity-40 transition-colors whitespace-nowrap font-medium"
+          >
+            {exporting ? '⏳ Exportando...' : '📥 Exportar XLSX'}
+          </button>
           <div className="relative">
             <input value={search} onChange={e => setSearch(e.target.value)}
               placeholder="Buscar item, ID, cliente..."
