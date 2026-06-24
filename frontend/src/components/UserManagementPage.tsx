@@ -203,7 +203,7 @@ const UserManagementPage: React.FC = () => {
 
   const startEdit = (user: User) => {
     setEditingUser(user);
-    const hasRestrictions = !!(user.tabPermissions && user.tabPermissions.length > 0);
+    const hasRestrictions = Array.isArray(user.tabPermissions);
     setRestrictTabs(hasRestrictions);
     setFormData({ 
       username: user.username, 
@@ -356,7 +356,7 @@ const UserManagementPage: React.FC = () => {
                   onClick={() => {
                     const next = !restrictTabs;
                     setRestrictTabs(next);
-                    if (next && !formData.tabPermissions) {
+                    if (next && formData.tabPermissions === null) {
                       setFormData(prev => ({ ...prev, tabPermissions: ALL_TABS.map(t => t.id) }));
                     }
                   }}
@@ -453,9 +453,13 @@ const UserManagementPage: React.FC = () => {
                   }`}>
                     {user.role === 'admin' ? 'Administrador' : 'Usuário'}
                   </span>
-                  {user.tabPermissions && user.tabPermissions.length > 0 && (
+                  {Array.isArray(user.tabPermissions) ? (
                     <span className="ml-2 px-2 py-1 rounded text-xs font-medium bg-yellow-500/20 text-yellow-400" title={`Acesso restrito a ${user.tabPermissions.length} aba(s)`}>
-                      🔒 {user.tabPermissions.length} abas
+                      🔒 {user.tabPermissions.length} aba{user.tabPermissions.length === 1 ? '' : 's'}
+                    </span>
+                  ) : (
+                    <span className="ml-2 px-2 py-1 rounded text-xs font-medium bg-ds-green/10 text-ds-green/70" title="Acesso total a todas as abas">
+                      ✅ Total
                     </span>
                   )}
                 </td>
