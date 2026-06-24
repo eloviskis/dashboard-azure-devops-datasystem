@@ -154,7 +154,13 @@ const App = () => {
           const data = await res.json();
           if (data.value && !isAdmin) {
             // Não-admin: utilizar configuração definida pelo admin
-            setTabsConfig(data.value);
+            // Merge: garante que abas adicionadas após a última config do admin também apareçam
+            const savedIds = new Set((data.value as { id: string }[]).map(t => t.id));
+            const merged = [
+              ...data.value,
+              ...DEFAULT_TAB_CONFIG.filter(t => !savedIds.has(t.id)),
+            ];
+            setTabsConfig(merged);
           }
         }
       } catch { /* sem conexão: usa configuração local */ }
