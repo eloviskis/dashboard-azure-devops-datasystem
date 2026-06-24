@@ -67,6 +67,7 @@ import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 import DevTrackerDashboard from './components/DevTrackerDashboard.tsx';
 import TeamEvolutionDashboard from './components/TeamEvolutionDashboard.tsx';
 import CeremoniesDashboard from './components/CeremoniesDashboard.tsx';
+import QATrackerDashboard from './components/QATrackerDashboard.tsx';
 
 // Import Types
 import { WorkItem, WorkItemFilters } from './types.ts';
@@ -74,11 +75,11 @@ import { WorkItem, WorkItemFilters } from './types.ts';
 // Import Metrics
 import { calculatePerformanceMetrics, calculateQualityMetrics, COMPLETED_STATES } from './utils/metrics.ts';
 
-type Tab = 'executive' | 'team-insights' | 'team-evolution' | 'cycle-analytics' | 'performance' | 'quality' | 'kanban' | 'detailed-throughput' | 'bottlenecks' | 'tags' | 'clients' | 'montecarlo' | 'item-list' | 'rootcause' | 'period-comparison' | 'backlog' | 'impedimentos' | 'po-analysis' | 'pull-requests' | 'scrum-ctc' | 'dora' | 'sla' | 'metas' | 'documentation' | 'team-comparison' | 'devtracker' | 'rituals';
+type Tab = 'executive' | 'team-insights' | 'team-evolution' | 'cycle-analytics' | 'performance' | 'quality' | 'kanban' | 'detailed-throughput' | 'bottlenecks' | 'tags' | 'clients' | 'montecarlo' | 'item-list' | 'rootcause' | 'period-comparison' | 'backlog' | 'impedimentos' | 'po-analysis' | 'pull-requests' | 'scrum-ctc' | 'dora' | 'sla' | 'metas' | 'documentation' | 'team-comparison' | 'devtracker' | 'rituals' | 'qa-tracker';
 
 type QuickFilter = 'weekly' | 'biweekly' | 'monthly' | 'global';
 
-const QUICK_FILTER_EXCLUDED_TABS: Tab[] = ['period-comparison', 'team-comparison', 'pull-requests', 'documentation', 'devtracker', 'team-evolution', 'rituals'];
+const QUICK_FILTER_EXCLUDED_TABS: Tab[] = ['period-comparison', 'team-comparison', 'pull-requests', 'documentation', 'devtracker', 'team-evolution', 'rituals', 'qa-tracker'];
 
 const DEFAULT_TAB_CONFIG = [
   // 🧭 1. Camada Executiva
@@ -117,6 +118,8 @@ const DEFAULT_TAB_CONFIG = [
   { id: 'devtracker', label: '🗂️ DevTracker', visible: true },
   // 🏛️ 9. Governança Ágil
   { id: 'rituals', label: '🗓️ Ritos & Cerimônias', visible: true },
+  // 🧪 10. Qualidade
+  { id: 'qa-tracker', label: '🧪 QA Tracker', visible: true },
 ];
 
 const App = () => {
@@ -748,6 +751,8 @@ const App = () => {
         return <DevTrackerDashboard />;
       case 'rituals':
         return <CeremoniesDashboard />;
+      case 'qa-tracker':
+        return <QATrackerDashboard />;
       default:
         return null;
     }

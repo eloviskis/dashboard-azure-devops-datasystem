@@ -2232,6 +2232,183 @@ app.delete('/api/ceremonies/config/:id', authenticateToken, async (req, res) => 
   }
 });
 
+// ══════════════════════════════════════════════════════════════════════
+// QA TRACKER — endpoints
+// ══════════════════════════════════════════════════════════════════════
+
+// GET /api/qa-tracker/versions — versões únicas disponíveis no DevOps
+app.get('/api/qa-tracker/versions', authenticateToken, async (req, res) => {
+  try {
+    const tagRows = await sql`
+      SELECT tags FROM work_items
+      WHERE tags IS NOT NULL AND tags != ''
+    `;
+    const versionSet = new Set();
+    const versionPattern = /\[?(\d+\.\d+\.\d+\.\d+)\]?/g;
+    for (const row of tagRows) {
+      let m;
+      while ((m = versionPattern.exec(row.tags || '')) !== null) {
+        versionSet.add(m[1]);
+        versionPattern.lastIndex = m.index + 1; // avoid infinite loop
+      }
+      versionPattern.lastIndex = 0;
+    }
+    const dvRows = await sql`
+      SELECT DISTINCT delivered_version FROM work_items
+      WHERE delivered_version IS NOT NULL AND delivered_version != ''
+    `;
+    dvRows.forEach(r => { if (/^\d+\.\d+\.\d+\.\d+$/.test(r.delivered_version)) versionSet.add(r.delivered_version); });
+    const sorted = [...versionSet].sort((a, b) => {
+      const pa = a.split('.').map(Number);
+      const pb = b.split('.').map(Number);
+      for (let i = 0; i < 4; i++) { if (pa[i] !== pb[i]) return pb[i] - pa[i]; }
+      return 0;
+    });
+    res.json(sorted);
+  } catch (err) {
+    console.error('❌ GET /api/qa-tracker/versions:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/qa-tracker/items?version=3.66.0.0 — work items da versão
+app.get('/api/qa-tracker/items', authenticateToken, async (req, res) => {
+  try {
+    const { version } = req.query;
+    if (!version) return res.status(400).json({ error: 'version obrigatório' });
+    const tagPattern = `%[${version}]%`;
+    const rows = await sql`
+      SELECT
+        work_item_id, title, type, area_path, assigned_to, qa,
+        state, priority, tags, delivered_version, tipo_cliente,
+        story_points, complexity, squad, dev, po, url
+      FROM work_items
+      WHERE tags ILIKE ${tagPattern}
+         OR delivered_version = ${version}
+      ORDER BY priority ASC NULLS LAST, work_item_id ASC
+    `;
+    res.json(rows);
+  } catch (err) {
+    console.error('❌ GET /api/qa-tracker/items:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Ensure qa_test_records table exists (called on init)
+async function ensureQATrackerTable() {
+  await sql`
+    CREATE TABLE IF NOT EXISTS qa_test_records (
+      id SERIAL PRIMARY KEY,
+      work_item_id INTEGER NOT NULL,
+      version TEXT NOT NULL,
+      qa_person TEXT,
+      status TEXT NOT NULL DEFAULT 'pending',
+      obs TEXT,
+      cts JSONB DEFAULT '[]',
+      attachments JSONB DEFAULT '[]',
+      override_desc TEXT,
+      override_client TEXT,
+      override_tipo TEXT,
+      override_area TEXT,
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW(),
+      UNIQUE(work_item_id, version)
+    )
+  `;
+}
+
+// GET /api/qa-tracker/records?version=3.66.0.0
+app.get('/api/qa-tracker/records', authenticateToken, async (req, res) => {
+  try {
+    await ensureQATrackerTable();
+    const { version } = req.query;
+    if (!version) return res.status(400).json({ error: 'version obrigatório' });
+    const rows = await sql`SELECT * FROM qa_test_records WHERE version = ${version} ORDER BY work_item_id ASC`;
+    res.json(rows);
+  } catch (err) {
+    console.error('❌ GET /api/qa-tracker/records:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/qa-tracker/records — upsert
+app.post('/api/qa-tracker/records', authenticateToken, async (req, res) => {
+  try {
+    await ensureQATrackerTable();
+    const { work_item_id, version, qa_person, status, obs, cts, attachments,
+            override_desc, override_client, override_tipo, override_area } = req.body;
+    if (!work_item_id || !version) return res.status(400).json({ error: 'work_item_id e version obrigatórios' });
+    const ctsJson = JSON.stringify(cts || []);
+    const attachJson = JSON.stringify(attachments || []);
+    const rows = await sql`
+      INSERT INTO qa_test_records
+        (work_item_id, version, qa_person, status, obs, cts, attachments,
+         override_desc, override_client, override_tipo, override_area, updated_at)
+      VALUES
+        (${work_item_id}, ${version}, ${qa_person || null}, ${status || 'pending'},
+         ${obs || null}, ${ctsJson}::jsonb, ${attachJson}::jsonb,
+         ${override_desc || null}, ${override_client || null}, ${override_tipo || null}, ${override_area || null}, NOW())
+      ON CONFLICT (work_item_id, version) DO UPDATE SET
+        qa_person     = EXCLUDED.qa_person,
+        status        = EXCLUDED.status,
+        obs           = EXCLUDED.obs,
+        cts           = EXCLUDED.cts,
+        attachments   = EXCLUDED.attachments,
+        override_desc   = EXCLUDED.override_desc,
+        override_client = EXCLUDED.override_client,
+        override_tipo   = EXCLUDED.override_tipo,
+        override_area   = EXCLUDED.override_area,
+        updated_at    = NOW()
+      RETURNING *
+    `;
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('❌ POST /api/qa-tracker/records:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/qa-tracker/records/:id
+app.put('/api/qa-tracker/records/:id', authenticateToken, async (req, res) => {
+  try {
+    const { qa_person, status, obs, cts, attachments,
+            override_desc, override_client, override_tipo, override_area } = req.body;
+    const ctsJson = JSON.stringify(cts || []);
+    const attachJson = JSON.stringify(attachments || []);
+    const rows = await sql`
+      UPDATE qa_test_records SET
+        qa_person     = ${qa_person || null},
+        status        = ${status || 'pending'},
+        obs           = ${obs || null},
+        cts           = ${ctsJson}::jsonb,
+        attachments   = ${attachJson}::jsonb,
+        override_desc   = ${override_desc || null},
+        override_client = ${override_client || null},
+        override_tipo   = ${override_tipo || null},
+        override_area   = ${override_area || null},
+        updated_at    = NOW()
+      WHERE id = ${req.params.id}
+      RETURNING *
+    `;
+    if (!rows.length) return res.status(404).json({ error: 'Registro não encontrado' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('❌ PUT /api/qa-tracker/records/:id:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/qa-tracker/records/:id
+app.delete('/api/qa-tracker/records/:id', authenticateToken, async (req, res) => {
+  try {
+    await sql`DELETE FROM qa_test_records WHERE id = ${req.params.id}`;
+    res.json({ success: true });
+  } catch (err) {
+    console.error('❌ DELETE /api/qa-tracker/records/:id:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/ceremonies/records/overview — visão geral com métricas e filtros
 app.get('/api/ceremonies/records/overview', authenticateToken, async (req, res) => {
   try {
