@@ -40,6 +40,7 @@ const ALL_TABS = [
   { id: 'documentation',       label: '📖 Documentação' },
   { id: 'devtracker',          label: '🗂️ DevTracker' },
   { id: 'rituals',             label: '🗓️ Ritos & Cerimônias' },
+  { id: 'qa-tracker',         label: '🧪 QA Tracker' },
 ];
 
 const UserManagementPage: React.FC = () => {
