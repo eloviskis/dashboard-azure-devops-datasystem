@@ -164,7 +164,8 @@ const EditModal: React.FC<{
   onSaved: (record: QARecord) => void;
   token: string;
   version: string;
-}> = ({ item, onClose, onSaved, token, version }) => {
+  qaPersons: string[];
+}> = ({ item, onClose, onSaved, token, version, qaPersons }) => {
   const rec = item.record;
   const [qaP, setQaP] = useState(rec?.qa_person ?? item.qa ?? '');
   const [status, setStatus] = useState<QAStatus>(rec?.status ?? 'pending');
