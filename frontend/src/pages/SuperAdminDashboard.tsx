@@ -56,17 +56,22 @@ const SuperAdminDashboard: React.FC<{ onLogout: () => void; adminToken?: string 
 
   const fetchAll = useCallback(async (t: string) => {
     setLoading(true);
+    try {
     const headers = { Authorization: `Bearer ${t}` };
     const [tr, pr, rr] = await Promise.all([
       fetch(`${API}/api/superadmin/tenants`, { headers }).then(r => r.json()),
       fetch(`${API}/api/superadmin/plans`, { headers }).then(r => r.json()),
       fetch(`${API}/api/superadmin/revenue`, { headers }).then(r => r.json()),
     ]);
-    setTenants(tr.tenants || []);
+    setTenants(Array.isArray(tr.tenants) ? tr.tenants : []);
     setStats(tr.stats || null);
-    setPlans(pr || []);
-    setRevenue(rr || []);
+    setPlans(Array.isArray(pr) ? pr : []);
+    setRevenue(Array.isArray(rr) ? rr : []);
     setLoading(false);
+  } catch (err) {
+    console.error('SuperAdmin fetchAll error:', err);
+    setLoading(false);
+  }
   }, []);
 
   // Auto-carrega quando token admin é fornecido diretamente

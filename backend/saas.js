@@ -445,7 +445,7 @@ function superAdminAuth(req, res, next) {
   if (!token) return res.status(401).json({ error: 'Token não fornecido' });
   jwt.verify(token, JWT_SECRET, (err, user) => {
     if (err) return res.status(403).json({ error: 'Acesso negado' });
-    if (user?.role === 'superadmin' || user?.isAdmin === true) {
+    if (user?.role === 'superadmin' || user?.isAdmin === true || user?.role === 'admin') {
       req.user = user;
       return next();
     }
