@@ -856,7 +856,7 @@ const App = () => {
   }
 
   // Super Admin — acessível apenas quando admin autenticado clica no botão
-  if (showSuperAdmin && isAdmin) return <SuperAdminDashboard onLogout={() => setShowSuperAdmin(false)} />;
+  if (showSuperAdmin && isAdmin) return <SuperAdminDashboard onLogout={() => setShowSuperAdmin(false)} adminToken={token || ''} />;
 
   // Não autenticado: /login → LoginPage, qualquer outra rota → LandingPage
   if (!isAuthenticated) {

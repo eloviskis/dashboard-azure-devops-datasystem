@@ -25,8 +25,8 @@ const STATUS_CFG: Record<string, { label: string; cls: string }> = {
   manual:    { label: 'Manual',    cls: 'bg-blue-500/10 text-blue-400 border-blue-500/20'        },
 };
 
-const SuperAdminDashboard: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
-  const [token, setToken]         = useState('');
+const SuperAdminDashboard: React.FC<{ onLogout: () => void; adminToken?: string }> = ({ onLogout, adminToken }) => {
+  const [token, setToken]         = useState(adminToken || '');
   const [masterKey, setMasterKey] = useState('');
   const [loginErr, setLoginErr]   = useState('');
   const [tab, setTab]             = useState<'tenants' | 'plans' | 'revenue'>('tenants');
@@ -68,6 +68,14 @@ const SuperAdminDashboard: React.FC<{ onLogout: () => void }> = ({ onLogout }) =
     setRevenue(rr || []);
     setLoading(false);
   }, []);
+
+  // Auto-carrega quando token admin é fornecido diretamente
+  useEffect(() => {
+    if (adminToken && !tenants.length && !loading) {
+      setToken(adminToken);
+      fetchAll(adminToken);
+    }
+  }, [adminToken, fetchAll]);
 
   async function patchTenant() {
     if (!selected) return;

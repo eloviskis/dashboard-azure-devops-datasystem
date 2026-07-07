@@ -438,14 +438,18 @@ router.post('/superadmin/login', (req, res) => {
   res.json({ token });
 });
 
-// ─── SUPERADMIN: Middleware ───────────────────────────────────────────────────
+// ─── SUPERADMIN: Middleware ─────────────────────────────────────────────────
+// Aceita tokens de role 'superadmin' OU tokens de admin regular (isAdmin=true)
 function superAdminAuth(req, res, next) {
   const token = req.headers['authorization']?.split(' ')[1];
   if (!token) return res.status(401).json({ error: 'Token não fornecido' });
   jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err || user?.role !== 'superadmin') return res.status(403).json({ error: 'Acesso negado' });
-    req.user = user;
-    next();
+    if (err) return res.status(403).json({ error: 'Acesso negado' });
+    if (user?.role === 'superadmin' || user?.isAdmin === true) {
+      req.user = user;
+      return next();
+    }
+    return res.status(403).json({ error: 'Acesso negado' });
   });
 }
 
