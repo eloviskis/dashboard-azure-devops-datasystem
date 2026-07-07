@@ -9,6 +9,9 @@ const multer = require('multer');
 const ical = require('node-ical');
 require('dotenv').config();
 
+// Módulo SaaS (tenants, planos, pagamento, super-admin)
+const saas = require('./saas');
+
 // Database driver: PostgreSQL (pg) with connection pooling
 const { Pool } = require('pg');
 
@@ -97,6 +100,8 @@ if (DATABASE_URL) {
   };
 
   console.log('✅ Database connection pool configured (serverless-optimized)');
+  // Injeta pool/sql no módulo SaaS
+  saas.init(pool, sqlFn => sql = sqlFn || sql);
 } else {
   console.log('⚠️ No DATABASE_URL — database features disabled');
 }
@@ -477,7 +482,14 @@ const initDatabase = async () => {
 };
 
 // Initialize database on startup
-initDatabase();
+initDatabase().then(() => {
+  // Inicializa tabelas SaaS (tenants, planos, mp_events) e migra tenant_id
+  saas.init(pool, null);
+  return saas.initSaasTables();
+});
+
+// Monta rotas SaaS em /api
+app.use('/api', saas.router);
 
 // Azure DevOps configuration
 const AZURE_CONFIG = {
@@ -945,7 +957,7 @@ app.post('/api/auth/login', async (req, res) => {
     }
 
     const token = jwt.sign(
-      { id: user.id, username: user.username, email: user.email, role: user.role },
+      { id: user.id, username: user.username, email: user.email, role: user.role, tenant_id: user.tenant_id || 1, tenant_slug: 'default' },
       JWT_SECRET,
       { expiresIn: '24h' }
     );

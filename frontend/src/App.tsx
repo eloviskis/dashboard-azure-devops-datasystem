@@ -69,6 +69,10 @@ import DevTrackerDashboard from './components/DevTrackerDashboard.tsx';
 import TeamEvolutionDashboard from './components/TeamEvolutionDashboard.tsx';
 import CeremoniesDashboard from './components/CeremoniesDashboard.tsx';
 import QATrackerDashboard from './components/QATrackerDashboard.tsx';
+import LandingPage from './pages/LandingPage.tsx';
+import SignupWizard from './pages/SignupWizard.tsx';
+import PaymentWall from './pages/PaymentWall.tsx';
+import SuperAdminDashboard from './pages/SuperAdminDashboard.tsx';
 
 // Import Types
 import { WorkItem, WorkItemFilters } from './types.ts';
@@ -124,10 +128,28 @@ const DEFAULT_TAB_CONFIG = [
 ];
 
 const App = () => {
-  const { isAuthenticated, isLoading: authLoading, isAdmin, user, token } = useAuth();
-  // Tema — padrão definido pela variável de build VITE_DEFAULT_THEME (ex: 'bluey')
+  const { isAuthenticated, isLoading: authLoading, isAdmin, user, token, logout } = useAuth();
   const defaultTheme = (import.meta.env.VITE_DEFAULT_THEME || 'default') as import('./hooks/useTheme').AppTheme;
   const { theme, toggle: toggleTheme } = useTheme(defaultTheme);
+
+  // Roteamento simples via hash/pathname
+  const path = window.location.pathname;
+  const [showSignup, setShowSignup] = useState(false);
+  const [showSuperAdmin, setShowSuperAdmin] = useState(path === '/superadmin');
+  const [subscriptionExpired, setSubscriptionExpired] = useState(false);
+  // Se autenticado, interceptor de resposta 402 (assinatura expirada)
+  useEffect(() => {
+    const original = window.fetch;
+    window.fetch = async (...args) => {
+      const response = await original(...args);
+      if (response.status === 402 && isAuthenticated) {
+        setSubscriptionExpired(true);
+      }
+      return response;
+    };
+    return () => { window.fetch = original; };
+  }, [isAuthenticated]);
+
   const [activeTab, setActiveTab] = useState<Tab>(() => {
     const params = new URLSearchParams(window.location.search);
     const urlTab = params.get('tab') as Tab;
@@ -832,9 +854,34 @@ const App = () => {
     );
   }
 
-  // Se não estiver autenticado, mostrar tela de login
+  // Super Admin
+  if (showSuperAdmin) return <SuperAdminDashboard onLogout={() => { setShowSuperAdmin(false); window.history.pushState({}, '', '/'); }} />;
+
+  // Se não estiver autenticado, mostrar landing ou login
   if (!isAuthenticated) {
-    return <LoginPage />;
+    return (
+      <>
+        <LoginPage />
+        {showSignup && (
+          <SignupWizard
+            onSuccess={(tok, slug) => { localStorage.setItem('auth_token', tok); window.location.reload(); }}
+            onCancel={() => setShowSignup(false)}
+          />
+        )}
+        {/* Botão flutuante para acessar a landing/signup */}
+        <button
+          onClick={() => setShowSignup(true)}
+          className="fixed bottom-6 right-6 z-50 px-4 py-2 rounded-full bg-ds-green text-ds-dark-blue text-xs font-bold shadow-lg hover:brightness-110 transition-all"
+        >
+          Criar conta gratuita
+        </button>
+      </>
+    );
+  }
+
+  // Assinatura expirada
+  if (subscriptionExpired) {
+    return <PaymentWall tenantSlug="" companyName={user?.username} token={token || ''} onLogout={logout} />;
   }
 
   return (
