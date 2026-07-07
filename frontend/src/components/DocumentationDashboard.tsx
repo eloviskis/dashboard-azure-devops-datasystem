@@ -292,6 +292,183 @@ const DocumentationDashboard: React.FC = () => {
       </div>
 
       <div className="bg-ds-navy rounded-lg border border-ds-border overflow-hidden">
+        <div className="bg-orange-500/10 p-4 border-b border-ds-border">
+          <h2 className="text-lg font-bold text-ds-light-text">Fluxo de Dados por Grafico</h2>
+          <p className="text-ds-text text-sm mt-0.5">De onde vem cada campo, qual coluna no banco e qual grafico ele alimenta.</p>
+        </div>
+        <div className="p-4 space-y-6 text-xs">
+
+          {/* METRICAS DE TEMPO */}
+          <div>
+            <h3 className="font-bold text-ds-green mb-2 text-sm">Metricas de Tempo (Cycle Time, Lead Time, P85...)</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead><tr className="border-b border-ds-border text-left">
+                  <th className="pb-1 pr-3 text-ds-text font-semibold">Campo Azure DevOps</th>
+                  <th className="pb-1 pr-3 text-ds-text font-semibold">Coluna no Banco</th>
+                  <th className="pb-1 pr-3 text-ds-text font-semibold">Grafico Alimentado</th>
+                  <th className="pb-1 text-ds-text font-semibold">Obs</th>
+                </tr></thead>
+                <tbody className="space-y-1">
+                  {[
+                    ['Microsoft.VSTS.Common.ClosedDate','closed_date','Cycle Time, Throughput, P85, Lead Time, CFD','Obrigatorio para qualquer metrica de entrega'],
+                    ['Microsoft.VSTS.Common.ActivatedDate','first_activation_date','Cycle Time (closedDate - activatedDate)','Se ausente, cycle time = null; o sistema tenta calcular via changedDate'],
+                    ['System.CreatedDate','created_date','Lead Time (closedDate - createdDate), Aging','Sempre disponivel no Azure DevOps'],
+                    ['System.ChangedDate','changed_date','CFD, Gargalos (estimado), Aging WIP','Usado como fallback para cycle time e para estimar tempo por estado'],
+                    ['System.State','state','WIP, CFD, Throughput, Backlog, Impedimentos','Estados de conclusao: Closed/Done/Finished/Pronto/Resolved'],
+                    ['System.AreaPath','area_path / team','Throughput por Time, Cycle Time por Time, Evolucao Times','O ultimo segmento do area_path vira o campo team'],
+                    ['Microsoft.VSTS.Common.Priority','priority','SLA, Aging critico, P0 Root Cause, Evolucao Times','0=critico, 1=alta, 2=media, 3=baixa, 4=muito baixa'],
+                    ['System.WorkItemType','type','Bugs vs Issues, Quality, Root Cause, Scrum','User Story, Bug, Issue, Feature, Task, Melhoria, Eventuality'],
+                  ].map(([az,db,chart,obs],i) => (
+                    <tr key={i} className="border-b border-ds-border/30 hover:bg-ds-dark-blue">
+                      <td className="py-1 pr-3"><code className="text-ds-green">{az}</code></td>
+                      <td className="py-1 pr-3 text-blue-300">{db}</td>
+                      <td className="py-1 pr-3 text-ds-light-text">{chart}</td>
+                      <td className="py-1 text-ds-text/70">{obs}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* ROOT CAUSE */}
+          <div>
+            <h3 className="font-bold text-ds-green mb-2 text-sm">Root Cause (Issues) — campos obrigatorios por grafico</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead><tr className="border-b border-ds-border text-left">
+                  <th className="pb-1 pr-3 text-ds-text font-semibold">Grafico</th>
+                  <th className="pb-1 pr-3 text-ds-text font-semibold">Campo Azure DevOps</th>
+                  <th className="pb-1 pr-3 text-ds-text font-semibold">Coluna no Banco</th>
+                  <th className="pb-1 text-ds-text font-semibold">Filtro Necessario</th>
+                </tr></thead>
+                <tbody>
+                  {[
+                    ['Issues por Causa Raiz','Custom.Raizdoproblema','causa_raiz','type=Issue AND customType=Correcao AND closedDate IS NOT NULL'],
+                    ['P0 por Causa Raiz','Custom.Raizdoproblema + priority','causa_raiz + priority','type=Issue AND priority=0'],
+                    ['Issues por Complexidade','Custom.Complexity','complexity','type=Issue AND closed'],
+                    ['Issues por Squad','Custom.Squad','squad','type=Issue AND closed'],
+                    ['Issues por Plataforma','Custom.Platform','platform','type=Issue AND closed'],
+                    ['Issues por Desenvolvedor','Custom.DEV','dev','type=Issue AND closed'],
+                    ['Reincidencia','Custom.REINCIDENCIA','reincidencia','type=Issue — valor numerico (1, 2, 3...)'],
+                    ['Falha do Processo','Custom.Falhadoprocesso','falha_do_processo','type=Issue AND closed'],
+                    ['Identificacao da Falha','Custom.7ac99842 (campo GUID)','identificacao','type=Issue AND closed'],
+                    ['Tipo (Correcao/Alteracao)','Custom.Type','custom_type','type=Issue — valores: Correcao ou Alteracao'],
+                  ].map(([g,az,db,f],i) => (
+                    <tr key={i} className="border-b border-ds-border/30 hover:bg-ds-dark-blue">
+                      <td className="py-1 pr-3 text-ds-light-text font-medium">{g}</td>
+                      <td className="py-1 pr-3"><code className="text-ds-green">{az}</code></td>
+                      <td className="py-1 pr-3 text-blue-300">{db}</td>
+                      <td className="py-1 text-ds-text/70">{f}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* QA TRACKER */}
+          <div>
+            <h3 className="font-bold text-ds-green mb-2 text-sm">QA Tracker — origem dos dados</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead><tr className="border-b border-ds-border text-left">
+                  <th className="pb-1 pr-3 text-ds-text font-semibold">Grafico</th>
+                  <th className="pb-1 pr-3 text-ds-text font-semibold">Tabela/Coluna</th>
+                  <th className="pb-1 text-ds-text font-semibold">Como Popular</th>
+                </tr></thead>
+                <tbody>
+                  {[
+                    ['Cards KPI (Testado/Pendente/Bloqueado)','qa_test_records.status','Clicar em item na lista e marcar status manualmente, ou usar botao Auto-Popular'],
+                    ['Distribuicao de status (donut)','qa_test_records.status + version','Idem — ao menos 1 registro por versao'],
+                    ['Por QA Responsavel','qa_test_records.qa_person','Atribuir qa_person no modal de edicao de cada item'],
+                    ['Por Tipo / Por Area','work_items.type + work_items.area_path','Sincronizado automaticamente do Azure DevOps'],
+                    ['Historico por Versao','qa_test_records.version + status','Acumular registros em multiplas versoes'],
+                    ['Versoes no seletor','work_items.tags [v1.x] ou work_items.delivered_version','Tag no formato [v1.x] OU campo Custom.DeliveredVersion preenchido'],
+                  ].map(([g,tc,h],i) => (
+                    <tr key={i} className="border-b border-ds-border/30 hover:bg-ds-dark-blue">
+                      <td className="py-1 pr-3 text-ds-light-text font-medium">{g}</td>
+                      <td className="py-1 pr-3"><code className="text-blue-300">{tc}</code></td>
+                      <td className="py-1 text-ds-text/70">{h}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* RITOS */}
+          <div>
+            <h3 className="font-bold text-ds-green mb-2 text-sm">Ritos e Cerimonias — origem dos dados</h3>
+            <div className="grid md:grid-cols-2 gap-3">
+              {[
+                {t:'Cards de % por rito',d:'Tabela ceremony_records + ceremony_config. % = realizados / (realizados + remarcados + cancelados).'},
+                {t:'Tabela semanal por time',d:'ceremony_records filtrado por team + month. Celulas clicaveis abrem modal de registro.'},
+                {t:'Historico 3 meses',d:'ceremony_records GROUP BY ritual_type + month, calcula % de realizacao por tipo.'},
+                {t:'Como popular',d:'1) Configurar Ritos (botao engrenagem) 2) Registrar cada ocorrencia manualmente clicando na celula 3) Ou importar via arquivo .ics'},
+              ].map((r,i) => (
+                <div key={i} className="bg-ds-dark-blue p-2 rounded border border-ds-border">
+                  <p className="text-ds-light-text font-medium">{r.t}</p>
+                  <p className="text-ds-text/80 mt-0.5">{r.d}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* PULL REQUESTS */}
+          <div>
+            <h3 className="font-bold text-ds-green mb-2 text-sm">Pull Requests — origem dos dados</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead><tr className="border-b border-ds-border text-left">
+                  <th className="pb-1 pr-3 text-ds-text font-semibold">Grafico</th>
+                  <th className="pb-1 pr-3 text-ds-text font-semibold">Coluna no Banco</th>
+                  <th className="pb-1 text-ds-text font-semibold">Fonte no Azure DevOps</th>
+                </tr></thead>
+                <tbody>
+                  {[
+                    ['Status dos PRs (pizza)','pull_requests.status','Azure DevOps Git API — status: active/completed/abandoned'],
+                    ['Votos dos Revisores','pull_requests.reviewers (JSON array)','reviewers[].vote: 10=Aprovado, 5=Sugestoes, 0=Sem voto, -5=Aguardando, -10=Rejeitado'],
+                    ['Top Revisores','pull_requests.reviewers[].displayName','Nome do revisor extraido do JSON de reviewers'],
+                    ['Tempo de Review','pull_requests.closed_date - pull_requests.created_date','Calculado no frontend a partir das datas do PR'],
+                    ['PRs por Repositorio','pull_requests.repository_name','Azure DevOps Git API — repository.name'],
+                  ].map(([g,db,src],i) => (
+                    <tr key={i} className="border-b border-ds-border/30 hover:bg-ds-dark-blue">
+                      <td className="py-1 pr-3 text-ds-light-text font-medium">{g}</td>
+                      <td className="py-1 pr-3"><code className="text-blue-300">{db}</code></td>
+                      <td className="py-1 text-ds-text/70">{src}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* SINCRONIZACAO */}
+          <div className="bg-ds-dark-blue rounded border border-ds-border p-3">
+            <h3 className="font-bold text-ds-green mb-2 text-sm">Como a sincronizacao funciona</h3>
+            <div className="grid md:grid-cols-2 gap-3">
+              {[
+                {t:'Sincronizacao automatica',d:'A cada 30 minutos o backend chama a API do Azure DevOps e atualiza todos os work_items e pull_requests no banco PostgreSQL.'},
+                {t:'Sincronizacao manual',d:'Clique no botao Sincronizar no header para forcah uma atualizacao imediata.'},
+                {t:'Campos calculados (cycle time)',d:'cycleTime e leadTime NAO sao armazenados no banco. Sao calculados no frontend a partir de closedDate, firstActivationDate e createdDate.'},
+                {t:'Campos customizados',d:'Campos Custom.* precisam estar mapeados no arquivo server.js (funcao mapCustomFields). Se um campo nao aparece, verifique o mapeamento.'},
+                {t:'Novos campos customizados',d:'Edite o arquivo server.js na secao de mapeamento e adicione: { apiField: "Custom.SeuCampo", dbField: "nome_coluna" }. Depois crie a coluna no banco.'},
+                {t:'Dados das cerimonias e QA',d:'Esses dados NAO vem do Azure DevOps — sao inseridos manualmente pela equipe na propria plataforma (tabelas ceremony_records e qa_test_records).'},
+              ].map((r,i) => (
+                <div key={i} className="bg-ds-navy p-2 rounded border border-ds-border">
+                  <p className="text-ds-light-text font-medium text-xs">{r.t}</p>
+                  <p className="text-ds-text/80 mt-0.5 text-xs">{r.d}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <div className="bg-ds-navy rounded-lg border border-ds-border overflow-hidden">
         <div className="bg-blue-600/10 p-4 border-b border-ds-border">
           <h2 className="text-lg font-bold text-ds-light-text">Referencia de Campos Azure DevOps</h2>
           <p className="text-ds-text text-sm mt-0.5">Campos sincronizados pelo backend e seu significado no dashboard.</p>
