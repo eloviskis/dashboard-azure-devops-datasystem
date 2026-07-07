@@ -226,9 +226,9 @@ const DORAMetricsDashboard: React.FC<Props> = ({ data }) => {
       {/* Glossary */}
       <div className="bg-ds-navy/50 p-4 rounded-lg border border-ds-border/50">
         <h4 className="text-ds-light-text font-semibold mb-2">📚 Glossário — Indicadores Adaptados</h4>
-        <div className="bg-yellow-900/20 border border-yellow-700/40 rounded-lg p-3 mb-3">
-          <p className="text-yellow-300 text-xs">
-            ⚠️ <strong>Aviso:</strong> Estes indicadores são <strong>adaptações conceituais</strong> das métricas DORA para o contexto de Work Items do Azure DevOps.
+        <div className="bg-ds-border/20 border border-ds-border rounded-lg p-3 mb-3">
+          <p className="text-ds-text text-xs">
+            ⚠️ <strong className="text-ds-light-text">Aviso:</strong> Estes indicadores são <strong>adaptações conceituais</strong> das métricas DORA para o contexto de Work Items do Azure DevOps.
             As métricas DORA originais dependem de dados de pipeline CI/CD (deploys, releases, incidentes), que não estão disponíveis nesta integração.
             Os valores abaixo usam <strong>dados reais da API</strong>, mas com definições adaptadas.
           </p>
@@ -237,7 +237,7 @@ const DORAMetricsDashboard: React.FC<Props> = ({ data }) => {
           <p><strong className="text-ds-green">Deployment Frequency:</strong> Throughput semanal — itens concluídos por semana (<em>DORA real: deploys para produção</em>).</p>
           <p><strong className="text-blue-400">Lead Time for Changes:</strong> Cycle time médio de PBIs/User Stories (<em>DORA real: commit → produção</em>).</p>
           <p><strong className="text-red-400">Change Failure Rate:</strong> % de Bugs sobre total entregue (<em>DORA real: % deploys que causam falha</em>).</p>
-          <p><strong className="text-yellow-400">MTTR:</strong> Cycle time médio de Bugs (<em>DORA real: tempo de indisponibilidade até restauração</em>).</p>
+          <p><strong className="text-ds-text">MTTR:</strong> Cycle time médio de Bugs (<em>DORA real: tempo de indisponibilidade até restauração</em>).</p>
         </div>
       </div>
     </div>
