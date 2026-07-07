@@ -147,16 +147,15 @@ function generateWorkItem(id) {
   let tags = [];
   if (Math.random() < 0.15) tags.push('IMPEDIMENTO');
   if (isClosed && Math.random() < 0.4) {
-      const ver = `1.${randInt(0, 4)}.${randInt(0, 5)}.${randInt(0, 20)}`;
-    tags.push(`[${ver}]`);
-      if (Math.random() < 0.3) tags.push(`[SUPREMA CALCADOS]`);
+    tags.push(`[v1.${randInt(0, 4)}]`);
+  }
   const reincidencia = (type === 'Bug' && Math.random() < 0.15) ? 'true' : null;
 
     // Impedimento booleano - usar tags como indicador
 
-  // Delivered version
+  // Delivered version — extrai do tag [v1.X]
   let delivered_version = null;
-  const tagVer = tags.find(t => /^\[\d+\.\d+\.\d+\.\d+\]$/.test(t));
+  const tagVer = tags.find(t => /^\[v[0-9]/.test(t));
   if (tagVer) delivered_version = tagVer.replace(/[\[\]]/g, '');
 
   return {
