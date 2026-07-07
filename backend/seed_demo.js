@@ -149,10 +149,7 @@ function generateWorkItem(id) {
   if (isClosed && Math.random() < 0.4) {
     const ver = `3.${randInt(64, 68)}.${randInt(0, 5)}.${randInt(0, 20)}`;
     tags.push(`[${ver}]`);
-    if (Math.random() < 0.3) tags.push(`[MUNDIAL CALCADOS]`);
-  }
-
-  // Reincidência
+      if (Math.random() < 0.3) tags.push(`[SUPREMA CALCADOS]`);
   const reincidencia = (type === 'Bug' && Math.random() < 0.15) ? 'true' : null;
 
     // Impedimento booleano - usar tags como indicador
