@@ -215,6 +215,16 @@ function requireSuperAdmin(req, res, next) {
   next();
 }
 
+// ─── PUBLIC: Planos disponíveis (sem auth) ────────────────────────────────────
+router.get('/public/plans', async (req, res) => {
+  try {
+    const rows = await sql`SELECT id, name, price_brl, max_users, trial_days FROM saas_plans WHERE active = true ORDER BY price_brl ASC`;
+    res.json(rows);
+  } catch {
+    res.json([]);
+  }
+});
+
 // ─── PUBLIC: Teste de conexão Azure (antes do signup) ────────────────────────
 router.post('/public/test-azure', async (req, res) => {
   const { org, project, pat } = req.body;

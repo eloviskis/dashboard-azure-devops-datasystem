@@ -18,6 +18,22 @@ interface LandingPageProps {
 
 const LandingPage: React.FC<LandingPageProps> = ({ onStartTrial, onLogin }) => {
   const [email, setEmail] = useState('');
+  const [planPrice, setPlanPrice] = useState<number | null>(null);
+  const [planTrialDays, setPlanTrialDays] = useState(30);
+  const [planMaxUsers, setPlanMaxUsers] = useState(10);
+
+  React.useEffect(() => {
+    fetch(`${API}/api/public/plans`)
+      .then(r => r.ok ? r.json() : [])
+      .then(plans => {
+        if (plans.length > 0) {
+          setPlanPrice(parseFloat(plans[0].price_brl));
+          setPlanTrialDays(plans[0].trial_days || 30);
+          setPlanMaxUsers(plans[0].max_users || 10);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   return (
     <div className="min-h-screen bg-ds-dark-blue text-ds-light-text font-sans">
@@ -49,7 +65,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onStartTrial, onLogin }) => {
       {/* HERO */}
       <section className="max-w-5xl mx-auto px-8 py-24 text-center">
         <div className="inline-flex items-center gap-2 bg-ds-green/10 text-ds-green text-xs font-semibold px-4 py-1.5 rounded-full border border-ds-green/20 mb-6">
-          ✦ 30 dias grátis, sem cartão de crédito
+          ✦ {planTrialDays} dias grátis, sem cartão de crédito
         </div>
         <h1 className="text-4xl md:text-6xl font-bold leading-tight mb-6">
           Inteligência operacional para<br/>
@@ -97,12 +113,15 @@ const LandingPage: React.FC<LandingPageProps> = ({ onStartTrial, onLogin }) => {
         <p className="text-ds-text mb-8">Sem surpresas. Um plano com tudo incluso.</p>
         <div className="bg-ds-navy border-2 border-ds-green/40 rounded-2xl p-8 relative">
           <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-ds-green text-ds-dark-blue text-xs font-bold px-4 py-1 rounded-full">
-            30 dias grátis
+            {planTrialDays} dias grátis
           </div>
           <div className="text-4xl font-bold text-ds-light-text mb-1">
-            R$ 299<span className="text-lg font-normal text-ds-text">/mês</span>
+            {planPrice !== null
+              ? <>R$ {planPrice.toLocaleString('pt-BR', {minimumFractionDigits: 0})}<span className="text-lg font-normal text-ds-text">/mês</span></>
+              : <>R$ 299<span className="text-lg font-normal text-ds-text">/mês</span></>
+            }
           </div>
-          <p className="text-ds-text text-sm mb-6">por empresa · até 10 usuários</p>
+          <p className="text-ds-text text-sm mb-6">por empresa · até {planMaxUsers} usuários</p>
           <ul className="text-left space-y-2 text-sm text-ds-text mb-8">
             {['28 dashboards completos', 'QA Tracker', 'DevTracker + Cerimônias', 'Dados do Azure DevOps em tempo real', 'Suporte por e-mail', 'Acesso a todas as atualizações'].map(item => (
               <li key={item} className="flex items-center gap-2">

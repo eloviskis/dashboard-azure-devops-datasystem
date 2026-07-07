@@ -50,6 +50,39 @@ const SuperAdminDashboard: React.FC<{ onLogout: () => void; adminToken?: string 
   const [degResult, setDegResult]   = useState<{login:string; slug:string; trial_ends_at:string} | null>(null);
   const [degError, setDegError]     = useState('');
 
+  // Edição de plano
+  const [editPlan, setEditPlan] = useState<Plan | null>(null);
+  const [editPlanName, setEditPlanName] = useState('');
+  const [editPlanPrice, setEditPlanPrice] = useState('');
+  const [editPlanMaxUsers, setEditPlanMaxUsers] = useState('');
+  const [editPlanTrialDays, setEditPlanTrialDays] = useState('');
+  const [editPlanActive, setEditPlanActive] = useState(true);
+
+  function openEditPlan(p: Plan) {
+    setEditPlan(p);
+    setEditPlanName(p.name);
+    setEditPlanPrice(String(p.price_brl));
+    setEditPlanMaxUsers(String(p.max_users));
+    setEditPlanTrialDays(String(p.trial_days));
+    setEditPlanActive(p.active);
+  }
+
+  async function savePlan() {
+    if (!editPlan) return;
+    await fetch(`${API}/api/superadmin/plans/${editPlan.id}`, {
+      method: 'PATCH', headers: { ...authHeader, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: editPlanName,
+        price_brl: parseFloat(editPlanPrice),
+        max_users: parseInt(editPlanMaxUsers),
+        trial_days: parseInt(editPlanTrialDays),
+        active: editPlanActive,
+      })
+    });
+    setEditPlan(null);
+    fetchAll(token);
+  }
+
   const authHeader = { Authorization: `Bearer ${token}` };
 
   async function login() {
@@ -265,9 +298,15 @@ const SuperAdminDashboard: React.FC<{ onLogout: () => void; adminToken?: string 
               <div key={p.id} className="bg-ds-navy border border-ds-border rounded-xl p-4">
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="font-semibold">{p.name}</h3>
-                  <span className={`text-xs px-2 py-0.5 rounded border ${p.active ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'}`}>
-                    {p.active ? 'Ativo' : 'Inativo'}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs px-2 py-0.5 rounded border ${p.active ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'}`}>
+                      {p.active ? 'Ativo' : 'Inativo'}
+                    </span>
+                    <button onClick={() => openEditPlan(p)}
+                      className="text-xs px-2 py-0.5 border border-ds-border rounded hover:border-ds-green/40 text-ds-text hover:text-ds-light-text">
+                      Editar
+                    </button>
+                  </div>
                 </div>
                 <div className="text-2xl font-bold text-ds-green mb-1">R$ {parseFloat(String(p.price_brl)).toFixed(2)}</div>
                 <div className="text-xs text-ds-text space-y-0.5">
@@ -383,6 +422,43 @@ const SuperAdminDashboard: React.FC<{ onLogout: () => void; adminToken?: string 
           </div>
         )}
       </div>
+
+      {/* Modal de edição de plano */}
+      {editPlan && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+          <div className="bg-ds-navy border border-ds-border rounded-2xl p-6 w-full max-w-sm">
+            <h3 className="font-bold mb-4">✏️ Editar Plano: {editPlan.name}</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-ds-text">Nome do plano</label>
+                <input value={editPlanName} onChange={e=>setEditPlanName(e.target.value)} className={inputCls+' mt-1'} />
+              </div>
+              <div>
+                <label className="text-xs text-ds-text">Preço (R$/mês)</label>
+                <input type="number" step="0.01" min="0" value={editPlanPrice} onChange={e=>setEditPlanPrice(e.target.value)} className={inputCls+' mt-1'} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-ds-text">Trial (dias)</label>
+                  <input type="number" min="0" value={editPlanTrialDays} onChange={e=>setEditPlanTrialDays(e.target.value)} className={inputCls+' mt-1'} />
+                </div>
+                <div>
+                  <label className="text-xs text-ds-text">Max usuários</label>
+                  <input type="number" min="1" value={editPlanMaxUsers} onChange={e=>setEditPlanMaxUsers(e.target.value)} className={inputCls+' mt-1'} />
+                </div>
+              </div>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={editPlanActive} onChange={e=>setEditPlanActive(e.target.checked)} className="accent-green-500" />
+                <span className="text-xs text-ds-text">Plano ativo (visível na landing page)</span>
+              </label>
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button onClick={() => setEditPlan(null)} className="flex-1 py-2 border border-ds-border rounded-lg text-ds-text text-sm">Cancelar</button>
+              <button onClick={savePlan} className="flex-1 py-2 bg-ds-green text-ds-dark-blue rounded-lg font-bold text-sm hover:brightness-110">Salvar</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal de edição de tenant */}
       {selected && (
