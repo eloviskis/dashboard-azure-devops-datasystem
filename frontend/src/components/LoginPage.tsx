@@ -9,7 +9,7 @@ interface Branding {
 }
 
 const DEFAULT_BRANDING: Branding = {
-  company_name: 'DevOps Dashboard',
+  company_name: 'Fluxometria',
   logo_url: '',
   footer_text: '',
   cover_url: '',

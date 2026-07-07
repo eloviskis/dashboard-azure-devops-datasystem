@@ -101,7 +101,7 @@ if (DATABASE_URL) {
 
   console.log('✅ Database connection pool configured (serverless-optimized)');
   // Injeta pool/sql no módulo SaaS
-  saas.init(pool, sqlFn => sql = sqlFn || sql);
+  saas.init(pool, sql);
 } else {
   console.log('⚠️ No DATABASE_URL — database features disabled');
 }
@@ -484,7 +484,7 @@ const initDatabase = async () => {
 // Initialize database on startup
 initDatabase().then(() => {
   // Inicializa tabelas SaaS (tenants, planos, mp_events) e migra tenant_id
-  saas.init(pool, null);
+  // pool/sql já injetados no bloco acima via saas.init(pool, sqlFn)
   return saas.initSaasTables();
 });
 
@@ -1206,11 +1206,11 @@ app.get('/api/public/branding', async (req, res) => {
   try {
     const rows = await sql`SELECT key, value FROM app_settings WHERE key IN ('branding')`;
     const setting = rows[0];
-    const defaults = { company_name: 'DevOps Dashboard', logo_url: '', footer_text: '', cover_url: '' };
+    const defaults = { company_name: 'Fluxometria', logo_url: '', footer_text: '', cover_url: '' };
     const branding = setting ? { ...defaults, ...JSON.parse(setting.value) } : defaults;
     res.json(branding);
   } catch {
-    res.json({ company_name: 'DevOps Dashboard', logo_url: '', footer_text: '', cover_url: '' });
+    res.json({ company_name: 'Fluxometria', logo_url: '', footer_text: '', cover_url: '' });
   }
 });
 

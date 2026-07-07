@@ -113,7 +113,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onStartTrial, onLogin }) => {
 
       {/* FOOTER */}
       <footer className="border-t border-ds-border px-8 py-6 text-center text-ds-text/50 text-xs">
-        © {new Date().getFullYear()} DevOps Dashboard · Desenvolvido por Data System Softwares
+        © {new Date().getFullYear()} Fluxometria
       </footer>
     </div>
   );
