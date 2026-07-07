@@ -134,7 +134,7 @@ const Header: React.FC<HeaderProps> = ({ lastSyncStatus, onOpenUserManagement, o
                 <div className="font-sans">
                     <div className="flex items-center gap-3">
                         <h1 className="text-2xl font-bold tracking-wider">
-                            <span className="text-white">FLUXO</span><span className="text-ds-green">METRIA</span>
+                            <span className="text-ds-light-text">FLUXO</span><span className="text-ds-green">METRIA</span>
                         </h1>
                         <div className="has-tooltip">
                            <span className={`h-3 w-3 rounded-full ${syncInfo.colorClass} block`}></span>

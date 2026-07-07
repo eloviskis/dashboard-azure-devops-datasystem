@@ -34,7 +34,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onStartTrial, onLogin }) => {
             <path d="M18 32 L12 28 L18 24" stroke="#74C0F5" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
           </svg>
           <span className="text-xl font-bold tracking-wide">
-            <span className="text-white">FLUXO</span><span style={{color:'#4BA3E3'}}>METRIA</span>
+            <span className="text-ds-light-text">FLUXO</span><span style={{color:'#4BA3E3'}}>METRIA</span>
           </span>
         </div>
         <div className="flex items-center gap-4">
