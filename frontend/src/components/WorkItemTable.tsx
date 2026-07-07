@@ -79,15 +79,13 @@ const WorkItemTable: React.FC<WorkItemTableProps> = ({ data }) => {
 
   // Export CSV function
   const exportCSV = useCallback(() => {
-    const headers = ['ID', 'Título', 'Status', 'Responsável', 'Time', 'CR Nível 1', 'CR Nível 2', 'Tipo', 'Criado em', 'Cycle Time (dias)', 'Tags'];
+    const headers = ['ID', 'Título', 'Status', 'Responsável', 'Time', 'Tipo', 'Criado em', 'Cycle Time (dias)', 'Tags'];
     const rows = data.map(item => [
       item.workItemId,
       `"${(item.title || '').replace(/"/g, '""')}"`,
       item.state,
       item.assignedTo || 'N/A',
       item.team || '',
-      item.codeReviewLevel1 || 'N/A',
-      item.codeReviewLevel2 || 'N/A',
       item.type,
       item.createdDate ? format(new Date(item.createdDate), 'dd/MM/yyyy') : '',
       item.cycleTime ?? '',
@@ -306,8 +304,6 @@ const WorkItemTable: React.FC<WorkItemTableProps> = ({ data }) => {
                     <SortableHeader sortKey="state" title="Status" sortConfig={sortConfig} requestSort={requestSort} />
                     <SortableHeader sortKey="assignedTo" title="Responsável" sortConfig={sortConfig} requestSort={requestSort} />
                     <SortableHeader sortKey="team" title="Time" sortConfig={sortConfig} requestSort={requestSort} />
-                    <SortableHeader sortKey="codeReviewLevel1" title="CR Nível 1" sortConfig={sortConfig} requestSort={requestSort} />
-                    <SortableHeader sortKey="codeReviewLevel2" title="CR Nível 2" sortConfig={sortConfig} requestSort={requestSort} />
                     <SortableHeader sortKey="type" title="Tipo" sortConfig={sortConfig} requestSort={requestSort} />
                     <SortableHeader sortKey="createdDate" title="Criado em" sortConfig={sortConfig} requestSort={requestSort} />
                     <SortableHeader sortKey="cycleTime" title="Cycle Time (d)" sortConfig={sortConfig} requestSort={requestSort} />
@@ -336,8 +332,6 @@ const WorkItemTable: React.FC<WorkItemTableProps> = ({ data }) => {
                         </td>
                         <td className="px-6 py-4">{item.assignedTo || 'N/A'}</td>
                         <td className="px-6 py-4">{item.team}</td>
-                        <td className="px-6 py-4">{item.codeReviewLevel1 || 'N/A'}</td>
-                        <td className="px-6 py-4">{item.codeReviewLevel2 || 'N/A'}</td>
                         <td className="px-6 py-4">{item.type}</td>
                         <td className="px-6 py-4">{item.createdDate ? format(new Date(item.createdDate), 'dd/MM/yyyy') : '-'}</td>
                         <td className="px-6 py-4 text-center">{item.cycleTime !== null ? item.cycleTime : '-'}</td>
