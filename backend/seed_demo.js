@@ -7,7 +7,7 @@ const pool = new Pool({
 });
 
 // ─── Listas de dados ficticios ─────────────────────────────────────────────────
-const TEAMS = ['Franquia', 'Castelini', 'Estratégico', 'Tático', 'Wakanda', 'Boltz', 'Sustentação'];
+const TEAMS = ['Time Frente', 'Time Norte', 'Time Central', 'Time Leste', 'Time Oeste', 'Time Sul', 'Time Base'];
 
 const DEVS = [
   'Marina Duarte', 'Rafael Alves', 'Camila Ramos', 'Diego Mendes', 'Lucas Cardoso',
