@@ -67,7 +67,7 @@ interface ModalData {
 const COLORS = ['#FFD600', '#00B8A9', '#F6416C', '#43A047', '#FF9800', '#1E88E5', '#8E24AA', '#FDD835', '#00C853', '#FF6F00'];
 
 // URL base do Azure DevOps
-const AZURE_DEVOPS_BASE_URL = 'https://dev.azure.com/datasystemsoftwares/USE/_workitems/edit';
+const AZURE_DEVOPS_BASE_URL = 'https://dev.azure.com/fluxometria-demo/FLEX/_workitems/edit';
 
 // Helper para gerar URL do work item
 const getWorkItemUrl = (workItemId: number | string): string => {
