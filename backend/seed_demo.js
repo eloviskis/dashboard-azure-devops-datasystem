@@ -147,7 +147,7 @@ function generateWorkItem(id) {
   let tags = [];
   if (Math.random() < 0.15) tags.push('IMPEDIMENTO');
   if (isClosed && Math.random() < 0.4) {
-    const ver = `3.${randInt(64, 68)}.${randInt(0, 5)}.${randInt(0, 20)}`;
+      const ver = `1.${randInt(0, 4)}.${randInt(0, 5)}.${randInt(0, 20)}`;
     tags.push(`[${ver}]`);
       if (Math.random() < 0.3) tags.push(`[SUPREMA CALCADOS]`);
   const reincidencia = (type === 'Bug' && Math.random() < 0.15) ? 'true' : null;
