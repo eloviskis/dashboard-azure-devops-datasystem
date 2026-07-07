@@ -116,7 +116,7 @@ const DEFAULT_TAB_CONFIG = [
   { id: 'tags', label: '🏷️ Análise de Tags', visible: true },
   // 👥 5. Visões Específicas
   { id: 'clients', label: '🏢 Análise por Cliente', visible: true },
-  { id: 'scrum-ctc', label: '🏃 Scrum (CTC/Franquia)', visible: true },
+  { id: 'scrum-ctc', label: '🏃 Scrum', visible: true },
   { id: 'team-comparison', label: '👥 Pessoas & Senioridade', visible: true },
   // 📋 6. Operacional / Dados Brutos
   { id: 'item-list', label: '📝 Lista de Itens', visible: true },

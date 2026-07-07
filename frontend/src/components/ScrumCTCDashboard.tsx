@@ -30,7 +30,7 @@ const ScrumCTCDashboard: React.FC<ScrumCTCDashboardProps> = ({ data }) => {
   const [sprintHistory, setSprintHistory] = useState<number>(8);
   const [filterMember, setFilterMember] = useState<string>('all');
   const [filterType, setFilterType] = useState<string>('all');
-  const [selectedScrumTeam, setSelectedScrumTeam] = useState<string>('__ctc__');
+  const [selectedScrumTeam, setSelectedScrumTeam] = useState<string>('__all__');
 
   // Available teams
   const availableTeams = useMemo(() => {
@@ -39,12 +39,6 @@ const ScrumCTCDashboard: React.FC<ScrumCTCDashboardProps> = ({ data }) => {
 
   // Filter by selected team
   const franquiaItems = useMemo(() => {
-    if (selectedScrumTeam === '__ctc__') {
-      return data.filter(item => {
-        const team = (item.team || '').toLowerCase();
-        return team.includes('franquia') || team.includes('ctc');
-      });
-    }
     if (selectedScrumTeam === '__all__') return data;
     return data.filter(item => item.team === selectedScrumTeam);
   }, [data, selectedScrumTeam]);
@@ -503,7 +497,6 @@ const ScrumCTCDashboard: React.FC<ScrumCTCDashboardProps> = ({ data }) => {
             <label htmlFor="scrum-team" className="text-ds-text text-sm mb-1 block">Time Scrum:</label>
             <select id="scrum-team" value={selectedScrumTeam} onChange={e => setSelectedScrumTeam(e.target.value)}
               className="bg-ds-navy border border-ds-border text-ds-light-text text-sm rounded-md p-2">
-              <option value="__ctc__">CTC (Franquia)</option>
               <option value="__all__">Todos os Times</option>
               {availableTeams.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
@@ -544,7 +537,7 @@ const ScrumCTCDashboard: React.FC<ScrumCTCDashboardProps> = ({ data }) => {
             </select>
           </div>
           <div className="text-ds-green text-xs flex items-center gap-2">
-            <span>🏷️</span> Time: <strong>{selectedScrumTeam === '__ctc__' ? 'CTC (Franquia)' : selectedScrumTeam === '__all__' ? 'Todos' : selectedScrumTeam}</strong> — {franquiaItems.length} itens totais
+            <span>Time:</span> <strong>{selectedScrumTeam === '__all__' ? 'Todos' : selectedScrumTeam}</strong> &mdash; {franquiaItems.length} itens totais
             {currentSprint && (
               <span className="ml-2 px-2 py-1 rounded-full bg-ds-green/20 text-ds-green font-bold text-xs border border-ds-green/40">
                 🏃 Sprint Atual: {currentSprint.name} ({currentSprint.count} itens ativos)
