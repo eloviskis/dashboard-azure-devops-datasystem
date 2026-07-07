@@ -1,0 +1,19 @@
+{
+  "folders": [
+    {
+      "name": "Data System (main)",
+      "path": "."
+    },
+    {
+      "name": "Fluxometria (client)",
+      "path": "../fluxometria"
+    }
+  ],
+  "settings": {
+    "files.exclude": {
+      "**/.git": true,
+      "**/node_modules": true,
+      "**/dist": false
+    }
+  }
+}

@@ -348,7 +348,11 @@ const UserManagementPage: React.FC = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-ds-light-text">Restringir acesso a abas</p>
-                  <p className="text-xs text-ds-text mt-0.5">Se desativado, o usuário vê todas as abas</p>
+                  <p className="text-xs text-ds-text mt-0.5">
+                    {restrictTabs
+                      ? 'Marque as abas que este usuário pode acessar'
+                      : 'Desativado: usuário vê todas as abas visíveis'}
+                  </p>
                 </div>
                 <button
                   type="button"
@@ -357,7 +361,8 @@ const UserManagementPage: React.FC = () => {
                     const next = !restrictTabs;
                     setRestrictTabs(next);
                     if (next && formData.tabPermissions === null) {
-                      setFormData(prev => ({ ...prev, tabPermissions: ALL_TABS.map(t => t.id) }));
+                      // Iniciar sem nenhuma aba selecionada — admin escolhe quais permitir
+                      setFormData(prev => ({ ...prev, tabPermissions: [] }));
                     }
                   }}
                   className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${

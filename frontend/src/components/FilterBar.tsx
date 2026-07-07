@@ -215,6 +215,31 @@ const FilterBar: React.FC<FilterBarProps> = ({
          <span className="text-ds-text text-sm">
            Mostrando <strong className="text-ds-green">{filteredWorkItems.length}</strong> de <strong className="text-ds-light-text">{workItems.length}</strong> itens
          </span>
+         <div className="flex items-center gap-2 flex-wrap">
+           {/* Toggles de exclusão de impedimento/bloqueio */}
+           <button
+             onClick={() => onWorkItemFiltersChange({ ...workItemFilters, excludeImpedimentos: !workItemFilters.excludeImpedimentos })}
+             title="Quando ativo, exclui tarefas com campo Impedimento marcado dos cálculos de tempo"
+             className={`flex items-center gap-1.5 py-1.5 px-3 rounded-md text-xs font-semibold transition-colors border ${
+               workItemFilters.excludeImpedimentos
+                 ? 'bg-orange-500/20 text-orange-300 border-orange-500/40'
+                 : 'bg-ds-muted/20 text-ds-text border-ds-border hover:border-orange-500/30 hover:text-orange-300'
+             }`}
+           >
+             <span>⚠️</span> {workItemFilters.excludeImpedimentos ? 'Ignorando Impedimentos' : 'Ignorar Impedimentos'}
+           </button>
+           <button
+             onClick={() => onWorkItemFiltersChange({ ...workItemFilters, excludeBloqueios: !workItemFilters.excludeBloqueios })}
+             title="Quando ativo, exclui tarefas com campo Bloqueio marcado dos cálculos de tempo"
+             className={`flex items-center gap-1.5 py-1.5 px-3 rounded-md text-xs font-semibold transition-colors border ${
+               workItemFilters.excludeBloqueios
+                 ? 'bg-red-500/20 text-red-300 border-red-500/40'
+                 : 'bg-ds-muted/20 text-ds-text border-ds-border hover:border-red-500/30 hover:text-red-300'
+             }`}
+           >
+             <span>🔒</span> {workItemFilters.excludeBloqueios ? 'Ignorando Bloqueios' : 'Ignorar Bloqueios'}
+           </button>
+         </div>
          <div className="flex items-center gap-4">
            <button onClick={() => {
              const mainEl = document.querySelector('main');

@@ -182,6 +182,8 @@ const App = () => {
     specificMonth: undefined,
     customStartDate: undefined,
     customEndDate: undefined,
+    excludeImpedimentos: false,
+    excludeBloqueios: false,
   };
 
   const [workItemFilters, setWorkItemFilters] = useState<WorkItemFilters>(initialWorkItemFilters);
@@ -227,6 +229,9 @@ const App = () => {
       if (workItemFilters.priorities.length > 0 && !workItemFilters.priorities.includes(String(item.priority || ''))) return false;
       const itemTags = Array.isArray(item.tags) ? item.tags : (item.tags ? item.tags.split(';').map(t => t.trim()) : []);
       if (workItemFilters.tags.length > 0 && (!itemTags.length || !itemTags.some(t => workItemFilters.tags.includes(t)))) return false;
+      // Excluir itens com impedimento ou bloqueio ativo
+      if (workItemFilters.excludeImpedimentos && item.impedimento === true) return false;
+      if (workItemFilters.excludeBloqueios && item.bloqueio === true) return false;
       return true;
     });
   }, [workItems, workItemFilters, periodDates]);
@@ -943,6 +948,39 @@ const App = () => {
                   </button>
                 ))}
                 <span className="ml-auto text-ds-muted text-xs">{quickFilteredWorkItems.length} itens</span>
+              </div>
+            )}
+            {/* Mini-barra de exclusão de impedimentos/bloqueios para abas com métricas que escondem a FilterBar global */}
+            {['cycle-analytics', 'team-evolution', 'team-insights', 'scrum-ctc', 'period-comparison'].includes(activeTab) && (
+              <div className="flex items-center gap-2 mb-3 px-4 py-2 bg-ds-navy/40 rounded-lg border border-ds-border/60">
+                <span className="text-ds-text/60 text-xs font-medium">Excluir dos cálculos:</span>
+                <button
+                  onClick={() => setWorkItemFilters(f => ({ ...f, excludeImpedimentos: !f.excludeImpedimentos }))}
+                  title="Excluir tarefas com Impedimento ativo dos cálculos de métricas"
+                  className={`flex items-center gap-1.5 py-1 px-2.5 rounded-md text-xs font-semibold transition-colors border ${
+                    workItemFilters.excludeImpedimentos
+                      ? 'bg-orange-500/20 text-orange-300 border-orange-500/40'
+                      : 'bg-ds-muted/20 text-ds-text border-ds-border hover:border-orange-500/30 hover:text-orange-300'
+                  }`}
+                >
+                  <span>⚠️</span> {workItemFilters.excludeImpedimentos ? 'Ignorando Impedimentos' : 'Ignorar Impedimentos'}
+                </button>
+                <button
+                  onClick={() => setWorkItemFilters(f => ({ ...f, excludeBloqueios: !f.excludeBloqueios }))}
+                  title="Excluir tarefas com Bloqueio ativo dos cálculos de métricas"
+                  className={`flex items-center gap-1.5 py-1 px-2.5 rounded-md text-xs font-semibold transition-colors border ${
+                    workItemFilters.excludeBloqueios
+                      ? 'bg-red-500/20 text-red-300 border-red-500/40'
+                      : 'bg-ds-muted/20 text-ds-text border-ds-border hover:border-red-500/30 hover:text-red-300'
+                  }`}
+                >
+                  <span>🔒</span> {workItemFilters.excludeBloqueios ? 'Ignorando Bloqueios' : 'Ignorar Bloqueios'}
+                </button>
+                {(workItemFilters.excludeImpedimentos || workItemFilters.excludeBloqueios) && (
+                  <span className="ml-1 text-xs text-ds-text/50">
+                    {quickFilteredWorkItems.length} itens no cálculo
+                  </span>
+                )}
               </div>
             )}
             <ErrorBoundary name={`Dashboard-${activeTab}`}>

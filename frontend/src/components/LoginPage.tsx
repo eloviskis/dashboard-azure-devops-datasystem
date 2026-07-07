@@ -1,30 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 
-interface Branding {
-  company_name: string;
-  logo_url: string;
-  footer_text: string;
-  cover_url: string;
-}
-
-const DEFAULT_BRANDING: Branding = {
-  company_name: 'DevOps Dashboard',
-  logo_url: '',
-  footer_text: '',
-  cover_url: '',
-};
-
-async function fetchBranding(): Promise<Branding> {
-  try {
-    const res = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/public/branding`);
-    if (!res.ok) return DEFAULT_BRANDING;
-    return { ...DEFAULT_BRANDING, ...(await res.json()) };
-  } catch {
-    return DEFAULT_BRANDING;
-  }
-}
-
 function generateCaptcha() {
   const ops = ['+', '-', '×'] as const;
   const op = ops[Math.floor(Math.random() * ops.length)];
@@ -57,10 +33,7 @@ const LoginPage: React.FC = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [failCount, setFailCount] = useState(0);
-  const [branding, setBranding] = useState<Branding>(DEFAULT_BRANDING);
   const { login } = useAuth();
-
-  useEffect(() => { fetchBranding().then(setBranding); }, []);
 
   const refreshCaptcha = useCallback(() => {
     setCaptcha(generateCaptcha());
@@ -107,12 +80,7 @@ const LoginPage: React.FC = () => {
           <div className="max-w-md w-full">
             {/* Logo/Header */}
             <div className="text-center mb-8">
-              {branding.logo_url
-                ? <img src={branding.logo_url} alt={branding.company_name} className="mx-auto mb-4 h-20 object-contain" />
-                : <div className="mx-auto mb-4 h-20 flex items-center justify-center">
-                    <span className="text-3xl font-bold text-ds-green tracking-tight">{branding.company_name}</span>
-                  </div>
-              }
+              <img src="/logo-datasystem.png" alt="Data System" className="mx-auto mb-4 h-20 object-contain" />
               <p className="text-ds-text mt-2">Azure DevOps Analytics</p>
             </div>
 
@@ -214,25 +182,25 @@ const LoginPage: React.FC = () => {
             </div>
 
             {/* Solicitar acesso */}
-            <p className="text-center text-sm mt-4 text-ds-text/60">
-              Entre em contato com o administrador para solicitar acesso.
+            <p className="text-center text-sm mt-4">
+              <a
+                href="mailto:eloi.santaroza@datasystem.com.br?subject=Solicitação de novo usuário - Performance Dashboard&body=Olá, gostaria de solicitar a criação de um novo usuário para o Performance Dashboard.%0A%0ANome: %0AE-mail: %0AEquipe: "
+                className="text-blue-400 hover:text-blue-300 transition-colors underline"
+              >
+                Solicitar acesso
+              </a>
             </p>
 
             {/* Footer */}
             <p className="text-center text-ds-muted text-sm mt-6">
-              {branding.footer_text || `© ${new Date().getFullYear()} ${branding.company_name}. Todos os direitos reservados.`}
+              © 2026 Data System. Todos os direitos reservados.
             </p>
           </div>
         </div>
 
         {/* Right side - Image */}
         <div className="hidden lg:flex w-1/2 relative overflow-hidden">
-          <img
-            src={branding.cover_url || '/cover-default.jpg'}
-            alt={branding.company_name}
-            className="absolute inset-0 w-full h-full object-cover"
-            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-          />
+          <img src="/fotofachada.jpg" alt="Data System - Fachada" className="absolute inset-0 w-full h-full object-cover" />
           <div className="absolute inset-0 bg-gradient-to-l from-transparent via-ds-dark-blue/20 to-ds-dark-blue/70" />
           <div className="absolute inset-0 bg-gradient-to-t from-ds-dark-blue/50 via-transparent to-ds-dark-blue/30" />
         </div>

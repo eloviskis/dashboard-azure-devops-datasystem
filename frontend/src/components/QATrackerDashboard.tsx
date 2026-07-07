@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { useAuth } from '../contexts/AuthContext';
 
 // ─── types ────────────────────────────────────────────────────────────────────
@@ -70,6 +71,28 @@ const TIPO_CFG: Record<string, { bg: string; text: string }> = {
   'Feature':  { bg: 'bg-ds-cyan/15',     text: 'text-ds-cyan'    },
   'default':  { bg: 'bg-ds-muted/30',    text: 'text-ds-text'    },
 };
+
+const STATE_COLORS: Record<string, { bg: string; text: string; border: string }> = {
+  'Closed':                  { bg: 'bg-green-300/10',   text: 'text-green-300',   border: 'border-green-300/30'   },
+  'Finished':                { bg: 'bg-green-500/10',   text: 'text-green-400',   border: 'border-green-500/30'   },
+  'Resolved':                { bg: 'bg-teal-500/10',    text: 'text-teal-400',    border: 'border-teal-500/30'    },
+  'Completed':               { bg: 'bg-emerald-500/10', text: 'text-emerald-400', border: 'border-emerald-500/30' },
+  'Pronto':                  { bg: 'bg-lime-500/10',    text: 'text-lime-400',    border: 'border-lime-500/30'    },
+  'Done':                    { bg: 'bg-green-300/10',   text: 'text-green-300',   border: 'border-green-300/30'   },
+  'In Progress':             { bg: 'bg-blue-500/10',    text: 'text-blue-400',    border: 'border-blue-500/30'    },
+  'Active':                  { bg: 'bg-cyan-500/10',    text: 'text-cyan-400',    border: 'border-cyan-500/30'    },
+  'New':                     { bg: 'bg-slate-400/10',   text: 'text-slate-400',   border: 'border-slate-400/30'   },
+  'Design':                  { bg: 'bg-violet-500/10',  text: 'text-violet-400',  border: 'border-violet-500/30'  },
+  'In Planning':             { bg: 'bg-indigo-500/10',  text: 'text-indigo-400',  border: 'border-indigo-500/30'  },
+  'Para desenvolver':        { bg: 'bg-orange-500/10',  text: 'text-orange-400',  border: 'border-orange-500/30'  },
+  'Aguardando QA':           { bg: 'bg-amber-500/10',   text: 'text-amber-400',   border: 'border-amber-500/30'   },
+  'Aguardando code review':  { bg: 'bg-purple-500/10',  text: 'text-purple-400',  border: 'border-purple-500/30'  },
+  'Disapproved':             { bg: 'bg-red-500/10',     text: 'text-red-400',     border: 'border-red-500/30'     },
+  'Removed':                 { bg: 'bg-gray-500/10',    text: 'text-gray-400',    border: 'border-gray-500/30'    },
+};
+function stateCfg(state?: string) {
+  return STATE_COLORS[state ?? ''] ?? { bg: 'bg-ds-muted/30', text: 'text-ds-text', border: 'border-ds-border' };
+}
 
 const MAX_IMG_PX = 1200;
 const MAX_FILE_SIZE = 4 * 1024 * 1024;
@@ -168,7 +191,7 @@ const EditModal: React.FC<{
   qaPersons: string[];
 }> = ({ item, onClose, onSaved, token, version, qaPersons }) => {
   const rec = item.record;
-  const [qaP, setQaP] = useState(rec?.qa_person ?? item.qa ?? '');
+  const [qaP, setQaP] = useState(rec?.qa_person || item.qa || '');
   const [status, setStatus] = useState<QAStatus>(rec?.status ?? 'pending');
   const [obs, setObs] = useState(rec?.obs ?? '');
   const [cts, setCts] = useState<string[]>(rec?.cts ?? []);
@@ -261,6 +284,11 @@ const EditModal: React.FC<{
           <div className="flex items-center gap-3">
             <span className="font-mono text-ds-green text-sm font-semibold">#{item.work_item_id}</span>
             <span className={`text-xs px-2 py-0.5 rounded-md font-medium ${tipoCfg(item.display_tipo).bg} ${tipoCfg(item.display_tipo).text}`}>{item.display_tipo}</span>
+            {item.state && (
+              <span className="text-xs px-2 py-0.5 rounded-md font-medium bg-ds-muted/40 text-ds-text border border-ds-border">
+                {item.state}
+              </span>
+            )}
             {item.url && (
               <a href={item.url} target="_blank" rel="noopener noreferrer" className="text-xs text-ds-text hover:text-ds-green transition-colors">↗ DevOps</a>
             )}
@@ -469,15 +497,18 @@ async function exportQATrackerXlsx(
 
     type ColDef = { key: string; width: number; header: string };
     const cols: ColDef[] = [
-      { key: 'qa',     width: 16,  header: 'QA'             },
-      { key: 'id',     width: 10,  header: 'Tarefa'         },
-      { key: 'desc',   width: 45,  header: 'Descrição'      },
-      { key: 'client', width: 20,  header: 'Cliente'        },
-      { key: 'tipo',   width: 14,  header: 'Tipo'           },
-      { key: 'area',   width: 22,  header: 'Área'           },
-      { key: 'status', width: 16,  header: 'Status'         },
-      { key: 'cts',    width: 40,  header: 'Casos de Teste' },
-      { key: 'obs',    width: 30,  header: 'Observações'    },
+      { key: 'qa',     width: 16,  header: 'QA'                  },
+      { key: 'id',     width: 10,  header: 'Tarefa'              },
+      { key: 'desc',   width: 45,  header: 'Descrição'           },
+      { key: 'client', width: 20,  header: 'Cliente'             },
+      { key: 'tipo',   width: 14,  header: 'Tipo'                },
+      { key: 'area',   width: 22,  header: 'Área'                },
+      { key: 'tags',   width: 32,  header: 'Tags'                },
+      { key: 'estado', width: 18,  header: 'Estado (DevOps)'     },
+      { key: 'delver', width: 18,  header: 'Versão Entregue'     },
+      { key: 'status', width: 16,  header: 'Status QA'           },
+      { key: 'cts',    width: 40,  header: 'Casos de Teste'      },
+      { key: 'obs',    width: 30,  header: 'Observações'         },
     ];
     if (showVer) cols.splice(1, 0, { key: 'ver', width: 14, header: 'Versão' });
     if (hasImgs) cols.push({ key: 'imgs', width: 72, header: 'Evidência - Testes' });
@@ -514,13 +545,16 @@ async function exportQATrackerXlsx(
                         :                                                 C.cyan;
 
       const vals: unknown[] = [];
-      vals.push(rec?.qa_person ?? item.qa ?? '');
+      vals.push(rec?.qa_person || item.qa || '');
       if (showVer) vals.push(item._globalVersion ?? '');
       vals.push(`#${item.work_item_id}`);
       vals.push(item.display_desc);
       vals.push(item.display_client);
       vals.push(item.display_tipo);
       vals.push(item.display_area);
+      vals.push(item.tags ?? '');
+      vals.push(item.state ?? '');
+      vals.push(item.delivered_version ?? '');
       vals.push(statusLabel);
       vals.push(rec?.cts?.map((ct, idx) => `CT-${String(idx + 1).padStart(2, '0')}: ${ct}`).join('\n') ?? '');
       vals.push(rec?.obs ?? '');
@@ -531,7 +565,7 @@ async function exportQATrackerXlsx(
 
       const idCol  = showVer ? 3 : 2;
       const tipCol = showVer ? 6 : 5;
-      const stCol  = showVer ? 8 : 7;
+      const stCol  = showVer ? 11 : 10;
       const imgCol = cols.length;
 
       row.eachCell((cell, colNum) => {
@@ -602,7 +636,10 @@ async function exportQATrackerXlsx(
 const QATrackerDashboard: React.FC = () => {
   const { token } = useAuth();
 
-  const [versions,  setVersions]  = useState<string[]>([]);
+  const [versions,         setVersions]         = useState<string[]>([]);
+  const [versionsHasMore,  setVersionsHasMore]  = useState(false);
+  const [versionsOffset,   setVersionsOffset]   = useState(0);
+  const [versionsLoadMore, setVersionsLoadMore] = useState(false);
   const [qaPersons, setQaPersons] = useState<string[]>([]);
   const [version,   setVersion]   = useState<string>(() => localStorage.getItem('qa_tracker_version') || '');
   const [items,     setItems]     = useState<DevOpsItem[]>([]);
@@ -615,6 +652,7 @@ const QATrackerDashboard: React.FC = () => {
   const [filterStatus,   setFilterStatus]   = useState<QAStatus | ''>('');
   const [filterTipo,     setFilterTipo]     = useState('');
   const [filterArea,     setFilterArea]     = useState('');
+  const [filterState,    setFilterState]    = useState('');
   const [filterHighPrio, setFilterHighPrio] = useState(false);
 
   const [editingItem, setEditingItem] = useState<MergedItem | null>(null);
@@ -622,18 +660,26 @@ const QATrackerDashboard: React.FC = () => {
   const [qaGlobal,      setQaGlobal]      = useState('');
   const [globalMerged,  setGlobalMerged]  = useState<MergedItem[]>([]);
   const [globalLoading, setGlobalLoading] = useState(false);
-  const [exporting,     setExporting]     = useState(false);
+  const [exporting,          setExporting]          = useState(false);
+  const [autoPopulating,     setAutoPopulating]     = useState(false);
+  const [autoPopulateResult, setAutoPopulateResult] = useState<{ versionsProcessed: number; inserted: number; updated: number; corrected: number; total: number } | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [showAnalytics, setShowAnalytics] = useState(false);
+  const [versionSummary, setVersionSummary] = useState<{ version: string; total: number; done: number; pending: number; blocked: number }[]>([]);
+  const [summaryLoaded, setSummaryLoaded] = useState(false);
+  const [drillModal, setDrillModal] = useState<{ title: string; items: MergedItem[] } | null>(null);
 
   // ── Fetch versions + QA persons on mount ──
   useEffect(() => {
     if (!token) return;
     const headers = { Authorization: `Bearer ${token}` };
 
-    fetch(`${API}/api/qa-tracker/versions`, { headers })
+    fetch(`${API}/api/qa-tracker/versions?limit=10`, { headers })
       .then(r => r.json())
-      .then((v: string[]) => {
+      .then(({ versions: v, hasMore }: { versions: string[]; total: number; hasMore: boolean }) => {
         setVersions(v);
+        setVersionsHasMore(hasMore);
+        setVersionsOffset(v.length);
         setVersion(prev => prev || v[0] || '');
       })
       .catch(() => setError('Erro ao carregar versões'));
@@ -727,17 +773,19 @@ const QATrackerDashboard: React.FC = () => {
   const activeList = qaGlobal ? globalMerged : merged;
 
   // ── Derived options for dropdowns ──
-  const tiposDisponiveis = [...new Set(activeList.map(m => m.display_tipo).filter(Boolean))].sort();
-  const areasDisponiveis = [...new Set(activeList.map(m => m.display_area).filter(Boolean))].sort();
+  const tiposDisponiveis  = [...new Set(activeList.map(m => m.display_tipo).filter(Boolean))].sort();
+  const areasDisponiveis  = [...new Set(activeList.map(m => m.display_area).filter(Boolean))].sort();
+  const statesDisponiveis = [...new Set(activeList.map(m => m.state).filter(Boolean) as string[])].sort();
 
   // ── Filtered ──
   const displayList = activeList.filter(m => {
     const s = search.toLowerCase();
     if (s && !m.display_desc.toLowerCase().includes(s) && !String(m.work_item_id).includes(s) && !m.display_client.toLowerCase().includes(s)) return false;
-    if (!qaGlobal && filterQA && (m.record?.qa_person ?? m.qa ?? '') !== filterQA) return false;
+    if (!qaGlobal && filterQA && (m.record?.qa_person || m.qa || 'Sem QA atuando') !== filterQA) return false;
     if (filterStatus && (m.record?.status ?? 'pending') !== filterStatus) return false;
     if (filterTipo && m.display_tipo !== filterTipo) return false;
     if (filterArea && m.display_area !== filterArea) return false;
+    if (filterState && m.state !== filterState) return false;
     if (filterHighPrio && (m.priority ?? 99) > 2) return false;
     return true;
   });
@@ -751,7 +799,7 @@ const QATrackerDashboard: React.FC = () => {
   // ── QA grouping for sidebar ──
   const qaGroups: Record<string, number> = {};
   merged.forEach(m => {
-    const key = m.record?.qa_person ?? m.qa ?? '—';
+    const key = m.record?.qa_person || m.qa || 'Sem QA atuando';
     qaGroups[key] = (qaGroups[key] || 0) + 1;
   });
 
@@ -769,8 +817,171 @@ const QATrackerDashboard: React.FC = () => {
     setEditingItem(null);
   };
 
-  const hasActiveFilters = filterStatus || filterTipo || filterArea || filterHighPrio || search;
+  const hasActiveFilters = filterStatus || filterTipo || filterArea || filterState || filterHighPrio || search;
   const selectCls = 'bg-ds-dark-blue border border-ds-border text-ds-text rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-ds-green';
+
+  // ── Drill-down: abre modal com itens do segmento clicado no gráfico ──
+  const drillByStatus = useCallback((statusName: string) => {
+    const statusMap: Record<string, QAStatus> = { 'Testados': 'done', 'Pendentes': 'pending', 'Bloqueados': 'blocked' };
+    const st = statusMap[statusName];
+    if (!st) return;
+    const items = displayList.filter(m => (m.record?.status ?? 'pending') === st);
+    setDrillModal({ title: `${statusName} · ${items.length} item${items.length !== 1 ? 's' : ''}`, items });
+  }, [displayList]);
+
+  const drillByDimension = useCallback((
+    dimension: 'qa' | 'type' | 'area',
+    groupName: string,
+    status: QAStatus | null
+  ) => {
+    const getKey = (m: MergedItem): string =>
+      dimension === 'qa'   ? (m.record?.qa_person || m.qa || 'Sem QA atuando') :
+      dimension === 'type' ? m.display_tipo :
+      m.display_area;
+    const items = displayList.filter(m => {
+      const matchGroup  = getKey(m) === groupName;
+      const matchStatus = status ? (m.record?.status ?? 'pending') === status : true;
+      return matchGroup && matchStatus;
+    });
+    const statusLabel = status === 'done' ? ' · ✅ Testados' : status === 'pending' ? ' · ⏳ Pendentes' : status === 'blocked' ? ' · 🔒 Bloqueados' : '';
+    setDrillModal({ title: `${groupName}${statusLabel} · ${items.length} item${items.length !== 1 ? 's' : ''}`, items });
+  }, [displayList]);
+
+  const drillByHistoryVersion = useCallback((version: string, status: QAStatus | null) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    fetch(`${API}/api/qa-tracker/version-items?version=${encodeURIComponent(version)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .then(r => r.json()).then((rows: any[]) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let items: MergedItem[] = rows.map((r: any) => ({
+          work_item_id:      r.work_item_id,
+          title:             r.title,
+          type:              r.type,
+          area_path:         r.area_path,
+          assigned_to:       r.assigned_to,
+          qa:                r.qa,
+          state:             r.state,
+          priority:          r.priority,
+          tags:              r.tags,
+          delivered_version: r.delivered_version,
+          tipo_cliente:      r.tipo_cliente,
+          story_points:      r.story_points,
+          url:               r.url,
+          record: r.rec_id ? {
+            id:              r.rec_id,
+            work_item_id:    r.work_item_id,
+            version:         r.qtr_version,
+            qa_person:       r.qa_person,
+            status:          r.status ?? 'pending',
+            obs:             r.obs,
+            cts:             r.cts ?? [],
+            attachments:     r.attachments ?? [],
+            override_desc:   r.override_desc,
+            override_client: r.override_client,
+            override_tipo:   r.override_tipo,
+            override_area:   r.override_area,
+          } : undefined,
+          display_desc:   r.override_desc   || r.title,
+          display_client: r.override_client || r.tipo_cliente || (r.area_path as string)?.split('\\').pop() || '',
+          display_tipo:   r.override_tipo   || r.type || 'Melhoria',
+          display_area:   r.override_area   || (r.area_path as string)?.split('\\').pop() || '',
+          _globalVersion: r.qtr_version,
+        } as MergedItem));
+        if (status) items = items.filter(m => (m.record?.status ?? 'pending') === status);
+        const statusLabel = status === 'done' ? ' · ✅ Testados' : status === 'pending' ? ' · ⏳ Pendentes' : status === 'blocked' ? ' · 🔒 Bloqueados' : '';
+        setDrillModal({ title: `v${version}${statusLabel} · ${items.length} item${items.length !== 1 ? 's' : ''}`, items });
+      })
+      .catch(console.error);
+  }, [token]);
+
+  const handleAutoPopulate = useCallback(async () => {
+    if (!token || autoPopulating) return;
+    setAutoPopulating(true);
+    setAutoPopulateResult(null);
+    try {
+      const r = await fetch(`${API}/api/qa-tracker/auto-populate`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await r.json();
+      if (r.ok) {
+        setAutoPopulateResult(data);
+        setSummaryLoaded(false); // força reload do histórico
+        setTimeout(() => setAutoPopulateResult(null), 8000);
+      }
+    } catch { /* ignore */ } finally {
+      setAutoPopulating(false);
+    }
+  }, [token, autoPopulating]);
+
+  const loadMoreVersions = useCallback(() => {
+    if (!token || versionsLoadMore || !versionsHasMore) return;
+    setVersionsLoadMore(true);
+    fetch(`${API}/api/qa-tracker/versions?offset=${versionsOffset}&limit=10`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.json())
+      .then(({ versions: more, hasMore }: { versions: string[]; total: number; hasMore: boolean }) => {
+        setVersions(prev => [...prev, ...more]);
+        setVersionsHasMore(hasMore);
+        setVersionsOffset(prev => prev + more.length);
+      })
+      .catch(() => {})
+      .finally(() => setVersionsLoadMore(false));
+  }, [token, versionsOffset, versionsLoadMore, versionsHasMore]);
+
+  // ── Analytics useMemo (responde aos filtros ativos) ──
+  const analytics = useMemo(() => {
+    const _total   = displayList.length;
+    const _done    = displayList.filter(m => (m.record?.status ?? 'pending') === 'done').length;
+    const _blocked = displayList.filter(m => (m.record?.status ?? 'pending') === 'blocked').length;
+    const _pending = _total - _done - _blocked;
+
+    type StatMap = Record<string, { done: number; pending: number; blocked: number }>;
+    const byQAMap: StatMap   = {};
+    const byTypeMap: StatMap = {};
+    const byAreaMap: StatMap = {};
+
+    for (const m of displayList) {
+      const st   = m.record?.status ?? 'pending';
+      const qa   = m.record?.qa_person || m.qa || 'Sem QA atuando';
+      const type = m.display_tipo || '—';
+      const area = m.display_area || '—';
+      for (const [map, key] of [[byQAMap, qa], [byTypeMap, type], [byAreaMap, area]] as [StatMap, string][]) {
+        if (!map[key]) map[key] = { done: 0, pending: 0, blocked: 0 };
+        (map[key] as Record<string, number>)[st]++;
+      }
+    }
+
+    const toArr = (map: StatMap) =>
+      Object.entries(map)
+        .map(([name, v]) => ({ name, ...v, total: v.done + v.pending + v.blocked }))
+        .sort((a, b) => b.total - a.total);
+
+    return {
+      byStatus: [
+        { name: 'Testados',   value: _done,    color: '#7FD320' },
+        { name: 'Pendentes',  value: _pending,  color: '#F59E0B' },
+        { name: 'Bloqueados', value: _blocked,  color: '#EF4444' },
+      ],
+      byQA:   toArr(byQAMap).slice(0, 10),
+      byType: toArr(byTypeMap),
+      byArea: toArr(byAreaMap).slice(0, 8),
+      total: _total, done: _done, pending: _pending, blocked: _blocked,
+      pctDone: pct(_done, _total),
+    };
+  }, [displayList]);
+
+  // ── Fetch version summary (Fase 3) — carrega uma vez quando analytics é aberto ──
+  useEffect(() => {
+    if (!showAnalytics || !token || summaryLoaded) return;
+    fetch(`${API}/api/qa-tracker/version-summary`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : [])
+      .then((data) => { setVersionSummary(data); setSummaryLoaded(true); })
+      .catch(() => setSummaryLoaded(true));
+  }, [showAnalytics, token, summaryLoaded]);
 
   const handleExport = useCallback(async () => {
     setExporting(true);
@@ -814,12 +1025,33 @@ const QATrackerDashboard: React.FC = () => {
         {!sidebarCollapsed && (
         <div className="px-3 py-3 border-b border-ds-border">
           <label className="text-[10px] font-semibold uppercase tracking-wider text-ds-text block mb-1.5">Versão</label>
-          <select value={version} onChange={e => { setVersion(e.target.value); setQaGlobal(''); }}
+          <select value={version} onChange={e => {
+            if (e.target.value === '__load_more__') { loadMoreVersions(); return; }
+            setVersion(e.target.value); setQaGlobal('');
+          }}
             title="Selecionar versão"
             className="w-full bg-ds-navy border border-ds-border text-ds-light-text rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:border-ds-green font-mono">
             {versions.length === 0 && <option value="">Carregando...</option>}
             {versions.map(v => <option key={v} value={v}>{v}</option>)}
+            {versionsHasMore && (
+              <option value="__load_more__" className="text-ds-text/70 italic">
+                {versionsLoadMore ? 'Carregando...' : '↓ Mais versões...'}
+              </option>
+            )}
           </select>
+          {/* Fase 2: barra de progresso da versão atual */}
+          {total > 0 && (
+            <div className="mt-2.5">
+              <div className="flex items-center justify-between text-[10px] text-ds-text mb-1">
+                <span>{done} / {total} testados</span>
+                <span className="font-semibold text-ds-green">{pct(done, total)}%</span>
+              </div>
+              <div className="h-1.5 rounded-full bg-ds-muted/40 overflow-hidden flex">
+                <div style={{ width: `${pct(done, total)}%` }} className="bg-ds-green transition-all duration-500" />
+                <div style={{ width: `${pct(blocked, total)}%` }} className="bg-red-500 transition-all duration-500" />
+              </div>
+            </div>
+          )}
         </div>
         )}
 
@@ -879,10 +1111,42 @@ const QATrackerDashboard: React.FC = () => {
 
         {/* Topbar */}
         <div className="bg-ds-dark-blue border-b border-ds-border px-5 py-3 flex items-center gap-3">
+          {/* Sidebar toggle — sempre visível */}
+          <button
+            type="button"
+            onClick={() => setSidebarCollapsed(prev => !prev)}
+            title={sidebarCollapsed ? 'Expandir painel lateral' : 'Recolher painel lateral'}
+            className="shrink-0 w-7 h-7 flex items-center justify-center rounded text-ds-text hover:text-ds-light-text hover:bg-ds-muted/30 transition-colors text-xs"
+          >
+            {sidebarCollapsed ? '▶' : '◀'}
+          </button>
           <h2 className="text-base font-semibold text-ds-light-text whitespace-nowrap">
             {version ? <>v<span className="text-ds-green font-mono">{version}</span></> : 'Selecione uma versão'}
           </h2>
           <div className="flex-1" />
+          <button
+            onClick={handleAutoPopulate}
+            disabled={autoPopulating}
+            title="Preencher automaticamente status QA para versões sem registros (baseado em state DevOps, bloqueio e impedimento)"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-ds-muted/20 text-ds-text border border-ds-border rounded-lg hover:border-ds-cyan/40 hover:text-ds-cyan disabled:opacity-40 transition-colors whitespace-nowrap font-medium"
+          >
+            {autoPopulating ? '⏳ Processando...' : '⚡ Auto-popular'}
+          </button>
+          {autoPopulateResult && (
+            <span className="text-xs text-ds-green font-medium whitespace-nowrap">
+              ✅ {autoPopulateResult.versionsProcessed} versões · {autoPopulateResult.inserted} criados · {autoPopulateResult.updated} atualizados{autoPopulateResult.corrected > 0 ? ` · ${autoPopulateResult.corrected} corrigidos` : ''}
+            </span>
+          )}
+          <button
+            onClick={() => setShowAnalytics(v => !v)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs border rounded-lg transition-colors whitespace-nowrap font-medium ${
+              showAnalytics
+                ? 'bg-ds-cyan/20 text-ds-cyan border-ds-cyan/40'
+                : 'bg-transparent text-ds-text border-ds-border hover:border-ds-cyan/40 hover:text-ds-cyan'
+            }`}
+          >
+            📊 {showAnalytics ? 'Fechar' : 'Análise'}
+          </button>
           <button
             onClick={handleExport}
             disabled={exporting || displayList.length === 0}
@@ -937,31 +1201,254 @@ const QATrackerDashboard: React.FC = () => {
             </select>
           )}
 
+          {statesDisponiveis.length > 1 && (
+            <select value={filterState} onChange={e => setFilterState(e.target.value)}
+              title="Filtrar por State DevOps" className={selectCls}>
+              <option value="">Todos os states</option>
+              {statesDisponiveis.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          )}
+
           <button onClick={() => setFilterHighPrio(f => !f)}
             className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${filterHighPrio ? 'bg-red-500/15 text-red-400 border-red-500/30 font-semibold' : 'bg-transparent text-ds-text border-ds-border hover:border-red-400/40 hover:text-red-400'}`}>
             🔴 Alta prio
           </button>
 
           {hasActiveFilters && (
-            <button onClick={() => { setSearch(''); setFilterStatus(''); setFilterTipo(''); setFilterArea(''); setFilterHighPrio(false); }}
+            <button onClick={() => { setSearch(''); setFilterStatus(''); setFilterTipo(''); setFilterArea(''); setFilterState(''); setFilterHighPrio(false); }}
               className="ml-auto text-xs text-ds-text hover:text-ds-green border border-ds-border hover:border-ds-green/40 px-2.5 py-1.5 rounded-lg transition-colors">
               ✕ Limpar
             </button>
           )}
         </div>
 
+        {/* Analytics Panel — Fase 1 + 3 */}
+        {showAnalytics && (
+          <div className="border-b border-ds-border bg-ds-dark-blue/60 px-5 py-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-ds-light-text">
+                📊 Análise
+                <span className="ml-2 text-xs font-normal text-ds-text">
+                  {hasActiveFilters ? `${analytics.total} itens (com filtros)` : `${analytics.total} itens`}
+                </span>
+              </h3>
+              {hasActiveFilters && (
+                <span className="text-[10px] bg-ds-cyan/10 text-ds-cyan border border-ds-cyan/20 px-2 py-0.5 rounded-full">
+                  filtros ativos
+                </span>
+              )}
+            </div>
+
+            {/* Grid 4 gráficos */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+
+              {/* Gráfico 1 — Cobertura (donut) */}
+              <div className="bg-ds-navy rounded-xl border border-ds-border p-4 flex flex-col">
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-ds-text mb-2">Cobertura <span className="normal-case font-normal text-ds-text/50">· clique para filtrar</span></div>
+                <div className="relative flex justify-center">
+                  <ResponsiveContainer width="100%" height={130}>
+                    <PieChart>
+                      <Pie
+                        data={analytics.byStatus.filter(d => d.value > 0)}
+                        dataKey="value"
+                        innerRadius={38}
+                        outerRadius={58}
+                        paddingAngle={2}
+                        startAngle={90}
+                        endAngle={-270}
+                        cursor="pointer"
+                        onClick={(entry: any) => drillByStatus(entry.name)}
+                      >
+                        {analytics.byStatus.filter(d => d.value > 0).map(entry => (
+                          <Cell key={entry.name} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        formatter={(v: number) => [`${v} item${v !== 1 ? 's' : ''} (${pct(v, analytics.total)}%)`, '']}
+                        contentStyle={{ background: '#0A1E35', border: '1px solid #163050', borderRadius: 8, fontSize: 11 }}
+                        labelStyle={{ color: '#D8EBF5' }}
+                        itemStyle={{ color: '#D8EBF5' }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-ds-green">{analytics.pctDone}%</div>
+                      <div className="text-[10px] text-ds-text">testado</div>
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-1 space-y-1">
+                  {analytics.byStatus.map(s => (
+                    <button
+                      key={s.name}
+                      type="button"
+                      onClick={() => drillByStatus(s.name)}
+                      className="w-full flex items-center justify-between text-[11px] rounded px-1 py-0.5 hover:bg-ds-muted/25 transition-colors cursor-pointer"
+                    >
+                      <span className="flex items-center gap-1.5 text-ds-text">
+                        <span className="w-2 h-2 rounded-full shrink-0" style={{ background: s.color }} />
+                        {s.name}
+                      </span>
+                      <span className="font-semibold" style={{ color: s.color }}>{s.value}</span>
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setDrillModal({ title: `Todos · ${analytics.total} itens`, items: displayList })}
+                    className="w-full pt-1 border-t border-ds-border flex items-center justify-between text-[11px] text-ds-text rounded px-1 py-0.5 hover:bg-ds-muted/25 transition-colors cursor-pointer"
+                  >
+                    <span>Total</span>
+                    <span className="font-bold text-ds-light-text">{analytics.total}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Gráfico 2 — Por QA */}
+              <div className="bg-ds-navy rounded-xl border border-ds-border p-4 flex flex-col">
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-ds-text mb-2">Por QA <span className="normal-case font-normal text-ds-text/50">· clique para filtrar</span></div>
+                <ResponsiveContainer width="100%" height={analytics.byQA.length > 0 ? Math.min(280, analytics.byQA.length * 30 + 16) : 80}>
+                  <BarChart data={analytics.byQA} layout="vertical" margin={{ top: 0, right: 4, left: 0, bottom: 0 }}>
+                    <XAxis type="number" hide />
+                    <YAxis type="category" dataKey="name" width={96} tick={{ fontSize: 10, fill: '#7A9EB8' }} tickLine={false} axisLine={false} />
+                    <Tooltip
+                      contentStyle={{ background: '#0A1E35', border: '1px solid #163050', borderRadius: 8, fontSize: 11 }}
+                      labelStyle={{ color: '#D8EBF5' }}
+                      itemStyle={{ color: '#D8EBF5' }}
+                      formatter={(v: number, name: string) => [v, name === 'done' ? '✅ Testados' : name === 'pending' ? '⏳ Pendentes' : '🔒 Bloqueados']}
+                    />
+                    <Bar dataKey="done"    stackId="s" fill="#7FD320" cursor="pointer" onClick={(d: any) => drillByDimension('qa', d.name, 'done')} />
+                    <Bar dataKey="pending" stackId="s" fill="#F59E0B" cursor="pointer" onClick={(d: any) => drillByDimension('qa', d.name, 'pending')} />
+                    <Bar dataKey="blocked" stackId="s" fill="#EF4444" radius={[0, 3, 3, 0]} cursor="pointer" onClick={(d: any) => drillByDimension('qa', d.name, 'blocked')} />
+                  </BarChart>
+                </ResponsiveContainer>
+                {analytics.byQA.length === 0 && <div className="text-center text-xs text-ds-text/50 py-6">Sem dados</div>}
+              </div>
+
+              {/* Gráfico 3 — Por Tipo */}
+              <div className="bg-ds-navy rounded-xl border border-ds-border p-4 flex flex-col">
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-ds-text mb-2">Por Tipo <span className="normal-case font-normal text-ds-text/50">· clique para filtrar</span></div>
+                <ResponsiveContainer width="100%" height={analytics.byType.length > 0 ? Math.min(180, analytics.byType.length * 28 + 16) : 80}>
+                  <BarChart data={analytics.byType} layout="vertical" margin={{ top: 0, right: 4, left: 0, bottom: 0 }}>
+                    <XAxis type="number" hide />
+                    <YAxis type="category" dataKey="name" width={72} tick={{ fontSize: 10, fill: '#7A9EB8' }} tickLine={false} axisLine={false} />
+                    <Tooltip
+                      contentStyle={{ background: '#0A1E35', border: '1px solid #163050', borderRadius: 8, fontSize: 11 }}
+                      labelStyle={{ color: '#D8EBF5' }}
+                      itemStyle={{ color: '#D8EBF5' }}
+                      formatter={(v: number, name: string) => [v, name === 'done' ? '✅ Testados' : name === 'pending' ? '⏳ Pendentes' : '🔒 Bloqueados']}
+                    />
+                    <Bar dataKey="done"    stackId="s" fill="#7FD320" cursor="pointer" onClick={(d: any) => drillByDimension('type', d.name, 'done')} />
+                    <Bar dataKey="pending" stackId="s" fill="#F59E0B" cursor="pointer" onClick={(d: any) => drillByDimension('type', d.name, 'pending')} />
+                    <Bar dataKey="blocked" stackId="s" fill="#EF4444" radius={[0, 3, 3, 0]} cursor="pointer" onClick={(d: any) => drillByDimension('type', d.name, 'blocked')} />
+                  </BarChart>
+                </ResponsiveContainer>
+                {analytics.byType.length === 0 && <div className="text-center text-xs text-ds-text/50 py-6">Sem dados</div>}
+              </div>
+
+              {/* Gráfico 4 — Por Área */}
+              <div className="bg-ds-navy rounded-xl border border-ds-border p-4 flex flex-col">
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-ds-text mb-2">Por Área <span className="normal-case font-normal text-ds-text/50">· clique para filtrar</span></div>
+                <ResponsiveContainer width="100%" height={analytics.byArea.length > 0 ? Math.min(180, analytics.byArea.length * 24 + 16) : 80}>
+                  <BarChart data={analytics.byArea} layout="vertical" margin={{ top: 0, right: 4, left: 0, bottom: 0 }}>
+                    <XAxis type="number" hide />
+                    <YAxis type="category" dataKey="name" width={72} tick={{ fontSize: 10, fill: '#7A9EB8' }} tickLine={false} axisLine={false} />
+                    <Tooltip
+                      contentStyle={{ background: '#0A1E35', border: '1px solid #163050', borderRadius: 8, fontSize: 11 }}
+                      labelStyle={{ color: '#D8EBF5' }}
+                      itemStyle={{ color: '#D8EBF5' }}
+                      formatter={(v: number, name: string) => [v, name === 'done' ? '✅ Testados' : name === 'pending' ? '⏳ Pendentes' : '🔒 Bloqueados']}
+                    />
+                    <Bar dataKey="done"    stackId="s" fill="#7FD320" cursor="pointer" onClick={(d: any) => drillByDimension('area', d.name, 'done')} />
+                    <Bar dataKey="pending" stackId="s" fill="#F59E0B" cursor="pointer" onClick={(d: any) => drillByDimension('area', d.name, 'pending')} />
+                    <Bar dataKey="blocked" stackId="s" fill="#EF4444" radius={[0, 3, 3, 0]} cursor="pointer" onClick={(d: any) => drillByDimension('area', d.name, 'blocked')} />
+                  </BarChart>
+                </ResponsiveContainer>
+                {analytics.byArea.length === 0 && <div className="text-center text-xs text-ds-text/50 py-6">Sem dados</div>}
+              </div>
+            </div>
+
+            {/* Fase 3 — Histórico por versão */}
+            {(versionSummary.length > 0 || summaryLoaded) && (
+              <div className="bg-ds-navy rounded-xl border border-ds-border p-4">
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-ds-text mb-3">
+                  Histórico por Versão
+                  <span className="ml-2 normal-case font-normal text-ds-text/60">(últimas versões)</span>
+                  <span className="ml-1 normal-case font-normal text-ds-text/50">· clique para filtrar</span>
+                </div>
+                {versionSummary.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={120}>
+                    <BarChart data={versionSummary} margin={{ top: 0, right: 8, left: 0, bottom: 24 }}>
+                      <XAxis
+                        dataKey="version"
+                        tick={{ fontSize: 10, fill: '#7A9EB8' }}
+                        tickLine={false}
+                        axisLine={false}
+                        angle={-30}
+                        textAnchor="end"
+                        interval={0}
+                      />
+                      <YAxis hide />
+                      <Tooltip
+                        contentStyle={{ background: '#0A1E35', border: '1px solid #163050', borderRadius: 8, fontSize: 11 }}
+                        labelStyle={{ color: '#D8EBF5' }}
+                        itemStyle={{ color: '#D8EBF5' }}
+                        formatter={(v: number, name: string) => [v, name === 'done' ? '✅ Testados' : name === 'pending' ? '⏳ Pendentes' : '🔒 Bloqueados']}
+                      />
+                      <Bar dataKey="done"    stackId="s" fill="#7FD320" cursor="pointer" onClick={(d: any) => drillByHistoryVersion(d.version, 'done')} />
+                      <Bar dataKey="pending" stackId="s" fill="#F59E0B" cursor="pointer" onClick={(d: any) => drillByHistoryVersion(d.version, 'pending')} />
+                      <Bar dataKey="blocked" stackId="s" fill="#EF4444" radius={[3, 3, 0, 0]} cursor="pointer" onClick={(d: any) => drillByHistoryVersion(d.version, 'blocked')} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="text-center text-xs text-ds-text/50 py-6">Carregando histórico...</div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Metric cards */}
         <div className="grid grid-cols-4 gap-3 px-5 py-3 border-b border-ds-border bg-ds-dark-blue">
           {[
-            { label: 'Total',          value: total,                            color: 'text-ds-green'   },
-            { label: '✅ Testados',     value: `${done} (${pct(done, total)}%)`, color: 'text-green-400' },
-            { label: '⏳ Pendentes',    value: pending,                          color: 'text-yellow-400'},
-            { label: '🔒 Bloqueados',  value: blocked,                          color: 'text-red-400'   },
+            {
+              label: 'Total',
+              value: total,
+              color: 'text-ds-green',
+              items: activeList,
+              title: `Todos · ${total} itens`,
+            },
+            {
+              label: '✅ Testados',
+              value: `${done} (${pct(done, total)}%)`,
+              color: 'text-green-400',
+              items: activeList.filter(m => (m.record?.status ?? 'pending') === 'done'),
+              title: `✅ Testados · ${done} itens`,
+            },
+            {
+              label: '⏳ Pendentes',
+              value: pending,
+              color: 'text-yellow-400',
+              items: activeList.filter(m => (m.record?.status ?? 'pending') === 'pending'),
+              title: `⏳ Pendentes · ${pending} itens`,
+            },
+            {
+              label: '🔒 Bloqueados',
+              value: blocked,
+              color: 'text-red-400',
+              items: activeList.filter(m => (m.record?.status ?? 'pending') === 'blocked'),
+              title: `🔒 Bloqueados · ${blocked} itens`,
+            },
           ].map(m => (
-            <div key={m.label} className="bg-ds-navy rounded-xl border border-ds-border p-3">
-              <div className="text-[10px] text-ds-text uppercase tracking-wider mb-1">{m.label}</div>
+            <button
+              key={m.label}
+              type="button"
+              onClick={() => setDrillModal({ title: m.title, items: m.items })}
+              className="bg-ds-navy rounded-xl border border-ds-border p-3 text-left hover:border-ds-green/40 hover:bg-ds-muted/10 transition-all cursor-pointer group"
+            >
+              <div className="text-[10px] text-ds-text uppercase tracking-wider mb-1 group-hover:text-ds-light-text transition-colors">{m.label}</div>
               <div className={`text-2xl font-bold ${m.color}`}>{m.value}</div>
-            </div>
+            </button>
           ))}
         </div>
 
@@ -987,6 +1474,9 @@ const QATrackerDashboard: React.FC = () => {
             const tcfg = tipoCfg(item.display_tipo);
             const ctCount  = rec?.cts?.length ?? 0;
             const attCount = rec?.attachments?.length ?? 0;
+            const hasDeliveredVersion = /^\d+\.\d+\.\d+\.\d+$/.test(item.delivered_version ?? '');
+            const hasTagVersion = !!(item.tags && /\d+\.\d+\.\d+\.\d+/.test(item.tags));
+            const sscfg = stateCfg(item.state);
             return (
               <div key={item.work_item_id}
                 onClick={() => setEditingItem(item)}
@@ -996,8 +1486,11 @@ const QATrackerDashboard: React.FC = () => {
                     <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                       <span className="font-mono text-xs text-ds-green font-semibold">#{item.work_item_id}</span>
                       <span className={`text-[10px] px-2 py-0.5 rounded-md font-medium ${tcfg.bg} ${tcfg.text}`}>{item.display_tipo}</span>
+                      {item.state && <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${sscfg.bg} ${sscfg.text} ${sscfg.border}`}>{item.state}</span>}
                       {(item.priority ?? 99) <= 2 && <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/20">🔴 Alta</span>}
                       {qaGlobal && item._globalVersion && <span className="text-[10px] px-1.5 py-0.5 rounded bg-ds-cyan/10 text-ds-cyan border border-ds-cyan/20 font-mono">v{item._globalVersion}</span>}
+                      {!hasDeliveredVersion && item.type !== 'Eventuality' && <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-400 border border-orange-500/20 font-medium">⚠ Falta Versão</span>}
+                      {!hasTagVersion && <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 font-medium">🏷️ Falta Tag</span>}
                     </div>
                     <p className="text-sm text-ds-light-text leading-snug mb-2 line-clamp-2">{item.display_desc}</p>
                     <div className="flex flex-wrap gap-3 text-xs text-ds-text">
@@ -1037,6 +1530,89 @@ const QATrackerDashboard: React.FC = () => {
           onClose={() => setEditingItem(null)}
           onSaved={handleSaved}
         />
+      )}
+
+      {/* ── Drill-down Modal ── */}
+      {drillModal && (
+        <div
+          className="fixed inset-0 z-[250] flex items-center justify-center bg-black/70 backdrop-blur-sm"
+          onClick={() => setDrillModal(null)}
+        >
+          <div
+            className="bg-ds-navy border border-ds-border rounded-2xl w-full max-w-2xl mx-4 max-h-[85vh] flex flex-col shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-ds-border shrink-0">
+              <div>
+                <h3 className="text-sm font-semibold text-ds-light-text">{drillModal.title}</h3>
+                <p className="text-[11px] text-ds-text mt-0.5">Clique em um item para editar o registro QA</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDrillModal(null)}
+                title="Fechar"
+                className="w-7 h-7 flex items-center justify-center rounded text-ds-text hover:text-ds-light-text hover:bg-ds-muted/30 transition-colors"
+              >✕</button>
+            </div>
+
+            {/* Item list */}
+            <div className="overflow-y-auto flex-1 px-4 py-3 space-y-2">
+              {drillModal.items.length === 0 && (
+                <div className="text-center py-10 text-ds-text text-sm">Nenhum item neste segmento</div>
+              )}
+              {drillModal.items.map(item => {
+                const rec   = item.record;
+                const st: QAStatus = rec?.status ?? 'pending';
+                const scfg  = STATUS_CFG[st];
+                const tcfg  = tipoCfg(item.display_tipo);
+                const ctCount  = rec?.cts?.length ?? 0;
+                const attCount = rec?.attachments?.length ?? 0;
+                const hasDeliveredVersionD = /^\d+\.\d+\.\d+\.\d+$/.test(item.delivered_version ?? '');
+                const hasTagVersionD = !!(item.tags && /\d+\.\d+\.\d+\.\d+/.test(item.tags));
+                const sscfgD = stateCfg(item.state);
+                return (
+                  <div
+                    key={item.work_item_id}
+                    onClick={() => { setDrillModal(null); setEditingItem(item); }}
+                    className="bg-ds-dark-blue border border-ds-border rounded-xl p-3.5 cursor-pointer hover:border-ds-green/40 hover:bg-ds-muted/10 transition-all"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          <span className="font-mono text-xs text-ds-green font-semibold">#{item.work_item_id}</span>
+                          <span className={`text-[10px] px-2 py-0.5 rounded-md font-medium ${tcfg.bg} ${tcfg.text}`}>{item.display_tipo}</span>
+                          {item.state && <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${sscfgD.bg} ${sscfgD.text} ${sscfgD.border}`}>{item.state}</span>}
+                          {(item.priority ?? 99) <= 2 && <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/20">🔴 Alta</span>}
+                          {item._globalVersion && <span className="text-[10px] px-1.5 py-0.5 rounded bg-ds-cyan/10 text-ds-cyan border border-ds-cyan/20 font-mono">v{item._globalVersion}</span>}
+                          {!hasDeliveredVersionD && item.type !== 'Eventuality' && <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-400 border border-orange-500/20 font-medium">⚠ Falta Versão</span>}
+                          {!hasTagVersionD && <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 font-medium">🏷️ Falta Tag</span>}
+                        </div>
+                        <p className="text-sm text-ds-light-text leading-snug mb-1.5 line-clamp-2">{item.display_desc}</p>
+                        <div className="flex flex-wrap gap-3 text-xs text-ds-text">
+                          {(rec?.qa_person ?? item.qa) && <span>👤 {rec?.qa_person ?? item.qa}</span>}
+                          {item.display_client && <span>🏢 {item.display_client}</span>}
+                          {item.display_area && <span>📁 {item.display_area}</span>}
+                          {(ctCount > 0 || attCount > 0) && (
+                            <span className="text-ds-cyan/70">
+                              {ctCount > 0 ? `${ctCount} CT` : ''}
+                              {ctCount > 0 && attCount > 0 ? ' · ' : ''}
+                              {attCount > 0 ? `${attCount} anexo${attCount > 1 ? 's' : ''}` : ''}
+                            </span>
+                          )}
+                          {rec?.obs && <span className="text-ds-text/60 truncate max-w-[180px]" title={rec.obs}>💬 {rec.obs}</span>}
+                        </div>
+                      </div>
+                      <span className={`text-xs px-2.5 py-1 rounded-full border font-medium flex items-center gap-1 shrink-0 ${scfg.bg} ${scfg.text} ${scfg.border}`}>
+                        {scfg.icon} {scfg.label}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

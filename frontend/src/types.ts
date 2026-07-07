@@ -69,6 +69,8 @@ export interface WorkItem {
   // Campos de Identificação e Falha do Processo
   identificacao?: string | null;    // Custom.7ac99842... - Quem identificou (Cliente, Interno, etc)
   falhaDoProcesso?: string | null;  // Custom.Falhadoprocesso - Por que o problema ocorreu
+  impedimento?: boolean | null;     // Custom.Impedimento - item com impedimento ativo
+  bloqueio?: boolean | null;        // Custom.Bloqueio - bloqueio externo ao time
   // Campos de estimativa de tempo (Tasks)
   originalEstimate?: number | null; // Estimativa original em horas
   remainingWork?: number | null;    // Trabalho restante em horas
@@ -91,6 +93,8 @@ export interface WorkItemFilters {
   specificMonth?: string;
   customStartDate?: string;
   customEndDate?: string;
+  excludeImpedimentos?: boolean;
+  excludeBloqueios?: boolean;
 }
 
 // Pull Request
