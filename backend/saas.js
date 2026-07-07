@@ -549,6 +549,67 @@ router.post('/superadmin/mp-create-plan', superAdminAuth, async (req, res) => {
   }
 });
 
+// ─── SUPERADMIN: Liberar degustação em tenant existente ──────────────────────
+router.post('/superadmin/tenant/:id/degustacao', superAdminAuth, async (req, res) => {
+  const { days } = req.body; // days = null → ilimitado (2099-01-01)
+  const trial_ends_at = days
+    ? new Date(Date.now() + parseInt(days) * 86400000).toISOString()
+    : '2099-01-01T00:00:00.000Z';
+  await pool.query(
+    'UPDATE tenants SET subscription_status=$1, trial_ends_at=$2, updated_at=NOW() WHERE id=$3',
+    ['manual', trial_ends_at, req.params.id]
+  );
+  res.json({ success: true, trial_ends_at });
+});
+
+// ─── SUPERADMIN: Criar nova conta de degustação ───────────────────────────────
+router.post('/superadmin/create-free-account', superAdminAuth, async (req, res) => {
+  const { company_name, owner_email, owner_name, phone, password, days } = req.body;
+  if (!company_name || !owner_email || !password) {
+    return res.status(400).json({ error: 'company_name, owner_email e password são obrigatórios' });
+  }
+
+  // slug único
+  const slug = company_name.toLowerCase()
+    .replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')
+    .substring(0, 30) + '-' + Date.now().toString(36);
+
+  const trial_ends_at = days
+    ? new Date(Date.now() + parseInt(days) * 86400000).toISOString()
+    : '2099-01-01T00:00:00.000Z';
+
+  try {
+    // Cria tenant
+    const tenantRows = await sql`
+      INSERT INTO tenants (slug, company_name, owner_email, owner_name, phone, subscription_status, trial_ends_at, created_at, updated_at)
+      VALUES (${slug}, ${company_name}, ${owner_email}, ${owner_name||''}, ${phone||''}, 'manual', ${trial_ends_at}, NOW(), NOW())
+      RETURNING id
+    `;
+    const tenantId = tenantRows[0].id;
+
+    // Cria usuário admin da conta
+    const hashedPassword = await bcrypt.hash(password, 10);
+    await pool.query(
+      'INSERT INTO users (username, password, email, is_admin, tenant_id, created_at) VALUES ($1,$2,$3,true,$4,NOW())',
+      [owner_email.split('@')[0], hashedPassword, owner_email, tenantId]
+    );
+
+    res.status(201).json({
+      success: true,
+      tenant_id: tenantId,
+      slug,
+      trial_ends_at,
+      login: owner_email.split('@')[0],
+      message: 'Conta de degustação criada com sucesso'
+    });
+  } catch (err) {
+    if (err.message?.includes('unique') || err.message?.includes('duplicate')) {
+      return res.status(409).json({ error: 'E-mail ou slug já cadastrado' });
+    }
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Receita mensal
 router.get('/superadmin/revenue', superAdminAuth, async (req, res) => {
   const events = await sql`

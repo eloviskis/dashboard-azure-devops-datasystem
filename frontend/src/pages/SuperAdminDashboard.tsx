@@ -29,7 +29,7 @@ const SuperAdminDashboard: React.FC<{ onLogout: () => void; adminToken?: string 
   const [token, setToken]         = useState(adminToken || '');
   const [masterKey, setMasterKey] = useState('');
   const [loginErr, setLoginErr]   = useState('');
-  const [tab, setTab]             = useState<'tenants' | 'plans' | 'revenue'>('tenants');
+  const [tab, setTab]             = useState<'tenants' | 'plans' | 'revenue' | 'degustacao'>('tenants');
   const [tenants, setTenants]     = useState<Tenant[]>([]);
   const [stats, setStats]         = useState<Stats | null>(null);
   const [plans, setPlans]         = useState<Plan[]>([]);
@@ -39,6 +39,16 @@ const SuperAdminDashboard: React.FC<{ onLogout: () => void; adminToken?: string 
   const [editStatus, setEditStatus] = useState('');
   const [editTrialDays, setEditTrialDays] = useState('');
   const [editNotes, setEditNotes] = useState('');
+
+  // Degustação: criar conta
+  const [degEmail, setDegEmail]     = useState('');
+  const [degEmpresa, setDegEmpresa] = useState('');
+  const [degNome, setDegNome]       = useState('');
+  const [degPassword, setDegPassword] = useState('');
+  const [degDays, setDegDays]       = useState('30');
+  const [degLoading, setDegLoading] = useState(false);
+  const [degResult, setDegResult]   = useState<{login:string; slug:string; trial_ends_at:string} | null>(null);
+  const [degError, setDegError]     = useState('');
 
   const authHeader = { Authorization: `Bearer ${token}` };
 
@@ -81,6 +91,32 @@ const SuperAdminDashboard: React.FC<{ onLogout: () => void; adminToken?: string 
       fetchAll(adminToken);
     }
   }, [adminToken, fetchAll]);
+
+  async function grantDegustacao(tenantId: number, days: number | null) {
+    await fetch(`${API}/api/superadmin/tenant/${tenantId}/degustacao`, {
+      method: 'POST', headers: { ...authHeader, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ days })
+    });
+    setSelected(null);
+    fetchAll(token);
+  }
+
+  async function createFreeAccount() {
+    if (!degEmail || !degEmpresa || !degPassword) return;
+    setDegLoading(true); setDegError(''); setDegResult(null);
+    try {
+      const r = await fetch(`${API}/api/superadmin/create-free-account`, {
+        method: 'POST', headers: { ...authHeader, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ company_name: degEmpresa, owner_email: degEmail, owner_name: degNome, password: degPassword, days: degDays || null })
+      });
+      const d = await r.json();
+      if (!r.ok) return setDegError(d.error || 'Erro ao criar conta');
+      setDegResult(d);
+      setDegEmail(''); setDegEmpresa(''); setDegNome(''); setDegPassword('');
+      fetchAll(token);
+    } catch(e: any) { setDegError(e.message); }
+    finally { setDegLoading(false); }
+  }
 
   async function patchTenant() {
     if (!selected) return;
@@ -168,10 +204,10 @@ const SuperAdminDashboard: React.FC<{ onLogout: () => void; adminToken?: string 
 
       {/* Tabs */}
       <div className="px-6 flex gap-1 border-b border-ds-border">
-        {(['tenants', 'plans', 'revenue'] as const).map(t => (
+        {(['tenants', 'plans', 'revenue', 'degustacao'] as const).map(t => (
           <button key={t} onClick={() => setTab(t)}
             className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors capitalize ${tab === t ? 'border-ds-green text-ds-green' : 'border-transparent text-ds-text hover:text-ds-light-text'}`}>
-            { t === 'tenants' ? '🏢 Clientes' : t === 'plans' ? '📋 Planos' : '💰 Receita' }
+            { t === 'tenants' ? '🏢 Clientes' : t === 'plans' ? '📋 Planos' : t === 'revenue' ? '💰 Receita' : '🎁 Degustação' }
           </button>
         ))}
       </div>
@@ -247,6 +283,84 @@ const SuperAdminDashboard: React.FC<{ onLogout: () => void; adminToken?: string 
           </div>
         )}
 
+        {/* DEGUSTAÇÃO */}
+        {tab === 'degustacao' && !loading && (
+          <div className="max-w-lg space-y-6">
+            <div className="bg-ds-navy border border-ds-border rounded-xl p-5">
+              <h3 className="font-semibold text-sm mb-4">🎁 Criar nova conta de degustação</h3>
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-ds-text">Empresa *</label>
+                    <input value={degEmpresa} onChange={e=>setDegEmpresa(e.target.value)} className={inputCls+' mt-1'} placeholder="Nome da empresa" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-ds-text">Responsável</label>
+                    <input value={degNome} onChange={e=>setDegNome(e.target.value)} className={inputCls+' mt-1'} placeholder="Nome completo" />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs text-ds-text">E-mail * (será o usuário de login)</label>
+                  <input type="email" value={degEmail} onChange={e=>setDegEmail(e.target.value)} className={inputCls+' mt-1'} placeholder="email@empresa.com" />
+                </div>
+                <div>
+                  <label className="text-xs text-ds-text">Senha inicial *</label>
+                  <input type="text" value={degPassword} onChange={e=>setDegPassword(e.target.value)} className={inputCls+' mt-1'} placeholder="Senha temporária" />
+                </div>
+                <div>
+                  <label className="text-xs text-ds-text">Período gratuito</label>
+                  <div className="flex gap-2 mt-1 flex-wrap">
+                    {[['7','7 dias'],['15','15 dias'],['30','30 dias'],['60','60 dias'],['90','90 dias'],['','Ilimitado']].map(([v,l])=>(
+                      <button key={l} onClick={()=>setDegDays(v)}
+                        className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${degDays===v ? 'bg-ds-green text-ds-dark-blue border-ds-green font-bold' : 'border-ds-border text-ds-text hover:border-ds-green/40'}`}>
+                        {l}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {degError && <p className="text-red-400 text-xs bg-red-500/10 rounded p-2">{degError}</p>}
+                {degResult && (
+                  <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-3 text-xs">
+                    <p className="text-green-400 font-semibold mb-1">✅ Conta criada com sucesso!</p>
+                    <p className="text-ds-text">Login: <span className="text-ds-light-text font-mono">{degResult.login}</span></p>
+                    <p className="text-ds-text">Slug: <span className="text-ds-light-text font-mono">{degResult.slug}</span></p>
+                    <p className="text-ds-text">Válido até: <span className="text-ds-light-text">{degResult.trial_ends_at === '2099-01-01T00:00:00.000Z' ? 'Ilimitado' : new Date(degResult.trial_ends_at).toLocaleDateString('pt-BR')}</span></p>
+                  </div>
+                )}
+                <button onClick={createFreeAccount} disabled={degLoading || !degEmail || !degEmpresa || !degPassword}
+                  className="w-full py-2.5 bg-ds-green text-ds-dark-blue rounded-lg font-bold text-sm hover:brightness-110 disabled:opacity-50">
+                  {degLoading ? 'Criando...' : '🎁 Criar conta gratuita'}
+                </button>
+              </div>
+            </div>
+
+            {/* Liberar degustação em clientes existentes */}
+            {tenants.length > 0 && (
+              <div className="bg-ds-navy border border-ds-border rounded-xl p-5">
+                <h3 className="font-semibold text-sm mb-3">⚡ Liberar degustação para cliente existente</h3>
+                <div className="space-y-2">
+                  {tenants.map(t => (
+                    <div key={t.id} className="flex items-center justify-between bg-ds-dark-blue/50 rounded-lg px-3 py-2">
+                      <div>
+                        <p className="text-sm font-medium">{t.company_name}</p>
+                        <p className="text-xs text-ds-text">{t.owner_email}</p>
+                      </div>
+                      <div className="flex gap-1">
+                        {[['30','30d'],['90','90d'],['','∞']].map(([d,l])=>(
+                          <button key={l} onClick={()=>grantDegustacao(t.id, d ? parseInt(d) : null)}
+                            className="px-2 py-1 text-xs rounded bg-ds-green/10 text-ds-green border border-ds-green/20 hover:bg-ds-green/20 font-medium">
+                            🎁 {l}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* REVENUE */}
         {tab === 'revenue' && !loading && (
           <div className="max-w-lg">
@@ -289,6 +403,18 @@ const SuperAdminDashboard: React.FC<{ onLogout: () => void; adminToken?: string 
                 <label className="text-xs text-ds-text">Notas internas</label>
                 <textarea value={editNotes} onChange={e => setEditNotes(e.target.value)}
                   className="w-full mt-1 bg-ds-dark-blue border border-ds-border rounded-lg px-3 py-2 text-sm text-ds-light-text resize-none" rows={2} />
+              </div>
+              {/* Degustação rápida */}
+              <div>
+                <label className="text-xs text-ds-text">🎁 Degustação rápida (libera acesso manual)</label>
+                <div className="flex gap-2 mt-1 flex-wrap">
+                  {[['7','7 dias'],['15','15 dias'],['30','30 dias'],['60','60 dias'],['90','90 dias'],['','Ilimitado']].map(([d,l])=>(
+                    <button key={l} onClick={() => grantDegustacao(selected!.id, d ? parseInt(d) : null)}
+                      className="px-3 py-1.5 text-xs rounded-lg bg-ds-green/10 text-ds-green border border-ds-green/20 hover:bg-ds-green/20 font-medium transition-colors">
+                      🎁 {l}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
             <div className="flex gap-2 mt-4">
