@@ -132,10 +132,11 @@ const App = () => {
   const defaultTheme = (import.meta.env.VITE_DEFAULT_THEME || 'default') as import('./hooks/useTheme').AppTheme;
   const { theme, toggle: toggleTheme } = useTheme(defaultTheme);
 
-  // Roteamento simples via hash/pathname
+  // Roteamento simples via pathname
   const path = window.location.pathname;
+  const isLoginPage  = path === '/login';
   const [showSignup, setShowSignup] = useState(false);
-  const [showSuperAdmin, setShowSuperAdmin] = useState(path === '/superadmin');
+  const [showSuperAdmin, setShowSuperAdmin] = useState(false);
   const [subscriptionExpired, setSubscriptionExpired] = useState(false);
   // Se autenticado, interceptor de resposta 402 (assinatura expirada)
   useEffect(() => {
@@ -854,27 +855,37 @@ const App = () => {
     );
   }
 
-  // Super Admin
-  if (showSuperAdmin) return <SuperAdminDashboard onLogout={() => { setShowSuperAdmin(false); window.history.pushState({}, '', '/'); }} />;
+  // Super Admin — acessível apenas quando admin autenticado clica no botão
+  if (showSuperAdmin && isAdmin) return <SuperAdminDashboard onLogout={() => setShowSuperAdmin(false)} />;
 
-  // Se não estiver autenticado, mostrar landing ou login
+  // Não autenticado: /login → LoginPage, qualquer outra rota → LandingPage
   if (!isAuthenticated) {
+    if (isLoginPage) {
+      return (
+        <>
+          <LoginPage />
+          {showSignup && (
+            <SignupWizard
+              onSuccess={() => { window.location.reload(); }}
+              onCancel={() => setShowSignup(false)}
+            />
+          )}
+        </>
+      );
+    }
+    // Rota principal → Landing
     return (
       <>
-        <LoginPage />
+        <LandingPage
+          onStartTrial={() => setShowSignup(true)}
+          onLogin={() => window.location.href = '/login'}
+        />
         {showSignup && (
           <SignupWizard
-            onSuccess={(tok, slug) => { localStorage.setItem('auth_token', tok); window.location.reload(); }}
+            onSuccess={() => { window.location.reload(); }}
             onCancel={() => setShowSignup(false)}
           />
         )}
-        {/* Botão flutuante para acessar a landing/signup */}
-        <button
-          onClick={() => setShowSignup(true)}
-          className="fixed bottom-6 right-6 z-50 px-4 py-2 rounded-full bg-ds-green text-ds-dark-blue text-xs font-bold shadow-lg hover:brightness-110 transition-all"
-        >
-          Criar conta gratuita
-        </button>
       </>
     );
   }
@@ -886,7 +897,7 @@ const App = () => {
 
   return (
     <div className="min-h-screen bg-ds-dark-blue">
-      <Header lastSyncStatus={lastSyncStatus} onOpenUserManagement={isAdmin ? () => setShowUserManagement(true) : undefined} onSync={handleSync} syncing={syncing} workItems={workItems} theme={theme} onToggleTheme={toggleTheme} />
+      <Header lastSyncStatus={lastSyncStatus} onOpenUserManagement={isAdmin ? () => setShowUserManagement(true) : undefined} onSync={handleSync} syncing={syncing} workItems={workItems} theme={theme} onToggleTheme={toggleTheme} onOpenSuperAdmin={isAdmin ? () => setShowSuperAdmin(true) : undefined} />
 
       {showUserManagement ? (
         <div className="p-6 md:p-10">

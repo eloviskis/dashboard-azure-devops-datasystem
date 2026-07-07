@@ -228,7 +228,7 @@ const LoginPage: React.FC = () => {
         {/* Right side - Image */}
         <div className="hidden lg:flex w-1/2 relative overflow-hidden">
           <img
-            src={branding.cover_url || '/cover-default.jpg'}
+            src={branding.cover_url || '/imagem-fluxometria.png'}
             alt={branding.company_name}
             className="absolute inset-0 w-full h-full object-cover"
             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}

@@ -32,6 +32,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onStartTrial, onLogin }) => {
         </div>
         <div className="flex items-center gap-4">
           <button onClick={onLogin} className="text-sm text-ds-text hover:text-ds-light-text transition-colors">Entrar</button>
+          <button onClick={() => window.location.href = '/login'} className="text-sm text-ds-text hover:text-ds-light-text transition-colors hidden" aria-hidden />
           <button onClick={onStartTrial} className="px-4 py-2 rounded-lg bg-ds-green text-ds-dark-blue text-sm font-bold hover:brightness-110 transition-all">
             Começar grátis
           </button>

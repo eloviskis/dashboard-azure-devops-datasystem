@@ -11,6 +11,7 @@ import type { AppTheme } from '../hooks/useTheme';
 interface HeaderProps {
     lastSyncStatus: SyncStatus | null;
     onOpenUserManagement?: () => void;
+    onOpenSuperAdmin?: () => void;
     onSync?: () => void;
     syncing?: boolean;
     workItems?: WorkItem[];
@@ -18,7 +19,7 @@ interface HeaderProps {
     onToggleTheme?: () => void;
 }
 
-const Header: React.FC<HeaderProps> = ({ lastSyncStatus, onOpenUserManagement, onSync, syncing, workItems = [], theme = 'default', onToggleTheme }) => {
+const Header: React.FC<HeaderProps> = ({ lastSyncStatus, onOpenUserManagement, onOpenSuperAdmin, onSync, syncing, workItems = [], theme = 'default', onToggleTheme }) => {
     const { user, logout, isAdmin } = useAuth();
     const [showAlerts, setShowAlerts] = useState(false);
     const [dismissedAlertIds, setDismissedAlertIds] = useState<Set<number>>(new Set());
@@ -133,8 +134,7 @@ const Header: React.FC<HeaderProps> = ({ lastSyncStatus, onOpenUserManagement, o
                 <div className="font-sans">
                     <div className="flex items-center gap-3">
                         <h1 className="text-2xl font-bold tracking-wider">
-                            <span className="text-white">DATA</span>
-                            <span className="text-ds-green">SYSTEM</span>
+                            <span className="text-white">FLUXO</span><span className="text-ds-green">METRIA</span>
                         </h1>
                         <div className="has-tooltip">
                            <span className={`h-3 w-3 rounded-full ${syncInfo.colorClass} block`}></span>
@@ -145,7 +145,7 @@ const Header: React.FC<HeaderProps> = ({ lastSyncStatus, onOpenUserManagement, o
                            </span>
                         </div>
                     </div>
-                    <p className="text-sm text-ds-text tracking-widest">DevOps Performance Dashboard</p>
+                    <p className="text-sm text-ds-text tracking-widest">Fluxometria</p>
                 </div>
             </div>
             
@@ -222,6 +222,32 @@ const Header: React.FC<HeaderProps> = ({ lastSyncStatus, onOpenUserManagement, o
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
                         </svg>
                         <span className="hidden sm:inline">Usuários</span>
+                    </button>
+                )}
+                {/* Botão SuperAdmin — só para admin */}
+                {onOpenSuperAdmin && (
+                    <button
+                        onClick={onOpenSuperAdmin}
+                        className="flex items-center gap-2 px-3 py-2 bg-ds-navy hover:bg-ds-border rounded-lg transition-colors text-sm"
+                        title="Painel Super Admin"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-ds-green" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                        </svg>
+                        <span className="hidden sm:inline text-ds-green">Super Admin</span>
+                    </button>
+                )}
+                {/* Botão SuperAdmin — só para admin */}
+                {onOpenSuperAdmin && (
+                    <button
+                        onClick={onOpenSuperAdmin}
+                        className="flex items-center gap-2 px-3 py-2 bg-ds-navy hover:bg-ds-border rounded-lg transition-colors text-sm"
+                        title="Painel Super Admin"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-ds-green" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                        </svg>
+                        <span className="hidden sm:inline text-ds-green">Super Admin</span>
                     </button>
                 )}
                 {/* Toggle de tema claro/noturno */}
