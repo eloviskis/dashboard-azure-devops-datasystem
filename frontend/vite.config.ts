@@ -35,9 +35,9 @@ export default defineConfig({
     },
     proxy: {
       '/api': {
-        target: 'https://dsmetrics.online',
+        target: process.env.VITE_API_URL || 'http://localhost:3001',
         changeOrigin: true,
-        secure: true
+        secure: false
       }
     }
   }

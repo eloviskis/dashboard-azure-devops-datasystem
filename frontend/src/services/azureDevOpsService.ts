@@ -3,7 +3,7 @@ import { PullRequest } from '../types.ts';
 import { SyncStatus } from '../hooks/useAzureDevOpsData.ts';
 
 // Permite usar URL pública do backend via variável de ambiente
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://dsmetrics.online';
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
 // Helper: retorna headers com token JWT de autenticação
 const getAuthHeaders = (): HeadersInit => {

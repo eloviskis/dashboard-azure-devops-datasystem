@@ -18,7 +18,7 @@ const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ onClose }) =>
   const [showNew, setShowNew] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
-  const API_URL = import.meta.env.VITE_API_URL || 'https://dsmetrics.online';
+  const API_URL = import.meta.env.VITE_API_URL || '';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -25,16 +25,18 @@ const app = express();
 // sets headers on EVERY response so the browser never blocks requests.
 // This runs before any other middleware, route handler, or error.
 // ═══════════════════════════════════════════════════════════════════════════════
-const ALLOWED_ORIGINS = [
-  'https://dsmetrics.online',
-  'http://dsmetrics.online',
-  'https://www.dsmetrics.online',
-  'http://www.dsmetrics.online',
+// Origens base (localhost para dev)
+const ALLOWED_ORIGINS_BASE = [
   'http://localhost:5173',
   'http://localhost:3000',
-  'http://187.77.55.172',
-  'https://187.77.55.172'
 ];
+// Origens extras via variável de ambiente (vírgula separada)
+// Ex: ALLOWED_ORIGIN=https://meucliente.com,http://200.10.20.30
+const EXTRA_ORIGINS = (process.env.ALLOWED_ORIGIN || '')
+  .split(',')
+  .map(s => s.trim())
+  .filter(Boolean);
+const ALLOWED_ORIGINS = [...ALLOWED_ORIGINS_BASE, ...EXTRA_ORIGINS];
 
 function setCorsHeaders(req, res) {
   const origin = req.headers.origin;
@@ -236,12 +238,13 @@ const initDatabase = async () => {
       'first_activation_date TEXT',
       'original_estimate REAL', 'remaining_work REAL', 'completed_work REAL',
       'parent_id INTEGER',
-      'categoria TEXT'
+      'categoria TEXT',
+      'bloqueio BOOLEAN DEFAULT FALSE'
     ];
     for (const colDef of columnsToEnsure) {
       const [colName] = colDef.split(' ');
       try {
-        await sql.unsafe(`ALTER TABLE work_items ADD COLUMN IF NOT EXISTS ${colDef}`);
+        await pool.query(`ALTER TABLE work_items ADD COLUMN IF NOT EXISTS ${colDef}`);
       } catch (e) {
         // coluna já existe ou db não suporta IF NOT EXISTS — ignora
       }
@@ -640,6 +643,7 @@ async function syncData() {
         const identificacao = fields['Custom.7ac99842-e0ec-4f18-b91b-53bfe3e3b3f5'] || '';
         const falhaDoProcesso = fields['Custom.Falhadoprocesso'] || '';
         const impedimento = fields['Custom.Impedimento'] === true;
+        const bloqueio    = fields['Custom.Bloqueio']    === true;
         const categoria = fields['Custom.Category'] || fields['Custom.Categoria'] || null;
 
         await sql`
@@ -648,13 +652,13 @@ async function syncData() {
             code_review_level1, code_review_level2, custom_type, root_cause_status, squad, area, complexity,
             reincidencia, performance_days, qa, causa_raiz, root_cause_legacy, created_by, po, ready_date, done_date,
             root_cause_task, root_cause_team, root_cause_version, dev, platform, application, branch_base, delivered_version, base_version,
-            identificacao, falha_do_processo, impedimento, categoria, synced_at)
+            identificacao, falha_do_processo, impedimento, bloqueio, categoria, synced_at)
           VALUES (${workItemId}, ${title}, ${state}, ${type}, ${assignedTo}, ${team}, ${areaPath}, ${iterationPath},
             ${createdDate}, ${changedDate}, ${closedDate}, ${storyPoints}, ${tags}, ${tipoCliente}, ${priority}, ${url}, ${activatedDate || null},
             ${codeReviewLevel1}, ${codeReviewLevel2}, ${customType}, ${rootCauseStatus}, ${squad}, ${area}, ${complexity},
             ${reincidencia}, ${performanceDays}, ${qa}, ${causaRaiz}, ${rootCauseLegacy}, ${createdBy}, ${po}, ${readyDate}, ${doneDate},
             ${rootCauseTask}, ${rootCauseTeam}, ${rootCauseVersion}, ${dev}, ${platform}, ${application}, ${branchBase}, ${deliveredVersion}, ${baseVersion},
-            ${identificacao}, ${falhaDoProcesso}, ${impedimento}, ${categoria}, ${new Date().toISOString()})
+            ${identificacao}, ${falhaDoProcesso}, ${impedimento}, ${bloqueio}, ${categoria}, ${new Date().toISOString()})
           ON CONFLICT (work_item_id) DO UPDATE SET
             title = EXCLUDED.title, state = EXCLUDED.state, type = EXCLUDED.type, assigned_to = EXCLUDED.assigned_to,
             team = EXCLUDED.team, area_path = EXCLUDED.area_path, iteration_path = EXCLUDED.iteration_path,
@@ -690,6 +694,7 @@ async function syncData() {
             identificacao = EXCLUDED.identificacao,
             falha_do_processo = EXCLUDED.falha_do_processo,
             impedimento = EXCLUDED.impedimento,
+            bloqueio    = EXCLUDED.bloqueio,
             categoria = EXCLUDED.categoria,
             synced_at = EXCLUDED.synced_at
         `;
@@ -1184,6 +1189,19 @@ app.put('/api/settings/:key', authenticateToken, requireAdmin, async (req, res) 
   }
 });
 
+// Branding público (sem auth) — usado na tela de login antes de autenticar
+app.get('/api/public/branding', async (req, res) => {
+  try {
+    const rows = await sql`SELECT key, value FROM app_settings WHERE key IN ('branding')`;
+    const setting = rows[0];
+    const defaults = { company_name: 'DevOps Dashboard', logo_url: '', footer_text: '', cover_url: '' };
+    const branding = setting ? { ...defaults, ...JSON.parse(setting.value) } : defaults;
+    res.json(branding);
+  } catch {
+    res.json({ company_name: 'DevOps Dashboard', logo_url: '', footer_text: '', cover_url: '' });
+  }
+});
+
 // ===========================================
 // TEAM MEMBER AVATARS ENDPOINT
 // ===========================================
@@ -1329,7 +1347,8 @@ app.get('/api/items', authenticateToken, async (req, res) => {
         // Campos de Identificação e Falha do Processo
         identificacao: row.identificacao,
         falhaDoProcesso: row.falha_do_processo,
-        impedimento: row.impedimento || false
+        impedimento: row.impedimento || false,
+        bloqueio: row.bloqueio || false
       };
     });
 
@@ -1401,7 +1420,8 @@ app.get('/api/items/period/:days', authenticateToken, async (req, res) => {
       // Campos de Identificação e Falha do Processo
       identificacao: row.identificacao,
       falhaDoProcesso: row.falha_do_processo,
-      impedimento: row.impedimento || false
+      impedimento: row.impedimento || false,
+      bloqueio: row.bloqueio || false
     }));
 
     res.json(items);
@@ -1875,7 +1895,7 @@ app.get('/api/devtracker/active-tasks', authenticateToken, async (req, res) => {
         w.assigned_to, w.po, w.qa,
         w.first_activation_date, w.created_date,
         w.changed_date, w.priority, w.story_points, w.url,
-        w.impedimento, w.categoria, w.area_path,
+        w.impedimento, w.bloqueio, w.categoria, w.area_path,
         f.title        AS feature_title,
         f.work_item_id AS feature_id,
         av.image_url   AS avatar_url,
@@ -2301,39 +2321,40 @@ app.get('/api/qa-tracker/items-by-qa', authenticateToken, async (req, res) => {
 // GET /api/qa-tracker/versions — versões únicas disponíveis no DevOps (com pelo menos 1 item)
 app.get('/api/qa-tracker/versions', authenticateToken, async (req, res) => {
   try {
-    // Extrai versões apenas no formato [X.X.X.X] (mesmo padrão usado pelo endpoint /items)
-    const tagRows = await sql`
-      SELECT tags FROM work_items
-      WHERE tags IS NOT NULL AND tags LIKE '%[%'
-    `;
-    const versionSet = new Set();
-    const versionPattern = /\[(\d+\.\d+\.\d+\.\d+)\]/g;
-    for (const row of tagRows) {
-      let m;
-      while ((m = versionPattern.exec(row.tags || '')) !== null) {
-        versionSet.add(m[1]);
-      }
-      versionPattern.lastIndex = 0;
-    }
-    const dvRows = await sql`
-      SELECT DISTINCT delivered_version FROM work_items
-      WHERE delivered_version IS NOT NULL AND delivered_version != ''
-    `;
-    dvRows.forEach(r => { if (/^\d+\.\d+\.\d+\.\d+$/.test(r.delivered_version)) versionSet.add(r.delivered_version); });
-    const candidates = [...versionSet].sort((a, b) => {
+    const offset = Math.max(0, parseInt(req.query.offset) || 0);
+    const limit  = Math.min(50, Math.max(1, parseInt(req.query.limit) || 10));
+
+    // 2 queries em paralelo em vez de N+1 — extrai versões direto do banco
+    const [tagRows, dvRows] = await Promise.all([
+      sql`
+        SELECT DISTINCT matches[1] AS version
+        FROM work_items, regexp_matches(tags, '\\[(\\d+\\.\\d+\\.\\d+\\.\\d+)\\]', 'g') AS matches
+        WHERE tags LIKE '%[%'
+      `,
+      sql`
+        SELECT DISTINCT delivered_version AS version
+        FROM work_items
+        WHERE delivered_version ~ '^\\d+\\.\\d+\\.\\d+\\.\\d+$'
+          AND delivered_version IS NOT NULL AND delivered_version != ''
+      `,
+    ]);
+
+    const versionSet = new Set([
+      ...tagRows.map(r => r.version),
+      ...dvRows.map(r => r.version),
+    ]);
+    const sorted = [...versionSet].sort((a, b) => {
       const pa = a.split('.').map(Number);
       const pb = b.split('.').map(Number);
       for (let i = 0; i < 4; i++) { if (pa[i] !== pb[i]) return pb[i] - pa[i]; }
       return 0;
     });
-    // Filtra versões sem nenhum item (usa a mesma condição do endpoint /items)
-    const withItems = [];
-    for (const v of candidates) {
-      const tagPattern = `%[${v}]%`;
-      const cnt = await sql`SELECT COUNT(*) AS c FROM work_items WHERE tags ILIKE ${tagPattern} OR delivered_version = ${v}`;
-      if (Number(cnt[0].c) > 0) withItems.push(v);
-    }
-    res.json(withItems);
+
+    res.json({
+      versions: sorted.slice(offset, offset + limit),
+      total: sorted.length,
+      hasMore: offset + limit < sorted.length,
+    });
   } catch (err) {
     console.error('❌ GET /api/qa-tracker/versions:', err.message);
     res.status(500).json({ error: err.message });
@@ -2474,6 +2495,210 @@ app.delete('/api/qa-tracker/records/:id', authenticateToken, async (req, res) =>
     res.json({ success: true });
   } catch (err) {
     console.error('❌ DELETE /api/qa-tracker/records/:id:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/qa-tracker/version-items?version=X — itens com registros QA para drill-down do histórico
+app.get('/api/qa-tracker/version-items', authenticateToken, async (req, res) => {
+  try {
+    const { version } = req.query;
+    if (!version) return res.status(400).json({ error: 'version obrigatório' });
+    const tagPattern = `%[${version}]%`;
+    const rows = await sql`
+      SELECT
+        wi.work_item_id, wi.title, wi.type, wi.area_path, wi.assigned_to, wi.qa,
+        wi.state, wi.priority, wi.tags, wi.delivered_version, wi.tipo_cliente,
+        wi.story_points, wi.url,
+        qtr.id          AS rec_id,
+        qtr.version     AS qtr_version,
+        qtr.qa_person, qtr.status, qtr.obs, qtr.cts, qtr.attachments,
+        qtr.override_desc, qtr.override_client, qtr.override_tipo, qtr.override_area
+      FROM work_items wi
+      LEFT JOIN qa_test_records qtr
+        ON qtr.work_item_id = wi.work_item_id AND qtr.version = ${version}
+      WHERE wi.tags ILIKE ${tagPattern} OR wi.delivered_version = ${version}
+      ORDER BY wi.priority ASC NULLS LAST, wi.work_item_id ASC
+    `;
+    res.json(rows);
+  } catch (err) {
+    console.error('❌ GET /api/qa-tracker/version-items:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/qa-tracker/auto-populate — cria e atualiza registros QA com base no estado DevOps
+app.post('/api/qa-tracker/auto-populate', authenticateToken, async (req, res) => {
+  try {
+    const DONE_STATES = ['Closed', 'Finished', 'Resolved', 'Completed', 'Pronto', 'Done'];
+
+    // 1. Busca todos os pares (versão, item) com o status QA atual em uma única query
+    const allPairs = await sql`
+      SELECT
+        v.version,
+        wi.work_item_id,
+        wi.type,
+        wi.state,
+        wi.bloqueio,
+        wi.impedimento,
+        wi.delivered_version,
+        wi.tags,
+        qtr.status AS current_status
+      FROM (
+        SELECT DISTINCT matches[1] AS version, work_item_id
+        FROM work_items, regexp_matches(tags, '\\[(\\d+\\.\\d+\\.\\d+\\.\\d+)\\]', 'g') AS matches
+        WHERE tags LIKE '%[%'
+        UNION
+        SELECT DISTINCT delivered_version AS version, work_item_id
+        FROM work_items
+        WHERE delivered_version ~ '^\\d+\\.\\d+\\.\\d+\\.\\d+$'
+          AND delivered_version IS NOT NULL AND delivered_version != ''
+      ) v
+      JOIN work_items wi ON wi.work_item_id = v.work_item_id
+      LEFT JOIN qa_test_records qtr
+        ON qtr.work_item_id = v.work_item_id AND qtr.version = v.version
+    `;
+
+    const VERSION_PATTERN = /^\d+\.\d+\.\d+\.\d+$/;
+    const TAG_PATTERN = /\d+\.\d+\.\d+\.\d+/;
+
+    const toInsert = [];
+    const toUpdate = [];
+
+    for (const pair of allPairs) {
+      // Nunca sobrescreve registros já definidos manualmente como done/blocked
+      if (pair.current_status === 'done' || pair.current_status === 'blocked') continue;
+
+      // Eventuality não tem delivered_version — só exige tag com versão
+      // Para os demais tipos exige os DOIS campos: delivered_version E tag com versão
+      const hasDeliveredVersion = pair.delivered_version && VERSION_PATTERN.test(pair.delivered_version);
+      const hasTagVersion = !!(pair.tags && TAG_PATTERN.test(pair.tags));
+      const isEventuality = pair.type === 'Eventuality';
+      const hasBothVersionFields = isEventuality ? hasTagVersion : (hasDeliveredVersion && hasTagVersion);
+
+      let newStatus;
+      if (pair.bloqueio === true && pair.impedimento === true) {
+        newStatus = 'blocked';
+      } else if (DONE_STATES.includes(pair.state) && hasBothVersionFields) {
+        newStatus = 'done';
+      } else {
+        newStatus = 'pending';
+      }
+
+      if (pair.current_status === null) {
+        // Sem registro — criar
+        toInsert.push({ work_item_id: pair.work_item_id, version: pair.version, status: newStatus });
+      } else if (pair.current_status === 'pending' && newStatus !== 'pending') {
+        // Registro pendente que mudou de estado no DevOps — atualizar
+        toUpdate.push({ work_item_id: pair.work_item_id, version: pair.version, status: newStatus });
+      }
+    }
+
+    let inserted = 0, updated = 0;
+
+    // 2. Bulk insert dos registros novos — pg parameterizado, lotes de 500
+    if (toInsert.length > 0) {
+      const BATCH = 500;
+      for (let i = 0; i < toInsert.length; i += BATCH) {
+        const chunk = toInsert.slice(i, i + BATCH);
+        const placeholders = chunk.map((_, j) => `($${j * 3 + 1}, $${j * 3 + 2}, $${j * 3 + 3})`).join(',');
+        const flatValues = chunk.flatMap(r => [r.work_item_id, r.version, r.status]);
+        await pool.query(
+          `INSERT INTO qa_test_records (work_item_id, version, status) VALUES ${placeholders}
+           ON CONFLICT (work_item_id, version) DO NOTHING`,
+          flatValues
+        );
+      }
+      inserted = toInsert.length;
+    }
+
+    // 3. Batch update dos registros pendentes — pg unnest parameterizado
+    if (toUpdate.length > 0) {
+      const ids      = toUpdate.map(r => r.work_item_id);
+      const versions = toUpdate.map(r => r.version);
+      const statuses = toUpdate.map(r => r.status);
+      await pool.query(
+        `UPDATE qa_test_records q
+         SET status = upd.status, updated_at = NOW()
+         FROM unnest($1::int[], $2::text[], $3::text[]) AS upd(work_item_id, version, status)
+         WHERE q.work_item_id = upd.work_item_id
+           AND q.version = upd.version
+           AND q.status = 'pending'`,
+        [ids, versions, statuses]
+      );
+      updated = toUpdate.length;
+    }
+
+    // 4. Correção retroativa: downgrade done→pending para itens que não têm os DOIS campos de versão
+    // (protege apenas registros futuramente editados manualmente: se qa_person estiver preenchido, preserva)
+    const retrofix = await pool.query(`
+      UPDATE qa_test_records q
+      SET status = 'pending', updated_at = NOW()
+      FROM work_items wi
+      WHERE q.work_item_id = wi.work_item_id
+        AND q.status = 'done'
+        AND (q.qa_person IS NULL OR q.qa_person = '')
+        AND NOT (
+          -- Eventuality: só precisa de tag com versão
+          (wi.type = 'Eventuality' AND wi.tags ~ '\\d+\\.\\d+\\.\\d+\\.\\d+')
+          -- Demais tipos: precisa de delivered_version E tag com versão
+          OR (wi.type != 'Eventuality' AND wi.delivered_version ~ '^\\d+\\.\\d+\\.\\d+\\.\\d+$' AND wi.tags ~ '\\d+\\.\\d+\\.\\d+\\.\\d+')
+        )
+    `);
+    const corrected = retrofix.rowCount ?? 0;
+
+    const versionsProcessed = new Set(allPairs.map(p => p.version)).size;
+    res.json({ versionsProcessed, inserted, updated, corrected, total: inserted + updated + corrected });
+  } catch (err) {
+    console.error('❌ POST /api/qa-tracker/auto-populate:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/qa-tracker/version-summary — resumo (done/pending/blocked) por versão
+app.get('/api/qa-tracker/version-summary', authenticateToken, async (req, res) => {
+  try {
+    // Reutiliza a mesma lógica de /versions para obter a lista ordenada
+    const tagRows = await sql`SELECT tags FROM work_items WHERE tags IS NOT NULL AND tags LIKE '%[%'`;
+    const versionSet = new Set();
+    const versionPattern = /\[(\d+\.\d+\.\d+\.\d+)\]/g;
+    for (const row of tagRows) {
+      let m;
+      while ((m = versionPattern.exec(row.tags || '')) !== null) versionSet.add(m[1]);
+      versionPattern.lastIndex = 0;
+    }
+    const dvRows = await sql`SELECT DISTINCT delivered_version FROM work_items WHERE delivered_version IS NOT NULL AND delivered_version != ''`;
+    dvRows.forEach(r => { if (/^\d+\.\d+\.\d+\.\d+$/.test(r.delivered_version)) versionSet.add(r.delivered_version); });
+
+    const candidates = [...versionSet].sort((a, b) => {
+      const pa = a.split('.').map(Number);
+      const pb = b.split('.').map(Number);
+      for (let i = 0; i < 4; i++) { if (pa[i] !== pb[i]) return pb[i] - pa[i]; }
+      return 0;
+    }).slice(0, 12); // últimas 12 versões
+
+    const summary = [];
+    for (const v of candidates) {
+      const tagPattern = `%[${v}]%`;
+      const itemRows = await sql`
+        SELECT work_item_id FROM work_items
+        WHERE tags ILIKE ${tagPattern} OR delivered_version = ${v}
+      `;
+      const total = itemRows.length;
+      if (total === 0) continue;
+      const ids = itemRows.map(r => r.work_item_id);
+      const recRows = await sql`
+        SELECT status FROM qa_test_records
+        WHERE version = ${v} AND work_item_id = ANY(${ids})
+      `;
+      const done    = recRows.filter(r => r.status === 'done').length;
+      const blocked = recRows.filter(r => r.status === 'blocked').length;
+      const pending = total - done - blocked;
+      summary.push({ version: v, total, done, pending, blocked });
+    }
+    res.json(summary.reverse()); // ordem cronológica
+  } catch (err) {
+    console.error('❌ GET /api/qa-tracker/version-summary:', err.message);
     res.status(500).json({ error: err.message });
   }
 });

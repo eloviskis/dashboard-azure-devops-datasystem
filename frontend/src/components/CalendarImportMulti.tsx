@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 
-const API = import.meta.env.VITE_API_URL || 'https://dsmetrics.online';
+const API = import.meta.env.VITE_API_URL || '';
 
 interface CalendarEvent {
   id: string;
