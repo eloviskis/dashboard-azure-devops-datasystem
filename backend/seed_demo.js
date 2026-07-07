@@ -22,7 +22,7 @@ const TYPES = ['User Story', 'Bug', 'User Story', 'User Story', 'Feature', 'Melh
 const STATES_CLOSED   = ['Closed', 'Resolved', 'Finished', 'Pronto'];
 const STATES_OPEN     = ['Active', 'In Progress', 'New', 'Para Desenvolver', 'Aguardando QA', 'Aguardando Code Review'];
 
-const CLIENTES = ['Castelini', 'Boltz', 'Multilog', 'Mundial Calçados', 'Condado', 'Frente de Loja', 'Diretoria', null];
+const CLIENTES = ['Veritas Logistica', 'Apex Distribuidora', 'Nordex Industria', 'Suprema Calcados', 'Horizonte Varejo', 'Central Operacoes', 'Diretoria Corp', null];
 
 const AREAS = [
   'USE\\Contas a Receber', 'USE\\Contas a Pagar', 'USE\\Financeiro',
