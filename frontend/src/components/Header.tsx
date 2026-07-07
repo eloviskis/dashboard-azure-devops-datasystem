@@ -125,9 +125,9 @@ const Header: React.FC<HeaderProps> = ({ lastSyncStatus, onOpenUserManagement, o
     }, [lastSyncStatus]);
 
     return (
-        <header className="bg-ds-dark-blue text-ds-light-text p-5 px-10 border-b border-ds-border flex items-center justify-between">
-            <div className="flex items-center gap-4">
-                <svg width="38" height="38" viewBox="0 0 48 48" fill="none">
+        <header className="bg-ds-dark-blue text-ds-light-text px-3 sm:px-6 lg:px-10 py-3 border-b border-ds-border flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+                <svg width="32" height="32" viewBox="0 0 48 48" fill="none" className="shrink-0">
                   <circle cx="24" cy="24" r="22" fill="#1A6EBD" opacity="0.15"/>
                   <circle cx="24" cy="24" r="22" stroke="#1A6EBD" strokeWidth="2"/>
                   <path d="M12 20 Q24 10 36 20" stroke="#4BA3E3" strokeWidth="2.5" strokeLinecap="round" fill="none"/>
@@ -135,13 +135,13 @@ const Header: React.FC<HeaderProps> = ({ lastSyncStatus, onOpenUserManagement, o
                   <path d="M36 28 Q24 38 12 28" stroke="#74C0F5" strokeWidth="2.5" strokeLinecap="round" fill="none"/>
                   <path d="M18 32 L12 28 L18 24" stroke="#74C0F5" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
                 </svg>
-                <div className="font-sans">
-                    <div className="flex items-center gap-3">
-                        <h1 className="text-2xl font-bold tracking-wider">
+                <div className="font-sans min-w-0">
+                    <div className="flex items-center gap-2">
+                        <h1 className="text-base sm:text-xl lg:text-2xl font-bold tracking-wider">
                             <span className="text-ds-light-text">FLUXO</span><span className="text-ds-green">METRIA</span>
                         </h1>
                         <div className="has-tooltip">
-                           <span className={`h-3 w-3 rounded-full ${syncInfo.colorClass} block`}></span>
+                           <span className={`h-2.5 w-2.5 rounded-full ${syncInfo.colorClass} block shrink-0`}></span>
                            <span className='tooltip rounded shadow-lg p-2 bg-ds-navy text-ds-light-text -mt-14 ml-4 text-xs whitespace-nowrap'>
                              {syncInfo.dateText ? `Última Sincronização: ${syncInfo.dateText}` : syncInfo.text}
                              {syncInfo.dateText && <br />}

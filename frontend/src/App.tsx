@@ -914,7 +914,7 @@ const App = () => {
       )}
 
       {showUserManagement ? (
-        <div className="p-6 md:p-10">
+        <div className="p-3 sm:p-6 md:p-10">
           <div className="flex items-center gap-4 mb-6">
             <button
               onClick={() => setShowUserManagement(false)}
@@ -927,7 +927,7 @@ const App = () => {
           <UserManagementPage />
         </div>
       ) : (
-      <div className="p-6 md:p-10">
+      <div className="p-3 sm:p-6 md:p-10">
         <div className="mb-6">
             <div className="flex border-b border-ds-border overflow-x-auto tabs-scrollbar"
                  ref={tabsScrollRef}>

@@ -128,6 +128,29 @@ body {
   transition: filter 0.2s;
 }
 .login-btn:hover:not(:disabled) { filter: brightness(1.1); }
+
+/* ─── Responsividade global ─────────────────────────────────── */
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+*, *::before, *::after { box-sizing: border-box; }
+body { overflow-x: hidden; }
+
+/* Tabelas horizontalmente roláveis em mobile */
+.table-responsive { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+/* Charts — nunca ultrapassam a largura do container */
+.recharts-wrapper, .recharts-responsive-container { max-width: 100%; }
+
+/* Scrollbar tabs e painéis laterais */
+.tabs-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+.tabs-scrollbar::-webkit-scrollbar { display: none; }
+
+/* Touch-friendly: área mínima de toque para botões */
+button, a, [role="button"] { min-height: 36px; }
+
+/* Safe area para dispositivos com notch (iPhone) */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+}
 .login-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* Login Bluey light */
