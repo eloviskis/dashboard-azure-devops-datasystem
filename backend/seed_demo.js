@@ -10,12 +10,12 @@ const pool = new Pool({
 const TEAMS = ['Franquia', 'Castelini', 'Estratégico', 'Tático', 'Wakanda', 'Boltz', 'Sustentação'];
 
 const DEVS = [
-  'Allan Rocha', 'Bruno Mendes', 'Carlos Lima', 'Daniela Souza', 'Eduardo Ferreira',
-  'Fernanda Costa', 'Gabriel Santos', 'Helena Oliveira', 'Igor Pereira', 'Juliana Nunes',
-  'Kleber Martins', 'Larissa Carvalho', 'Marcos Silva', 'Natália Gomes', 'Otávio Reis',
+  'Marina Duarte', 'Rafael Alves', 'Camila Ramos', 'Diego Mendes', 'Lucas Cardoso',
+  'Beatriz Lopes', 'Thiago Neves', 'Anderson Pinto', 'Rodrigo Figueira', 'Juliana Moreira',
+  'Felipe Barbosa', 'Vanessa Castro', 'Leonardo Azevedo', 'Paulo Ribeiro', 'Aline Ferraz',
 ];
 
-const QA_PEOPLE = ['Allan Rocha', 'Fernanda Costa', 'Juliana Nunes', 'Natália Gomes'];
+const QA_PEOPLE = ['Marina Duarte', 'Vanessa Castro', 'Aline Ferraz', 'Beatriz Lopes'];
 
 const TYPES = ['User Story', 'Bug', 'User Story', 'User Story', 'Feature', 'Melhoria', 'Bug', 'Task', 'Issue', 'User Story'];
 
@@ -25,9 +25,9 @@ const STATES_OPEN     = ['Active', 'In Progress', 'New', 'Para Desenvolver', 'Ag
 const CLIENTES = ['Veritas Logistica', 'Apex Distribuidora', 'Nordex Industria', 'Suprema Calcados', 'Horizonte Varejo', 'Central Operacoes', 'Diretoria Corp', null];
 
 const AREAS = [
-  'USE\\Contas a Receber', 'USE\\Contas a Pagar', 'USE\\Financeiro',
-  'USE\\Vendas', 'USE\\Estoque', 'USE\\Compras', 'USE\\Fiscal', 'USE\\Integração',
-  'USE\\Relatórios', 'USE\\Cadastros', 'USE\\Autenticação', 'USE\\Dashboard',
+  'FLEX\\Contas a Receber', 'FLEX\\Contas a Pagar', 'FLEX\\Financeiro',
+  'FLEX\\Vendas', 'FLEX\\Estoque', 'FLEX\\Compras', 'FLEX\\Fiscal', 'FLEX\\Integracao',
+  'FLEX\\Relatorios', 'FLEX\\Cadastros', 'FLEX\\Autenticacao', 'FLEX\\Dashboard',
 ];
 
 const BUG_TITLES = [
@@ -170,8 +170,7 @@ function generateWorkItem(id) {
     assigned_to: dev,
     team,
     area_path: area,
-    iteration_path: `USE\\Sprint ${randInt(1, 24)}`,
-    created_date: formatDate(createdDate),
+    iteration_path: `FLEX\\Sprint ${randInt(1, 24)}`,    created_date: formatDate(createdDate),
     changed_date: formatDate(closedDate || addDays(createdDate, randInt(0, daysCreated))),
     closed_date: closedDate ? formatDate(closedDate) : null,
     first_activation_date: firstActivationDate ? formatDate(firstActivationDate) : null,
@@ -184,8 +183,7 @@ function generateWorkItem(id) {
     bloqueio: Math.random() < 0.05,
     delivered_version,
     synced_at: formatDate(new Date()),
-    url: `https://dev.azure.com/fluxometria-demo/USE/_workitems/edit/${70000 + id}`,
-  };
+    url: `https://dev.azure.com/fluxometria-demo/FLEX/_workitems/edit/${70000 + id}`,  };
 }
 
 // ─── Main ──────────────────────────────────────────────────────────────────────
@@ -233,7 +231,7 @@ async function main() {
       const createdAt = daysAgo(daysCreated);
       const closedAt = addDays(createdAt, randInt(1, 7));
       const status = Math.random() < 0.8 ? 'completed' : 'active';
-      const repo = rand(['USE-Backend', 'USE-Frontend', 'USE-Mobile', 'USE-Integrations', 'USE-Reports']);
+      const repo = rand(['flex-api-core', 'flex-web-app', 'flex-mobile', 'flex-integrations', 'flex-reports']);
 
       await client.query(`
         INSERT INTO pull_requests (
