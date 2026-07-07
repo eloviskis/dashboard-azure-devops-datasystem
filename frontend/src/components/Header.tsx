@@ -127,10 +127,13 @@ const Header: React.FC<HeaderProps> = ({ lastSyncStatus, onOpenUserManagement, o
     return (
         <header className="bg-ds-dark-blue text-ds-light-text p-5 px-10 border-b border-ds-border flex items-center justify-between">
             <div className="flex items-center gap-4">
-                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M12 2L2 7V17L12 22L22 17V7L12 2Z" stroke="#7FD320" strokeWidth="2" strokeLinejoin="round"/>
-                    <path d="M2 7L12 12M22 7L12 12M12 22V12" stroke="#7FD320" strokeWidth="2" strokeLinejoin="round"/>
-                    <path d="M17 4.5L7 9.5" stroke="#7FD320" strokeOpacity="0.7" strokeWidth="1.5" strokeLinejoin="round"/>
+                <svg width="38" height="38" viewBox="0 0 48 48" fill="none">
+                  <circle cx="24" cy="24" r="22" fill="#1A6EBD" opacity="0.15"/>
+                  <circle cx="24" cy="24" r="22" stroke="#1A6EBD" strokeWidth="2"/>
+                  <path d="M12 20 Q24 10 36 20" stroke="#4BA3E3" strokeWidth="2.5" strokeLinecap="round" fill="none"/>
+                  <path d="M30 16 L36 20 L30 24" stroke="#4BA3E3" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+                  <path d="M36 28 Q24 38 12 28" stroke="#74C0F5" strokeWidth="2.5" strokeLinecap="round" fill="none"/>
+                  <path d="M18 32 L12 28 L18 24" stroke="#74C0F5" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
                 </svg>
                 <div className="font-sans">
                     <div className="flex items-center gap-3">
