@@ -1214,6 +1214,60 @@ app.get('/api/public/branding', async (req, res) => {
   }
 });
 
+// Formulário de contato público
+app.post('/api/public/contact', async (req, res) => {
+  const { name, email, company, message } = req.body;
+  if (!name || !email || !message) {
+    return res.status(400).json({ error: 'Nome, e-mail e mensagem são obrigatórios' });
+  }
+  try {
+    await sql`
+      INSERT INTO app_settings (key, value, updated_at)
+      VALUES (${'contact_' + Date.now()}, ${JSON.stringify({ name, email, company, message, date: new Date().toISOString() })}, NOW())
+    `;
+  } catch { /* ignora se falhar ao salvar */ }
+  res.json({ ok: true });
+});
+
+// Configurações Azure DevOps (admin) — atualiza em memória + app_settings
+app.put('/api/admin/azure-settings', authenticateToken, async (req, res) => {
+  if (!req.user?.isAdmin && req.user?.role !== 'admin') {
+    return res.status(403).json({ error: 'Acesso negado' });
+  }
+  const { organization, project, pat } = req.body;
+  if (!organization || !project || !pat) {
+    return res.status(400).json({ error: 'organization, project e pat são obrigatórios' });
+  }
+  // Atualiza em memória imediatamente
+  AZURE_CONFIG.organization = organization.trim();
+  AZURE_CONFIG.project = project.trim();
+  AZURE_CONFIG.pat = pat.trim();
+  // Salva no banco para persistir após restart
+  const encPat = saas.encryptPAT ? saas.encryptPAT(pat.trim()) : pat.trim();
+  await sql`
+    INSERT INTO app_settings (key, value, updated_at)
+    VALUES ('azure_config', ${JSON.stringify({ organization: organization.trim(), project: project.trim(), pat_enc: encPat })}, NOW())
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
+  `;
+  // Dispara sincronização imediata
+  if (isConfigured()) {
+    syncData().catch(console.error);
+  }
+  res.json({ ok: true, organization: AZURE_CONFIG.organization, project: AZURE_CONFIG.project });
+});
+
+// Lê configuração Azure atual (admin)
+app.get('/api/admin/azure-settings', authenticateToken, async (req, res) => {
+  if (!req.user?.isAdmin && req.user?.role !== 'admin') {
+    return res.status(403).json({ error: 'Acesso negado' });
+  }
+  res.json({
+    organization: AZURE_CONFIG.organization !== 'your-organization' ? AZURE_CONFIG.organization : '',
+    project: AZURE_CONFIG.project !== 'your-project' ? AZURE_CONFIG.project : '',
+    configured: isConfigured(),
+  });
+});
+
 // ===========================================
 // TEAM MEMBER AVATARS ENDPOINT
 // ===========================================

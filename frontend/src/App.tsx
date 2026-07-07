@@ -74,6 +74,8 @@ import SignupWizard from './pages/SignupWizard.tsx';
 import PaymentWall from './pages/PaymentWall.tsx';
 import SuperAdminDashboard from './pages/SuperAdminDashboard.tsx';
 import { PrivacyPolicy, TermsOfUse, DeleteAccount } from './pages/LegalPages.tsx';
+import ContactPage from './pages/ContactPage.tsx';
+import AzureConfigModal from './components/AzureConfigModal.tsx';
 
 // Import Types
 import { WorkItem, WorkItemFilters } from './types.ts';
@@ -158,6 +160,7 @@ const App = () => {
     return urlTab && DEFAULT_TAB_CONFIG.some(t => t.id === urlTab) ? urlTab : 'executive';
   });
   const [showUserManagement, setShowUserManagement] = useState(false);
+  const [showAzureConfig, setShowAzureConfig] = useState(false);
   const { workItems, loading: loadingWIs, error: errorWIs, lastSyncStatus, syncing, handleSync } = useAzureDevOpsData(isAuthenticated);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -860,6 +863,7 @@ const App = () => {
   if (path === '/privacidade') return <PrivacyPolicy />;
   if (path === '/termos') return <TermsOfUse />;
   if (path === '/excluir-conta') return <DeleteAccount />;
+  if (path === '/contato') return <ContactPage />;
 
   // Super Admin — acessível apenas quando admin autenticado clica no botão
   if (showSuperAdmin && isAdmin) return <SuperAdminDashboard onLogout={() => setShowSuperAdmin(false)} adminToken={token || ''} />;
@@ -903,7 +907,11 @@ const App = () => {
 
   return (
     <div className="min-h-screen bg-ds-dark-blue">
-      <Header lastSyncStatus={lastSyncStatus} onOpenUserManagement={isAdmin ? () => setShowUserManagement(true) : undefined} onSync={handleSync} syncing={syncing} workItems={workItems} theme={theme} onToggleTheme={toggleTheme} onOpenSuperAdmin={isAdmin ? () => setShowSuperAdmin(true) : undefined} />
+      <Header lastSyncStatus={lastSyncStatus} onOpenUserManagement={isAdmin ? () => setShowUserManagement(true) : undefined} onSync={handleSync} syncing={syncing} workItems={workItems} theme={theme} onToggleTheme={toggleTheme} onOpenSuperAdmin={isAdmin ? () => setShowSuperAdmin(true) : undefined} onOpenAzureConfig={isAdmin ? () => setShowAzureConfig(true) : undefined} />
+      {/* Banner de configuração Azure — aparece para admin quando não configurado ou quando clica no link */}
+      {isAdmin && showAzureConfig && (
+        <AzureConfigModal token={token || ''} onClose={() => setShowAzureConfig(false)} />
+      )}
 
       {showUserManagement ? (
         <div className="p-6 md:p-10">

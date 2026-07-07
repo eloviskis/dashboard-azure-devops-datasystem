@@ -146,6 +146,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ onStartTrial, onLogin }) => {
           <a href="/termos" className="hover:text-ds-text transition-colors">Termos de Uso</a>
           <span>·</span>
           <a href="/excluir-conta" className="hover:text-ds-text transition-colors">Excluir Conta</a>
+          <span>·</span>
+          <a href="/contato" className="hover:text-ds-text transition-colors">Contato</a>
         </div>
         <p>© {new Date().getFullYear()} Fluxometria</p>
       </footer>
