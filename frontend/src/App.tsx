@@ -73,6 +73,7 @@ import LandingPage from './pages/LandingPage.tsx';
 import SignupWizard from './pages/SignupWizard.tsx';
 import PaymentWall from './pages/PaymentWall.tsx';
 import SuperAdminDashboard from './pages/SuperAdminDashboard.tsx';
+import { PrivacyPolicy, TermsOfUse, DeleteAccount } from './pages/LegalPages.tsx';
 
 // Import Types
 import { WorkItem, WorkItemFilters } from './types.ts';
@@ -854,6 +855,11 @@ const App = () => {
       </div>
     );
   }
+
+  // Páginas legais públicas
+  if (path === '/privacidade') return <PrivacyPolicy />;
+  if (path === '/termos') return <TermsOfUse />;
+  if (path === '/excluir-conta') return <DeleteAccount />;
 
   // Super Admin — acessível apenas quando admin autenticado clica no botão
   if (showSuperAdmin && isAdmin) return <SuperAdminDashboard onLogout={() => setShowSuperAdmin(false)} adminToken={token || ''} />;

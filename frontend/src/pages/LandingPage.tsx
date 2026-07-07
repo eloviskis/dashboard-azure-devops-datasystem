@@ -140,7 +140,14 @@ const LandingPage: React.FC<LandingPageProps> = ({ onStartTrial, onLogin }) => {
 
       {/* FOOTER */}
       <footer className="border-t border-ds-border px-8 py-6 text-center text-ds-text/50 text-xs">
-        © {new Date().getFullYear()} Fluxometria
+        <div className="flex flex-wrap items-center justify-center gap-4 mb-2">
+          <a href="/privacidade" className="hover:text-ds-text transition-colors">Política de Privacidade</a>
+          <span>·</span>
+          <a href="/termos" className="hover:text-ds-text transition-colors">Termos de Uso</a>
+          <span>·</span>
+          <a href="/excluir-conta" className="hover:text-ds-text transition-colors">Excluir Conta</a>
+        </div>
+        <p>© {new Date().getFullYear()} Fluxometria</p>
       </footer>
     </div>
   );
