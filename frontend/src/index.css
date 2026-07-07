@@ -21,18 +21,60 @@
   --color-ds-border: #163050;
 }
 
+/* ═══════════════════════════════════════════════════
+   Bluey Pastel Theme (modo claro)
+   Inspirado nas cores do desenho animado Bluey:
+   azuis céu, laranja quente, pasteis suaves
+   ═══════════════════════════════════════════════════ */
+[data-theme="bluey"] {
+  --color-ds-dark-blue: #E8F4FB;
+  --color-ds-navy:      #FFFFFF;
+  --color-ds-green:     #4B9AD4;   /* azul Bluey */
+  --color-ds-cyan:      #26B5A0;   /* teal mantido */
+  --color-ds-light-text:#0F2744;   /* texto escuro */
+  --color-ds-text:      #4A7396;   /* texto médio */
+  --color-ds-muted:     #D4EBF8;   /* fundo mutado */
+  --color-ds-border:    #A8CEEA;   /* borda suave */
+}
+
+/* ═══════════════════════════════════════════════════
+   Bluey Dark Theme (modo noturno)
+   Blues profundos com acentos Bluey
+   ═══════════════════════════════════════════════════ */
+[data-theme="bluey-dark"] {
+  --color-ds-dark-blue: #071829;
+  --color-ds-navy:      #0A1F36;
+  --color-ds-green:     #5AAEE0;   /* azul Bluey claro */
+  --color-ds-cyan:      #4DD0C4;
+  --color-ds-light-text:#D4EBF9;
+  --color-ds-text:      #7AB0C8;
+  --color-ds-muted:     #153558;
+  --color-ds-border:    #1C4068;
+}
+
 body {
-  background-color: #0A1E35;
+  background-color: var(--color-ds-dark-blue, #0A1E35);
   color: white;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   margin: 0;
 }
 
+[data-theme="bluey"] body,
+[data-theme="bluey"] {
+  background-color: #E8F4FB;
+  color: #0F2744;
+}
+
 ::-webkit-scrollbar { width: 8px; }
-::-webkit-scrollbar-track { background: #061526; }
-::-webkit-scrollbar-thumb { background: #163050; border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: #1E3A55; }
+::-webkit-scrollbar-track { background: var(--color-ds-dark-blue, #061526); }
+::-webkit-scrollbar-thumb { background: var(--color-ds-border, #163050); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-ds-muted, #1E3A55); }
+
+/* Scrollbar Bluey */
+[data-theme="bluey"] ::-webkit-scrollbar-track { background: #D4EBF8; }
+[data-theme="bluey"] ::-webkit-scrollbar-thumb { background: #A8CEEA; }
+[data-theme="bluey"] ::-webkit-scrollbar-thumb:hover { background: #7AB4D8; }
 
 /* Tabs horizontal scrollbar - thin & elegant */
 .tabs-scrollbar {
@@ -87,6 +129,34 @@ body {
 }
 .login-btn:hover:not(:disabled) { filter: brightness(1.1); }
 .login-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Login Bluey light */
+[data-theme="bluey"] .login-bg {
+  background: linear-gradient(135deg, #C5E0F5 0%, #E8F4FB 50%, #D4EBF8 100%);
+}
+[data-theme="bluey"] .login-card {
+  background: rgba(255, 255, 255, 0.90);
+  border: 1px solid #A8CEEA;
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 8px 32px rgba(75, 154, 212, 0.15);
+}
+[data-theme="bluey"] .login-input {
+  background: #F0F8FF;
+  border: 1px solid #A8CEEA;
+  color: #0F2744;
+}
+[data-theme="bluey"] .login-input::placeholder { color: #7AB0C8; }
+[data-theme="bluey"] .login-input:focus {
+  border-color: #4B9AD4;
+  box-shadow: 0 0 0 2px rgba(75, 154, 212, 0.20);
+}
+[data-theme="bluey"] .login-btn {
+  background: linear-gradient(90deg, #4B9AD4, #26B5A0);
+}
+[data-theme="bluey"] .login-icon-bg {
+  background: linear-gradient(135deg, #4B9AD4, #26B5A0);
+}
 
 /* ─── Chart Tooltip (Recharts custom tooltips) ─── */
 .chart-tooltip {

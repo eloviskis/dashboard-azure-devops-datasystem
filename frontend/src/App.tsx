@@ -15,6 +15,7 @@ import { useAzureDevOpsData } from './hooks/useAzureDevOpsData.ts';
 
 // Import Components
 import Header from './components/Header.tsx';
+import { useTheme } from './hooks/useTheme';
 import FilterBar from './components/FilterBar.tsx';
 import ChartInfoLamp from './components/ChartInfoLamp';
 import SummaryCard from './components/SummaryCard.tsx';
@@ -124,6 +125,9 @@ const DEFAULT_TAB_CONFIG = [
 
 const App = () => {
   const { isAuthenticated, isLoading: authLoading, isAdmin, user, token } = useAuth();
+  // Tema — padrão definido pela variável de build VITE_DEFAULT_THEME (ex: 'bluey')
+  const defaultTheme = (import.meta.env.VITE_DEFAULT_THEME || 'default') as import('./hooks/useTheme').AppTheme;
+  const { theme, toggle: toggleTheme } = useTheme(defaultTheme);
   const [activeTab, setActiveTab] = useState<Tab>(() => {
     const params = new URLSearchParams(window.location.search);
     const urlTab = params.get('tab') as Tab;
@@ -182,6 +186,8 @@ const App = () => {
     specificMonth: undefined,
     customStartDate: undefined,
     customEndDate: undefined,
+    excludeImpedimentos: false,
+    excludeBloqueios: false,
   };
 
   const [workItemFilters, setWorkItemFilters] = useState<WorkItemFilters>(initialWorkItemFilters);
@@ -251,6 +257,22 @@ const App = () => {
     });
   }, [filteredWorkItems, quickFilter]);
 
+  // Itens para métricas de tempo: exclui impedimentos e/ou bloqueios quando toggles ativados
+  const metricsWorkItems = useMemo(() => {
+    let result = quickFilteredWorkItems;
+    if (workItemFilters.excludeImpedimentos) {
+      result = result.filter(item => {
+        if (!item.tags) return true;
+        const tagsStr = Array.isArray(item.tags) ? item.tags.join(';') : item.tags;
+        return !tagsStr.toUpperCase().includes('IMPEDIMENTO');
+      });
+    }
+    if (workItemFilters.excludeBloqueios) {
+      result = result.filter(item => !item.bloqueio);
+    }
+    return result;
+  }, [quickFilteredWorkItems, workItemFilters.excludeImpedimentos, workItemFilters.excludeBloqueios]);
+
   const handleGenerateInsights = async () => {
       setAiLoading(true);
       setAiError('');
@@ -302,7 +324,7 @@ const App = () => {
       }
   };
 
-  const { total, completed, inProgress, avgCycleTime } = useMemo(() => calculatePerformanceMetrics(quickFilteredWorkItems), [quickFilteredWorkItems]);
+  const { total, completed, inProgress, avgCycleTime } = useMemo(() => calculatePerformanceMetrics(metricsWorkItems), [metricsWorkItems]);
   const { openBugs, openIssues, avgResolutionTime } = useMemo(() => calculateQualityMetrics(quickFilteredWorkItems), [quickFilteredWorkItems]);
 
   // Comparison with previous period
@@ -370,21 +392,21 @@ const App = () => {
         return (
           <>
             <SectionHeader title="Insights por Time" />
-            <TeamInsightsDashboard data={quickFilteredWorkItems} />
+            <TeamInsightsDashboard data={metricsWorkItems} />
           </>
         );
       case 'team-evolution':
         return (
           <>
             <SectionHeader title="Evolução por Time" />
-            <TeamEvolutionDashboard data={quickFilteredWorkItems} />
+            <TeamEvolutionDashboard data={metricsWorkItems} />
           </>
         );
       case 'cycle-analytics':
         return (
           <>
             <SectionHeader title="Cycle Time Analytics" />
-            <CycleTimeAnalyticsDashboard data={quickFilteredWorkItems} />
+            <CycleTimeAnalyticsDashboard data={metricsWorkItems} />
           </>
         );
       case 'performance':
@@ -455,7 +477,7 @@ const App = () => {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
               <div className="h-125">
                 <ChartInfoLamp info="Mostra os itens mais antigos em progresso, ajudando a identificar trabalho estagnado que pode precisar de atenção ou repriorização." />
-                <AgingItemsCard workItems={quickFilteredWorkItems} />
+                <AgingItemsCard workItems={metricsWorkItems} />
               </div>
               <div className="h-125">
                 <ChartInfoLamp info="Exibe os limites de trabalho em progresso (WIP) por coluna, time e pessoa. WIP alto pode indicar sobrecarga e multitasking excessivo." />
@@ -530,7 +552,7 @@ const App = () => {
                 <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
                   <ChartInfoLamp info="Exibe o tempo médio de ciclo por cliente, útil para identificar gargalos e oportunidades de melhoria no atendimento." />
                   <h3 className="text-ds-light-text font-bold text-lg mb-4">Cycle Time Médio por Cliente (Dias)</h3>
-                  <ClientCycleTimeChart data={quickFilteredWorkItems} />
+                  <ClientCycleTimeChart data={metricsWorkItems} />
                 </div>
                  <div className="col-span-1 lg:col-span-2 bg-ds-navy p-4 rounded-lg border border-ds-border">
                   <ChartInfoLamp info="Mostra a quantidade de itens concluídos por cliente, facilitando a análise de produtividade e entrega." />
@@ -553,7 +575,7 @@ const App = () => {
                 <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
                   <ChartInfoLamp info="Compara o lead time e o cycle time por time, permitindo identificar equipes mais ágeis e oportunidades de melhoria." />
                   <h3 className="text-ds-light-text font-bold text-lg mb-4">Lead Time vs. Cycle Time por Time (Dias)</h3>
-                  <LeadVsCycleTimeChart data={quickFilteredWorkItems} />
+                  <LeadVsCycleTimeChart data={metricsWorkItems} />
                 </div>
                 <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
                   <ChartInfoLamp info="O histograma de vazão semanal mostra a quantidade de entregas por semana, útil para acompanhar a evolução da produtividade." />
@@ -563,7 +585,7 @@ const App = () => {
             </div>
             {/* Flow Efficiency */}
             <ChartInfoLamp info="Mostra a eficiência do fluxo por time: % de tempo que os itens passam em trabalho ativo vs. tempo total em fila. Ajuda a reduzir tempos de espera." />
-            <FlowEfficiencyChart data={quickFilteredWorkItems} />
+            <FlowEfficiencyChart data={metricsWorkItems} />
           </>
         );
       case 'detailed-throughput':
@@ -599,7 +621,7 @@ const App = () => {
                         <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
                           <ChartInfoLamp info="Mostra o tempo médio em cada status, facilitando a identificação de gargalos e etapas que precisam de atenção." />
                           <h3 className="text-ds-light-text font-bold text-lg mb-4">Tempo Médio em Cada Status (Dias)</h3>
-                          <BottleneckAnalysisChart data={quickFilteredWorkItems} />
+                          <BottleneckAnalysisChart data={metricsWorkItems} />
                         </div>
                     </div>
                 </>
@@ -617,7 +639,7 @@ const App = () => {
                         <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
                            <ChartInfoLamp info="Mostra o cycle time médio por tag, ajudando a identificar tipos de trabalho que levam mais tempo para serem concluídos." />
                            <h3 className="text-ds-light-text font-bold text-lg mb-4">Cycle Time Médio por Tag (Dias)</h3>
-                          <CycleTimeByTagChart data={quickFilteredWorkItems} />
+                          <CycleTimeByTagChart data={metricsWorkItems} />
                         </div>
                     </div>
                 </>
@@ -626,7 +648,7 @@ const App = () => {
         return (
             <>
                 {/* Monte Carlo não tem um título simples, então não usamos SectionHeader */}
-                <MonteCarloSimulation data={quickFilteredWorkItems} filters={workItemFilters} />
+                <MonteCarloSimulation data={metricsWorkItems} filters={workItemFilters} />
             </>
         );
       case 'item-list':
@@ -669,7 +691,7 @@ const App = () => {
             <SectionHeader title="Análise de Backlog e Capacidade" />
             <div className="mb-6">
               <ChartInfoLamp info="Esta aba analisa a velocidade dos times (vazão, cycle time, lead time) e calcula quantas tarefas devem ser refinadas por tipo para manter um desenvolvimento saudável baseado no histórico do time." />
-              <BacklogAnalysisDashboard data={quickFilteredWorkItems} />
+              <BacklogAnalysisDashboard data={metricsWorkItems} />
             </div>
           </>
         );
@@ -704,10 +726,10 @@ const App = () => {
         return (
           <>
             <SectionHeader title="Scrum Dashboard — CTC/Franquia" />
-            <ScrumCTCDashboard data={quickFilteredWorkItems} />
+            <ScrumCTCDashboard data={metricsWorkItems} />
             {/* Story Points vs Cycle Time — movido para cá pois é métrica Scrum */}
             <div className="mt-6">
-              <StoryPointsVsCycleTimeChart data={quickFilteredWorkItems} />
+              <StoryPointsVsCycleTimeChart data={metricsWorkItems} />
             </div>
           </>
         );
@@ -715,21 +737,21 @@ const App = () => {
         return (
           <>
             <SectionHeader title="Visão Executiva" />
-            <ExecutiveHomeDashboard data={quickFilteredWorkItems} />
+            <ExecutiveHomeDashboard data={metricsWorkItems} />
           </>
         );
       case 'dora':
         return (
           <>
             <SectionHeader title="Indicadores DevOps (Adaptados)" />
-            <DORAMetricsDashboard data={quickFilteredWorkItems} />
+            <DORAMetricsDashboard data={metricsWorkItems} />
           </>
         );
       case 'sla':
         return (
           <>
             <SectionHeader title="SLA Tracking" />
-            <SLATrackingDashboard data={quickFilteredWorkItems} />
+            <SLATrackingDashboard data={metricsWorkItems} />
           </>
         );
       case 'metas':
@@ -817,7 +839,7 @@ const App = () => {
 
   return (
     <div className="min-h-screen bg-ds-dark-blue">
-      <Header lastSyncStatus={lastSyncStatus} onOpenUserManagement={isAdmin ? () => setShowUserManagement(true) : undefined} onSync={handleSync} syncing={syncing} workItems={workItems} />
+      <Header lastSyncStatus={lastSyncStatus} onOpenUserManagement={isAdmin ? () => setShowUserManagement(true) : undefined} onSync={handleSync} syncing={syncing} workItems={workItems} theme={theme} onToggleTheme={toggleTheme} />
 
       {showUserManagement ? (
         <div className="p-6 md:p-10">
@@ -874,6 +896,36 @@ const App = () => {
             </div>
         </div>
         
+        {/* Toggles: Excluir Impedimentos / Bloqueios das Métricas de Tempo */}
+        {(['cycle-analytics', 'kanban', 'sla', 'dora', 'montecarlo', 'bottlenecks', 'tags', 'clients', 'performance', 'scrum-ctc', 'team-insights', 'team-evolution', 'executive'] as Tab[]).includes(activeTab) && (
+          <div className="flex items-center justify-end gap-2 px-4 py-1.5 bg-ds-navy/30 border-b border-ds-border">
+            <button
+              onClick={() => setWorkItemFilters(f => ({ ...f, excludeImpedimentos: !f.excludeImpedimentos }))}
+              title="Quando ativado, exclui itens marcados com a tag IMPEDIMENTO dos gráficos de Cycle Time, Lead Time, SLA, Aging e demais métricas de tempo."
+              className={`flex items-center gap-1.5 px-3 py-1 text-xs rounded-md font-medium transition-colors ${
+                workItemFilters.excludeImpedimentos
+                  ? 'bg-ds-green text-ds-dark-blue'
+                  : 'bg-ds-muted/20 text-ds-text hover:bg-ds-muted/40 border border-ds-border'
+              }`}
+            >
+              <span>⚠️</span>
+              <span>{workItemFilters.excludeImpedimentos ? 'Impedimentos excluídos das métricas' : 'Ignorar impedimentos nas métricas de tempo'}</span>
+            </button>
+            <button
+              onClick={() => setWorkItemFilters(f => ({ ...f, excludeBloqueios: !f.excludeBloqueios }))}
+              title="Quando ativado, exclui itens com Bloqueio externo (Custom.Bloqueio = true) dos gráficos de Cycle Time, Lead Time, SLA, Aging e demais métricas de tempo."
+              className={`flex items-center gap-1.5 px-3 py-1 text-xs rounded-md font-medium transition-colors ${
+                workItemFilters.excludeBloqueios
+                  ? 'bg-ds-cyan text-ds-dark-blue'
+                  : 'bg-ds-muted/20 text-ds-text hover:bg-ds-muted/40 border border-ds-border'
+              }`}
+            >
+              <span>🔒</span>
+              <span>{workItemFilters.excludeBloqueios ? 'Bloqueios excluídos das métricas' : 'Ignorar bloqueios externos nas métricas'}</span>
+            </button>
+          </div>
+        )}
+
         {activeTab !== 'cycle-analytics' && activeTab !== 'team-insights' && activeTab !== 'pull-requests' && activeTab !== 'scrum-ctc' && activeTab !== 'team-comparison' && activeTab !== 'period-comparison' && activeTab !== 'devtracker' && activeTab !== 'team-evolution' && activeTab !== 'rituals' && activeTab !== 'qa-tracker' && (
         <div className="relative">
           <button

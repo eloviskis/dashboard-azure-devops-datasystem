@@ -1,12 +1,12 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { SyncStatus } from '../hooks/useAzureDevOpsData';
 import { WorkItem } from '../types';
-// Fix: Import date-fns functions from their submodules for v2 compatibility.
-import { formatDistanceToNow } from 'date-fns'; // Updated to named imports
-// Fix: Import locale data with a default import from its specific path to resolve type errors.
-import { ptBR } from 'date-fns/locale/pt-BR'; // Updated to named imports
+import { formatDistanceToNow } from 'date-fns';
+import { ptBR } from 'date-fns/locale/pt-BR';
 import { useAuth } from '../contexts/AuthContext';
 import ChangePasswordModal from './ChangePasswordModal';
+import ThemeToggle from './ThemeToggle';
+import type { AppTheme } from '../hooks/useTheme';
 
 interface HeaderProps {
     lastSyncStatus: SyncStatus | null;
@@ -14,9 +14,11 @@ interface HeaderProps {
     onSync?: () => void;
     syncing?: boolean;
     workItems?: WorkItem[];
+    theme?: AppTheme;
+    onToggleTheme?: () => void;
 }
 
-const Header: React.FC<HeaderProps> = ({ lastSyncStatus, onOpenUserManagement, onSync, syncing, workItems = [] }) => {
+const Header: React.FC<HeaderProps> = ({ lastSyncStatus, onOpenUserManagement, onSync, syncing, workItems = [], theme = 'default', onToggleTheme }) => {
     const { user, logout, isAdmin } = useAuth();
     const [showAlerts, setShowAlerts] = useState(false);
     const [dismissedAlertIds, setDismissedAlertIds] = useState<Set<number>>(new Set());
@@ -222,6 +224,8 @@ const Header: React.FC<HeaderProps> = ({ lastSyncStatus, onOpenUserManagement, o
                         <span className="hidden sm:inline">Usuários</span>
                     </button>
                 )}
+                {/* Toggle de tema claro/noturno */}
+                {onToggleTheme && <ThemeToggle theme={theme} onToggle={onToggleTheme} />}
                 {/* User menu dropdown */}
                 <div className="relative" ref={userMenuRef}>
                     <button
