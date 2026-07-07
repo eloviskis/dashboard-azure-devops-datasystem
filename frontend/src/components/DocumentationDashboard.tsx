@@ -16,593 +16,319 @@ interface DocSection {
 const DOCUMENTATION: DocSection[] = [
   {
     id: 'executive',
-    title: '📊 Visão Executiva',
-    description: 'Painel de indicadores de alto nível para gestores. Apresenta resumo geral do desempenho da equipe com métricas-chave de throughput, qualidade e previsibilidade.',
+    title: 'Ã°Å¸Å½Â¯ VisÃƒÂ£o Executiva',
+    description: 'Painel de alto nÃƒÂ­vel para gestores. Indicadores-chave de throughput, qualidade e previsibilidade da equipe no perÃƒÂ­odo selecionado.',
     metrics: [
-      {
-        name: 'Throughput (Vazão)',
-        formula: 'COUNT(itens com closedDate no período)',
-        fields: ['closedDate', 'state = Closed/Done/Finished'],
-        interpretation: 'Quantidade de itens entregues. Maior = melhor capacidade de entrega.'
-      },
-      {
-        name: 'Cycle Time Médio',
-        formula: '(closedDate - firstActivationDate) em dias',
-        fields: ['closedDate', 'firstActivationDate (Microsoft.VSTS.Common.ActivatedDate)'],
-        interpretation: 'Tempo médio de desenvolvimento. Menor = mais ágil.'
-      },
-      {
-        name: 'Lead Time Médio',
-        formula: '(closedDate - createdDate) em dias',
-        fields: ['closedDate', 'createdDate'],
-        interpretation: 'Tempo total desde criação até entrega. Inclui tempo em fila.'
-      },
-      {
-        name: 'WIP (Work in Progress)',
-        formula: 'COUNT(itens em estados ativos: Active, Para Desenvolver, etc)',
-        fields: ['state'],
-        interpretation: 'Trabalho em andamento. WIP alto pode indicar sobrecarga.'
-      }
+      { name: 'Throughput (VazÃƒÂ£o)', formula: 'COUNT(itens com closedDate no perÃƒÂ­odo)', fields: ['closedDate', 'state = Closed/Done/Finished/Pronto'], interpretation: 'Quantidade de itens entregues. Maior = melhor capacidade de entrega.' },
+      { name: 'Cycle Time MÃƒÂ©dio', formula: '(closedDate - firstActivationDate) em dias', fields: ['closedDate', 'firstActivationDate'], interpretation: 'Tempo mÃƒÂ©dio de desenvolvimento ativo. Menor = mais ÃƒÂ¡gil.' },
+      { name: 'Lead Time MÃƒÂ©dio', formula: '(closedDate - createdDate) em dias', fields: ['closedDate', 'createdDate'], interpretation: 'Tempo total desde criaÃƒÂ§ÃƒÂ£o atÃƒÂ© entrega, incluindo espera no backlog.' },
+      { name: 'WIP (Work in Progress)', formula: 'COUNT(itens em estados ativos)', fields: ['state = Active, Para Desenvolver, Aguardando QA, etc.'], interpretation: 'Trabalho em andamento simultÃƒÂ¢neo. WIP alto pode indicar sobrecarga.' }
     ],
-    charts: ['Resumo Geral', 'Entregues vs Criados', 'Tendência de Entregas']
+    charts: ['Resumo Geral', 'Entregues vs Criados', 'TendÃƒÂªncia de Entregas Semanal/Quinzenal/Mensal/Anual']
   },
   {
     id: 'team-insights',
-    title: '👥 Insights por Time',
-    description: 'Análise comparativa de performance entre times, baseada em area_path do Azure DevOps.',
+    title: 'Ã°Å¸â€˜Â¥ Insights por Time',
+    description: 'AnÃƒÂ¡lise comparativa de performance entre times. Inclui throughput, cycle time, P85 e percentil de cycle time por time.',
     metrics: [
-      {
-        name: 'Throughput por Time',
-        formula: 'COUNT(itens fechados) GROUP BY team',
-        fields: ['team (extraído de System.AreaPath)'],
-        interpretation: 'Comparar capacidade de entrega entre equipes.'
-      },
-      {
-        name: 'Cycle Time por Time',
-        formula: 'AVG(cycleTime) GROUP BY team',
-        fields: ['closedDate', 'firstActivationDate', 'team'],
-        interpretation: 'Identificar times mais ágeis ou com gargalos.'
-      },
-      {
-        name: 'Story Points por Time',
-        formula: 'SUM(storyPoints) GROUP BY team',
-        fields: ['storyPoints (Microsoft.VSTS.Scheduling.StoryPoints)', 'team'],
-        interpretation: 'Esforço total entregue por cada time.'
-      }
+      { name: 'Throughput por Time', formula: 'COUNT(itens fechados) GROUP BY team', fields: ['team (extraÃƒÂ­do de System.AreaPath)'], interpretation: 'Comparar capacidade de entrega entre equipes.' },
+      { name: 'Cycle Time por Time', formula: 'AVG(cycleTime) GROUP BY team', fields: ['closedDate', 'firstActivationDate', 'team'], interpretation: 'Identificar times mais ÃƒÂ¡geis ou com gargalos.' },
+      { name: 'P85 Cycle Time por Time', formula: '85Ã‚Âº percentil (cycleTime) GROUP BY team', fields: ['cycleTime', 'team'], interpretation: 'SLA de ciclo por time. 85% dos itens sÃƒÂ£o entregues neste tempo ou menos.' }
     ]
+  },
+  {
+    id: 'team-evolution',
+    title: 'Ã°Å¸â€œâ€¦ EvoluÃƒÂ§ÃƒÂ£o Times',
+    description: 'VisÃƒÂ£o semanal simplificada por time: throughput, cycle time, P85, lead time, WIP, impedimentos, gargalos, retrabalho e itens crÃƒÂ­ticos. Ideal para reuniÃƒÂµes de time.',
+    metrics: [
+      { name: 'Throughput Semanal', formula: 'COUNT(closedDate dentro da semana) por time', fields: ['closedDate', 'team'], interpretation: 'Entregas efetivas na semana.' },
+      { name: 'ProjeÃƒÂ§ÃƒÂ£o atÃƒÂ© fim da semana', formula: '(throughput atual / dias decorridos) Ãƒâ€” 5', fields: ['closedDate', 'data atual'], interpretation: 'Estimativa de entrega se o ritmo se mantiver.' },
+      { name: 'Gargalo da semana', formula: 'Estado com maior tempo mÃƒÂ©dio (via timeInStatusDays)', fields: ['timeInStatusDays'], interpretation: 'Onde as tarefas ficaram mais paradas. Clique para ver os itens.' },
+      { name: 'Itens P1/P2 resolvidos', formula: 'COUNT(closedDate na semana WHERE priority <= 2)', fields: ['priority', 'closedDate'], interpretation: 'UrgÃƒÂªncias crÃƒÂ­ticas resolvidas na semana.' },
+      { name: 'Retrabalho', formula: 'COUNT(reincidencia > 0) / total Ãƒâ€” 100', fields: ['reincidencia'], interpretation: '% de itens que voltaram. 0% = ideal.' }
+    ],
+    charts: ['Tabela semanal 4 semanas + projeÃƒÂ§ÃƒÂ£o', 'BarChart Throughput', 'LineChart CT vs LT', 'BarChart WIP', 'Cards de gargalo clicÃƒÂ¡veis']
   },
   {
     id: 'cycle-analytics',
-    title: '⏱️ Cycle Time Analytics',
-    description: 'Análise detalhada de tempo de ciclo com percentis, histograma e scatter plot para identificar outliers e padrões.',
+    title: 'Ã¢ÂÂ±Ã¯Â¸Â Cycle Time Analytics',
+    description: 'AnÃƒÂ¡lise detalhada de tempo de ciclo com percentis P50/P85/P95, histograma por time, scatter plot e histÃƒÂ³rico comparativo semanal/quinzenal/mensal.',
     metrics: [
-      {
-        name: 'Cycle Time',
-        formula: 'closedDate - firstActivationDate (em dias)',
-        fields: ['closedDate', 'firstActivationDate'],
-        interpretation: 'Tempo de desenvolvimento ativo (sem tempo em fila).'
-      },
-      {
-        name: 'Percentil 50 (P50)',
-        formula: 'Mediana dos cycle times',
-        fields: ['cycleTime calculado'],
-        interpretation: '50% dos itens são entregues neste tempo ou menos.'
-      },
-      {
-        name: 'Percentil 85 (P85)',
-        formula: '85º percentil dos cycle times',
-        fields: ['cycleTime calculado'],
-        interpretation: 'Usado para SLAs - 85% dos itens são entregues neste tempo.'
-      },
-      {
-        name: 'Percentil 95 (P95)',
-        formula: '95º percentil dos cycle times',
-        fields: ['cycleTime calculado'],
-        interpretation: 'Identifica outliers - apenas 5% levam mais que isso.'
-      }
+      { name: 'Cycle Time', formula: 'closedDate - firstActivationDate (dias)', fields: ['closedDate', 'firstActivationDate'], interpretation: 'Tempo de desenvolvimento ativo, sem tempo em fila.' },
+      { name: 'P50 (Mediana)', formula: 'Mediana dos cycle times', fields: ['cycleTime calculado'], interpretation: '50% dos itens sÃƒÂ£o entregues neste tempo ou menos.' },
+      { name: 'P85', formula: '85Ã‚Âº percentil dos cycle times', fields: ['cycleTime calculado'], interpretation: 'ReferÃƒÂªncia de SLA. 85% das entregas ocorrem dentro deste prazo.' },
+      { name: 'P95', formula: '95Ã‚Âº percentil dos cycle times', fields: ['cycleTime calculado'], interpretation: 'Identifica outliers: apenas 5% levam mais que isso.' }
     ],
-    charts: ['Histograma de Cycle Time', 'Scatter Plot (evolução temporal)', 'Box Plot por período']
+    charts: ['Percentil P85 por mÃƒÂªs (linha/barras)', 'Histograma P50/P85/P95 por time', 'TendÃƒÂªncia CT vs LT', 'HistÃƒÂ³rico Semanal/Quinzenal/Mensal', 'Scatter Plot', 'Ranking de Times', 'Top 15 Outliers', 'GlossÃƒÂ¡rio']
   },
   {
     id: 'performance',
-    title: '📈 Performance Geral',
-    description: 'Métricas de desempenho individual e coletivo, comparando produtividade e consistência.',
+    title: 'Ã°Å¸â€œË† Performance Geral',
+    description: 'MÃƒÂ©tricas de desempenho individual e coletivo: throughput, cycle time, status, aging e heatmap de atividade.',
     metrics: [
-      {
-        name: 'Itens por Pessoa',
-        formula: 'COUNT(itens fechados) / COUNT(pessoas únicas)',
-        fields: ['assignedTo (System.AssignedTo)', 'closedDate'],
-        interpretation: 'Produtividade média por desenvolvedor.'
-      },
-      {
-        name: 'Story Points por Pessoa',
-        formula: 'SUM(storyPoints) / COUNT(pessoas)',
-        fields: ['storyPoints', 'assignedTo'],
-        interpretation: 'Esforço médio entregue por pessoa.'
-      },
-      {
-        name: 'Variância de Cycle Time',
-        formula: 'Desvio padrão dos cycle times',
-        fields: ['cycleTime'],
-        interpretation: 'Consistência das entregas. Menor variância = mais previsível.'
-      }
-    ]
+      { name: 'Top 10 - Performance Individual', formula: 'COUNT(itens fechados) GROUP BY assignedTo', fields: ['assignedTo', 'closedDate'], interpretation: 'Colaboradores com mais entregas no perÃƒÂ­odo.' },
+      { name: 'Aging WIP', formula: 'Dias em andamento > threshold (P1: 3d, P2: 7d, P3: 14d)', fields: ['changedDate', 'state', 'priority'], interpretation: 'Itens parados hÃƒÂ¡ muito tempo. Indicador visual de risco.' },
+      { name: 'WIP Limits', formula: 'COUNT(itens em andamento) por coluna/time/pessoa', fields: ['state', 'team', 'assignedTo'], interpretation: 'WIP alto por pessoa indica sobrecarga.' },
+      { name: 'Comparativo PerÃƒÂ­odo Anterior', formula: 'DiferenÃƒÂ§a percentual vs perÃƒÂ­odo equivalente anterior', fields: ['closedDate', 'perÃƒÂ­odo'], interpretation: 'TendÃƒÂªncia de melhora ou piora na entrega.' }
+    ],
+    charts: ['Status Geral (pizza)', 'Performance dos Times', 'TendÃƒÂªncia de Entregas', 'Top 10 Individual', 'Aging Items', 'WIP Limits', 'Activity Heatmap']
   },
   {
     id: 'quality',
-    title: '🎯 Qualidade',
-    description: 'Indicadores de qualidade do código e processos, incluindo bugs e retrabalho.',
+    title: 'Ã¢Å“â€¦ Qualidade',
+    description: 'Indicadores de qualidade: Bugs vs Issues, taxa de detecÃƒÂ§ÃƒÂ£o, MTTR, retrabalho e bugs por feature.',
     metrics: [
-      {
-        name: 'Bugs vs Issues (Gráfico Comparativo)',
-        formula: 'COUNT(type = Bug) vs COUNT(type = Issue)',
-        fields: ['type = Bug (erros em desenvolvimento)', 'type = Issue (erros em produção)'],
-        interpretation: '🔍 Bug = erro detectado EM DESENVOLVIMENTO (não chegou ao cliente). Issue = erro que ESCAPOU PARA PRODUÇÃO (impactou o cliente). O gráfico mostra quantos erros foram detectados antes vs depois de ir para produção.'
-      },
-      {
-        name: 'Taxa de Detecção',
-        formula: '(Bugs / (Bugs + Issues)) × 100',
-        fields: ['type = Bug', 'type = Issue'],
-        interpretation: 'Percentual de erros detectados em desenvolvimento. Quanto MAIOR, MELHOR o processo de QA. >70% = excelente, 50-70% = bom, <50% = muitos erros escapando para produção.'
-      },
-      {
-        name: 'Taxa de Bugs',
-        formula: '(bugs fechados / total itens fechados) × 100',
-        fields: ['type = Bug', 'closedDate'],
-        interpretation: 'Percentual de bugs no throughput. Menor = melhor qualidade.'
-      },
-      {
-        name: 'Bugs por Sprint/Período',
-        formula: 'COUNT(bugs criados no período)',
-        fields: ['type = Bug', 'createdDate'],
-        interpretation: 'Tendência de criação de bugs.'
-      },
-      {
-        name: 'Tempo Médio de Correção',
-        formula: 'AVG(cycleTime) WHERE type = Bug',
-        fields: ['type', 'cycleTime'],
-        interpretation: 'Agilidade na correção de defeitos.'
-      },
-      {
-        name: 'Top Pessoas com Reincidência',
-        formula: 'Soma do valor do campo reincidência para issues da pessoa / Total de issues da pessoa',
-        fields: ['type = Issue', 'reincidencia (Custom.REINCIDENCIA)', 'assignedTo'],
-        interpretation: 'Ranking de issues com reincidência. Ordena por soma total de reincidências. Mostra: total de reincidências (soma), número de issues com reincidência, e taxa percentual. Considera apenas ISSUES, onde o campo reincidência é utilizado no Azure DevOps.'
-      }
-    ]
-  },
-  {
-    id: 'clients',
-    title: '🏢 Análise por Cliente',
-    description: 'Segmentação de métricas por tipo de cliente (SLA One, CTC, Franquia, etc).',
-    metrics: [
-      {
-        name: 'Throughput por Cliente',
-        formula: 'COUNT(itens fechados) GROUP BY tipoCliente',
-        fields: ['tipoCliente (Custom.Tipocliente)', 'closedDate'],
-        interpretation: 'Distribuição de entregas por segmento de cliente.'
-      },
-      {
-        name: 'Cycle Time por Cliente',
-        formula: 'AVG(cycleTime) GROUP BY tipoCliente',
-        fields: ['tipoCliente', 'cycleTime'],
-        interpretation: 'Velocidade de atendimento por tipo de cliente.'
-      }
-    ]
+      { name: 'Bug vs Issue', formula: 'COUNT(type=Bug) vs COUNT(type=Issue)', fields: ['type'], interpretation: 'Bug = erro detectado em desenvolvimento. Issue = erro que chegou ao cliente. Alta proporÃƒÂ§ÃƒÂ£o de Bug = QA eficaz.' },
+      { name: 'Taxa de DetecÃƒÂ§ÃƒÂ£o', formula: 'Bugs / (Bugs + Issues) Ãƒâ€” 100', fields: ['type'], interpretation: 'Quanto maior, melhor: mais erros capturados antes da produÃƒÂ§ÃƒÂ£o. Alvo: >70%.' },
+      { name: 'MTTR (Mean Time to Restore)', formula: 'AVG(cycleTime) WHERE type = Bug', fields: ['type', 'cycleTime'], interpretation: 'Tempo mÃƒÂ©dio para corrigir defeitos.' },
+      { name: 'Retrabalho (ReincidÃƒÂªncia)', formula: 'COUNT(reincidencia > 0) / COUNT(Issues) Ãƒâ€” 100', fields: ['reincidencia'], interpretation: 'Issues que voltaram. 0% = ideal.' }
+    ],
+    charts: ['Bugs vs Issues (pizza)', 'Bugs/Issues por Time', 'TendÃƒÂªncia de CriaÃƒÂ§ÃƒÂ£o', 'Rework Analysis', 'Bugs e Issues por Feature']
   },
   {
     id: 'kanban',
-    title: '📋 Fluxo Contínuo (Kanban)',
-    description: 'Visualização do fluxo de trabalho com CFD e métricas de fluxo.',
+    title: 'Ã°Å¸â€œÅ  Fluxo ContÃƒÂ­nuo (Kanban)',
+    description: 'VisualizaÃƒÂ§ÃƒÂ£o do fluxo de trabalho Kanban: CFD, Lead Time vs Cycle Time, Histograma de VazÃƒÂ£o e Flow Efficiency.',
     metrics: [
-      {
-        name: 'CFD (Cumulative Flow Diagram)',
-        formula: 'Acumulado de itens por estado ao longo do tempo',
-        fields: ['state', 'changedDate'],
-        interpretation: 'Visualiza gargalos (áreas largas = acúmulo).'
-      },
-      {
-        name: 'WIP por Estado',
-        formula: 'COUNT(itens) GROUP BY state',
-        fields: ['state'],
-        interpretation: 'Distribuição atual do trabalho no board.'
-      },
-      {
-        name: 'Flow Efficiency',
-        formula: '(tempo ativo / lead time) × 100',
-        fields: ['cycleTime', 'leadTime'],
-        interpretation: 'Percentual do tempo em trabalho ativo vs espera.'
-      }
-    ]
+      { name: 'CFD (Cumulative Flow Diagram)', formula: 'Acumulado de itens por estado ao longo do tempo', fields: ['state', 'changedDate'], interpretation: 'ÃƒÂreas largas = acÃƒÂºmulo/gargalo naquele estado.' },
+      { name: 'Flow Efficiency', formula: '(cycleTime / leadTime) Ãƒâ€” 100', fields: ['cycleTime', 'leadTime'], interpretation: '% do tempo em trabalho ativo vs espera. Alvo: >40%.' },
+      { name: 'Lead Time vs Cycle Time', formula: 'DiferenÃƒÂ§a entre leadTime e cycleTime por time', fields: ['leadTime', 'cycleTime', 'team'], interpretation: 'A diferenÃƒÂ§a ÃƒÂ© o tempo de espera no backlog antes de iniciar.' }
+    ],
+    charts: ['CFD', 'Lead Time vs Cycle Time por Time', 'Histograma de VazÃƒÂ£o Semanal', 'Flow Efficiency por Time']
   },
   {
     id: 'detailed-throughput',
-    title: '📊 Vazão Detalhada',
-    description: 'Análise granular do throughput com breakdown por tipo, time e período.',
+    title: 'Ã°Å¸â€œâ€° VazÃƒÂ£o Detalhada',
+    description: 'AnÃƒÂ¡lise granular de throughput por time, responsÃƒÂ¡vel e tipo de item ao longo do tempo.',
     metrics: [
-      {
-        name: 'Throughput Semanal',
-        formula: 'COUNT(itens fechados) GROUP BY semana',
-        fields: ['closedDate'],
-        interpretation: 'Tendência de entregas por semana.'
-      },
-      {
-        name: 'Throughput por Tipo',
-        formula: 'COUNT(itens fechados) GROUP BY type',
-        fields: ['type (System.WorkItemType)', 'closedDate'],
-        interpretation: 'Mix de entregas (PBI, Bug, Task, etc).'
-      }
+      { name: 'Throughput Semanal por Time', formula: 'COUNT(closedDate) GROUP BY semana, team', fields: ['closedDate', 'team'], interpretation: 'TendÃƒÂªncia de entrega por equipe semana a semana.' },
+      { name: 'Throughput por ResponsÃƒÂ¡vel', formula: 'COUNT(closedDate) GROUP BY assignedTo', fields: ['assignedTo', 'closedDate'], interpretation: 'DistribuiÃƒÂ§ÃƒÂ£o de entregas por pessoa.' },
+      { name: 'Throughput por Tipo', formula: 'COUNT(closedDate) GROUP BY type', fields: ['type', 'closedDate'], interpretation: 'Mix de entregas: User Story, Bug, Feature, Task, etc.' }
     ]
   },
   {
     id: 'bottlenecks',
-    title: '🚧 Gargalos (Estimado)',
-    description: 'Identificação de gargalos no processo baseado em tempo em cada estado.',
+    title: 'Ã°Å¸Å¡Â§ Gargalos (Estimado)',
+    description: 'IdentificaÃƒÂ§ÃƒÂ£o de gargalos por tempo estimado em cada estado, baseado em changedDate.',
     metrics: [
-      {
-        name: 'Tempo em Estado (Estimado)',
-        formula: 'Estimativa baseada em changedDate e state',
-        fields: ['state', 'changedDate'],
-        interpretation: 'Estados com mais tempo indicam gargalos.'
-      },
-      {
-        name: 'Aging WIP',
-        formula: 'Dias desde entrada no estado atual',
-        fields: ['changedDate', 'state'],
-        interpretation: 'Itens "envelhecendo" precisam de atenção.'
-      }
+      { name: 'Tempo em Estado (Estimado)', formula: 'Estimativa via changedDate: quando o estado mudou', fields: ['state', 'changedDate'], interpretation: 'Estados com mais tempo indicam onde o fluxo trava.' },
+      { name: 'Aging WIP por Estado', formula: 'Dias desde entrada no estado atual', fields: ['changedDate', 'state'], interpretation: 'Itens envelhecendo em um estado precisam de atenÃƒÂ§ÃƒÂ£o.' }
     ],
-    charts: ['Time in Status (barras)', 'Aging Items (lista)']
+    charts: ['Time in Status (barras horizontais por estado)', 'Aging Items (lista clicÃƒÂ¡vel)']
+  },
+  {
+    id: 'impedimentos',
+    title: 'Ã¢Å¡Â Ã¯Â¸Â Impedimentos',
+    description: 'Rastreamento de itens com tag IMPEDIMENTO ou campo bloqueio ativo. Filtra da aba Ignorar Impedimentos nas mÃƒÂ©tricas quando ativado.',
+    metrics: [
+      { name: 'Impedimentos Ativos', formula: 'COUNT(tags LIKE IMPEDIMENTO AND state != Closed)', fields: ['tags = IMPEDIMENTO', 'state'], interpretation: 'Bloqueios atuais. Clique nas barras para ver detalhes.' },
+      { name: 'Bloqueio Externo', formula: 'COUNT(bloqueio = true)', fields: ['bloqueio (campo booleano)'], interpretation: 'Itens bloqueados por dependÃƒÂªncias externas (fora do time).' }
+    ]
+  },
+  {
+    id: 'quality',
+    title: 'Ã¢Å“â€¦ Qualidade',
+    description: 'Bugs, Issues, retrabalho e qualidade por feature.',
+    metrics: [
+      { name: 'Taxa de DetecÃƒÂ§ÃƒÂ£o', formula: 'Bugs / (Bugs + Issues) Ãƒâ€” 100', fields: ['type'], interpretation: 'Percentual de erros capturados antes da produÃƒÂ§ÃƒÂ£o. >70% = excelente.' }
+    ]
   },
   {
     id: 'tags',
-    title: '🏷️ Análise de Tags',
-    description: 'Distribuição de trabalho por tags/categorias do Azure DevOps.',
+    title: 'Ã°Å¸ÂÂ·Ã¯Â¸Â AnÃƒÂ¡lise de Tags',
+    description: 'DistribuiÃƒÂ§ÃƒÂ£o de trabalho pelas tags configuradas no Azure DevOps.',
     metrics: [
-      {
-        name: 'Top Tags',
-        formula: 'COUNT(itens) GROUP BY tag ORDER BY count DESC',
-        fields: ['tags (System.Tags)'],
-        interpretation: 'Tags mais usadas indicam áreas de foco.'
-      },
-      {
-        name: 'Cycle Time por Tag',
-        formula: 'AVG(cycleTime) GROUP BY tag',
-        fields: ['tags', 'cycleTime'],
-        interpretation: 'Complexidade relativa por categoria.'
-      }
+      { name: 'Top Tags', formula: 'COUNT(itens) GROUP BY tag ORDER BY count DESC', fields: ['tags (System.Tags)'], interpretation: 'Tags mais usadas indicam foco e categorizaÃƒÂ§ÃƒÂ£o do trabalho.' },
+      { name: 'Cycle Time por Tag', formula: 'AVG(cycleTime) GROUP BY tag', fields: ['tags', 'cycleTime'], interpretation: 'Complexidade relativa por categoria.' }
+    ]
+  },
+  {
+    id: 'clients',
+    title: 'Ã°Å¸ÂÂ¢ AnÃƒÂ¡lise por Cliente',
+    description: 'SegmentaÃƒÂ§ÃƒÂ£o de mÃƒÂ©tricas por tipo de cliente (campo Custom.Tipocliente).',
+    metrics: [
+      { name: 'Throughput por Cliente', formula: 'COUNT(itens fechados) GROUP BY tipoCliente', fields: ['tipoCliente (Custom.Tipocliente)'], interpretation: 'DistribuiÃƒÂ§ÃƒÂ£o de entregas por segmento de cliente.' },
+      { name: 'Cycle Time por Cliente', formula: 'AVG(cycleTime) GROUP BY tipoCliente', fields: ['tipoCliente', 'cycleTime'], interpretation: 'Velocidade de atendimento por tipo de cliente.' }
     ]
   },
   {
     id: 'montecarlo',
-    title: '🎲 Previsão (Monte Carlo)',
-    description: 'Simulação de Monte Carlo para previsão probabilística de entregas.',
+    title: 'Ã°Å¸Å½Â² PrevisÃƒÂ£o (Monte Carlo)',
+    description: 'SimulaÃƒÂ§ÃƒÂ£o probabilÃƒÂ­stica usando throughput histÃƒÂ³rico para prever quantos itens serÃƒÂ£o entregues.',
     metrics: [
-      {
-        name: 'Simulação Monte Carlo',
-        formula: '10.000 iterações usando throughput histórico',
-        fields: ['throughput diário histórico'],
-        interpretation: 'Probabilidade de entregar X itens em Y dias.'
-      },
-      {
-        name: 'Percentil 50 (Previsão)',
-        formula: 'Mediana das simulações',
-        fields: ['throughput histórico'],
-        interpretation: '50% de chance de atingir esta quantidade.'
-      },
-      {
-        name: 'Percentil 85 (Previsão)',
-        formula: '85º percentil das simulações',
-        fields: ['throughput histórico'],
-        interpretation: 'Previsão conservadora (85% confiança).'
-      }
-    ]
-  },
-  {
-    id: 'rootcause',
-    title: '🔍 Root Cause (Issues)',
-    description: 'Análise de causa raiz para Issues de Correção, identificando padrões e origem dos bugs. Utiliza campos customizados específicos para rastreamento de problemas.',
-    metrics: [
-      {
-        name: 'Issues por Tipo (Correção/Alteração)',
-        formula: 'COUNT(issues) GROUP BY customType',
-        fields: ['customType (Custom.Type)'],
-        interpretation: 'Distribuição de correções vs alterações.'
-      },
-      {
-        name: 'P0 por Causa Raiz',
-        formula: 'COUNT(P0) GROUP BY causaRaiz',
-        fields: ['priority = 0', 'causaRaiz (Custom.Raizdoproblema)'],
-        interpretation: 'Áreas que mais geram problemas críticos.'
-      },
-      {
-        name: 'Issues por Time Causa Raiz',
-        formula: 'COUNT(issues) GROUP BY rootCauseTeam',
-        fields: ['rootCauseTeam (Custom.rootcauseteam)'],
-        interpretation: 'Qual time introduziu o bug originalmente.'
-      },
-      {
-        name: 'Issues por Complexidade',
-        formula: 'COUNT(issues) GROUP BY complexity',
-        fields: ['complexity (Custom.Complexity)'],
-        interpretation: 'Distribuição: Baixa, Média, Alta.'
-      },
-      {
-        name: 'Issues por Squad',
-        formula: 'COUNT(issues) GROUP BY squad',
-        fields: ['squad (Custom.Squad)'],
-        interpretation: 'Área de negócio mais afetada.'
-      },
-      {
-        name: 'Issues por Plataforma',
-        formula: 'COUNT(issues) GROUP BY platform',
-        fields: ['platform (Custom.Platform)'],
-        interpretation: 'WPF, Web, Mobile, etc.'
-      },
-      {
-        name: 'Issues por DEV',
-        formula: 'COUNT(issues) GROUP BY dev',
-        fields: ['dev (Custom.DEV)'],
-        interpretation: 'Desenvolvedor que trabalhou na correção.'
-      },
-      {
-        name: 'Reincidência',
-        formula: 'SUM(reincidencia) GROUP BY valor',
-        fields: ['reincidencia (Custom.REINCIDENCIA) - valor numérico'],
-        interpretation: 'Problemas recorrentes. Campo indica quantas vezes o problema ocorreu (1x, 2x, 3x...).'
-      },
-      {
-        name: 'Issues Sem Causa Raiz',
-        formula: 'COUNT(issues WHERE causaRaiz IS NULL OR causaRaiz = "")',
-        fields: ['causaRaiz (Custom.Raizdoproblema)'],
-        interpretation: 'Correções sem análise de causa raiz preenchida.'
-      },
-      {
-        name: 'Identificação da Falha',
-        formula: 'COUNT(issues) GROUP BY identificacao',
-        fields: ['identificacao (Custom.7ac99842-e0ec-4f18-b91b-53bfe3e3b3f5)'],
-        interpretation: 'Como o problema foi identificado (Cliente, QA, Desenvolvimento, etc).'
-      },
-      {
-        name: 'Falha do Processo',
-        formula: 'COUNT(issues) GROUP BY falhaDoProcesso',
-        fields: ['falhaDoProcesso (Custom.Falhadoprocesso)'],
-        interpretation: 'Em qual etapa do processo a falha ocorreu.'
-      }
+      { name: 'SimulaÃƒÂ§ÃƒÂ£o Monte Carlo', formula: '10.000 iteraÃƒÂ§ÃƒÂµes usando throughput histÃƒÂ³rico diÃƒÂ¡rio', fields: ['throughput histÃƒÂ³rico'], interpretation: 'Probabilidade de entregar X itens em Y dias.' },
+      { name: 'P50 (50% confianÃƒÂ§a)', formula: 'Mediana das simulaÃƒÂ§ÃƒÂµes', fields: ['throughput'], interpretation: 'PrevisÃƒÂ£o otimista Ã¢â‚¬â€ chance igual de ser mais ou menos.' },
+      { name: 'P85 (85% confianÃƒÂ§a)', formula: '85Ã‚Âº percentil das simulaÃƒÂ§ÃƒÂµes', fields: ['throughput'], interpretation: 'PrevisÃƒÂ£o conservadora recomendada para compromissos.' }
     ]
   },
   {
     id: 'backlog',
-    title: '📚 Análise de Backlog',
-    description: 'Saúde do backlog, aging de itens não iniciados e distribuição por prioridade.',
+    title: 'Ã°Å¸â€œÅ¡ AnÃƒÂ¡lise de Backlog',
+    description: 'SaÃƒÂºde do backlog, aging de itens nÃƒÂ£o iniciados e capacidade recomendada de refinamento.',
     metrics: [
-      {
-        name: 'Backlog Total',
-        formula: 'COUNT(itens WHERE state = New/Para Desenvolver)',
-        fields: ['state'],
-        interpretation: 'Tamanho do backlog não iniciado.'
-      },
-      {
-        name: 'Aging do Backlog',
-        formula: 'Dias desde criação para itens não iniciados',
-        fields: ['createdDate', 'state = New'],
-        interpretation: 'Itens antigos podem estar obsoletos.'
-      },
-      {
-        name: 'Backlog por Prioridade',
-        formula: 'COUNT(backlog) GROUP BY priority',
-        fields: ['priority', 'state = New'],
-        interpretation: 'Distribuição de prioridades pendentes.'
-      }
-    ]
-  },
-  {
-    id: 'impedimentos',
-    title: '⚠️ Impedimentos',
-    description: 'Rastreamento de Work Items do tipo Impediment.',
-    metrics: [
-      {
-        name: 'Impedimentos Ativos',
-        formula: 'COUNT(items WHERE type = Impediment AND state != Closed)',
-        fields: ['type = Impediment', 'state'],
-        interpretation: 'Bloqueios atuais que precisam de atenção.'
-      },
-      {
-        name: 'Tempo Médio de Resolução',
-        formula: 'AVG(closedDate - createdDate) WHERE type = Impediment',
-        fields: ['type', 'closedDate', 'createdDate'],
-        interpretation: 'Agilidade em resolver bloqueios.'
-      }
+      { name: 'Backlog Total', formula: 'COUNT(state = New/Para Desenvolver)', fields: ['state'], interpretation: 'Tamanho do backlog pendente.' },
+      { name: 'Aging do Backlog', formula: 'Dias desde createdDate para itens nÃƒÂ£o iniciados', fields: ['createdDate', 'state'], interpretation: 'Itens muito antigos podem estar obsoletos.' },
+      { name: 'Capacidade Recomendada', formula: 'Throughput mÃƒÂ©dio Ãƒâ€” 3 (buffer de 3x sprint)', fields: ['throughput histÃƒÂ³rico'], interpretation: 'Quantidade ideal de itens refinados para manter o fluxo.' }
     ]
   },
   {
     id: 'po-analysis',
-    title: '📝 Análise de Demanda',
-    description: 'Visão do fluxo de entrada de demandas e análise para Product Owners. Inclui tracking de DOR (Definition of Ready) e DOD (Definition of Done).',
+    title: 'Ã°Å¸â€œÂ¥ AnÃƒÂ¡lise de Demanda',
+    description: 'VisÃƒÂ£o de entrada de demandas, criaÃƒÂ§ÃƒÂ£o por PO e taxa de qualidade da especificaÃƒÂ§ÃƒÂ£o.',
     metrics: [
-      {
-        name: 'Itens Criados vs Fechados',
-        formula: 'COUNT(createdDate) vs COUNT(closedDate) no período',
-        fields: ['createdDate', 'closedDate'],
-        interpretation: 'Entrada > Saída = backlog crescendo.'
-      },
-      {
-        name: 'Demanda por Tipo',
-        formula: 'COUNT(itens criados) GROUP BY type',
-        fields: ['type', 'createdDate'],
-        interpretation: 'Mix de demandas entrando.'
-      },
-      {
-        name: 'Itens com/sem DOR',
-        formula: 'COUNT(itens WHERE readyDate IS NOT NULL) vs COUNT(itens WHERE readyDate IS NULL)',
-        fields: ['readyDate (Custom.DOR) - data que o item ficou pronto para desenvolvimento'],
-        interpretation: 'Itens com Definition of Ready preenchida. Indica qualidade da preparação da demanda.'
-      },
-      {
-        name: 'Itens com/sem DOD',
-        formula: 'COUNT(itens WHERE doneDate IS NOT NULL) vs COUNT(itens WHERE doneDate IS NULL)',
-        fields: ['doneDate (Custom.DOD) - data que o item foi considerado "pronto"'],
-        interpretation: 'Itens que atingiram Definition of Done. Indica conclusão completa.'
-      }
+      { name: 'Itens Criados vs Fechados', formula: 'COUNT(createdDate) vs COUNT(closedDate) no perÃƒÂ­odo', fields: ['createdDate', 'closedDate'], interpretation: 'Entrada > SaÃƒÂ­da = backlog crescendo.' },
+      { name: 'Demanda por Tipo', formula: 'COUNT(itens criados) GROUP BY type', fields: ['type', 'createdDate'], interpretation: 'Mix de demandas entrando.' },
+      { name: 'Taxa de Bugs por Criador', formula: 'Bugs gerados / itens criados por PO', fields: ['createdBy', 'type'], interpretation: 'Qualidade da especificaÃƒÂ§ÃƒÂ£o. Alto = itens mal especificados gerando retrabalho.' }
     ]
   },
   {
     id: 'pull-requests',
-    title: '🔀 Pull Requests & Code Review',
-    description: 'Métricas de Pull Requests e processo de Code Review.',
+    title: 'Ã°Å¸â€â‚¬ Pull Requests & Code Review',
+    description: 'MÃƒÂ©tricas de PRs sincronizados do Azure DevOps Repos.',
     metrics: [
-      {
-        name: 'PRs Abertos',
-        formula: 'COUNT(PRs WHERE status = active)',
-        fields: ['status', 'createdDate'],
-        interpretation: 'PRs aguardando review/merge.'
-      },
-      {
-        name: 'Tempo de Review',
-        formula: 'AVG(closedDate - createdDate) para PRs',
-        fields: ['createdDate', 'closedDate'],
-        interpretation: 'Velocidade do processo de code review.'
-      },
-      {
-        name: 'PRs por Reviewer',
-        formula: 'COUNT(PRs) GROUP BY reviewer',
-        fields: ['reviewers'],
-        interpretation: 'Carga de review por pessoa.'
-      },
-      {
-        name: 'PRs com Valida CR',
-        formula: 'COUNT(PRs WHERE labels CONTAINS "Valida CR")',
-        fields: ['labels'],
-        interpretation: 'PRs que passaram pela validação.'
-      }
+      { name: 'PRs Abertos', formula: 'COUNT(PRs WHERE status = active)', fields: ['status', 'createdDate'], interpretation: 'PRs aguardando review/merge.' },
+      { name: 'Tempo de Review', formula: 'AVG(closedDate - createdDate) para PRs', fields: ['createdDate', 'closedDate'], interpretation: 'Velocidade do processo de code review.' },
+      { name: 'PRs por RepositÃƒÂ³rio', formula: 'COUNT(PRs) GROUP BY repositoryName', fields: ['repositoryName'], interpretation: 'DistribuiÃƒÂ§ÃƒÂ£o de trabalho por repositÃƒÂ³rio.' }
     ]
   },
   {
     id: 'scrum-ctc',
-    title: '🏃 Scrum (CTC/Franquia)',
-    description: 'Métricas específicas para times Scrum CTC e Franquia.',
+    title: 'Ã°Å¸ÂÆ’ Scrum',
+    description: 'MÃƒÂ©tricas especÃƒÂ­ficas para times que usam Scrum. Seletor de time disponÃƒÂ­vel. Usa iterationPath para identificar sprints.',
     metrics: [
-      {
-        name: 'Velocity',
-        formula: 'SUM(storyPoints) para itens fechados na Sprint',
-        fields: ['storyPoints', 'iterationPath', 'closedDate'],
-        interpretation: 'Capacidade de entrega em Story Points.'
-      },
-      {
-        name: 'Sprint Burndown',
-        formula: 'Story Points restantes ao longo da Sprint',
-        fields: ['storyPoints', 'state', 'iterationPath'],
-        interpretation: 'Progresso durante a Sprint.'
-      }
+      { name: 'Velocity', formula: 'SUM(storyPoints) para itens fechados na Sprint', fields: ['storyPoints', 'iterationPath', 'closedDate'], interpretation: 'Capacidade de entrega em Story Points por sprint.' },
+      { name: 'Sprint Burndown', formula: 'Story Points restantes ao longo da Sprint', fields: ['storyPoints', 'state', 'iterationPath'], interpretation: 'Progresso durante a Sprint.' },
+      { name: 'Estimativa vs Realidade', formula: 'originalEstimate vs completedWork vs remainingWork', fields: ['originalEstimate', 'completedWork', 'remainingWork'], interpretation: 'Acuracidade das estimativas por sprint.' }
     ]
   },
   {
     id: 'dora',
-    title: '🚀 Indicadores DevOps (DORA)',
-    description: 'Métricas DORA para avaliar maturidade DevOps da equipe.',
+    title: 'Ã°Å¸Å¡â‚¬ Indicadores DevOps (DORA Ã¢â‚¬â€ Adaptados)',
+    description: 'MÃƒÂ©tricas DORA adaptadas para o contexto de Work Items do Azure DevOps. NÃƒÂ£o sÃƒÂ£o mÃƒÂ©tricas DORA reais (que requerem dados de pipeline CI/CD), mas aproximaÃƒÂ§ÃƒÂµes conceituais ÃƒÂºteis.',
     metrics: [
-      {
-        name: 'Deployment Frequency',
-        formula: 'Entregas por período (baseado em throughput)',
-        fields: ['closedDate'],
-        interpretation: 'Frequência de deploys. Elite: múltiplas por dia.'
-      },
-      {
-        name: 'Lead Time for Changes',
-        formula: 'Tempo desde commit até produção',
-        fields: ['leadTime (calculado)'],
-        interpretation: 'Elite: menos de 1 hora. Low: mais de 6 meses.'
-      },
-      {
-        name: 'Change Failure Rate',
-        formula: '(Bugs criados / Total entregas) × 100',
-        fields: ['type = Bug', 'createdDate', 'closedDate'],
-        interpretation: 'Taxa de falhas. Elite: 0-15%.'
-      },
-      {
-        name: 'Mean Time to Restore',
-        formula: 'AVG(cycleTime) para bugs P0/P1',
-        fields: ['type = Bug', 'priority', 'cycleTime'],
-        interpretation: 'Tempo para resolver incidentes. Elite: < 1 hora.'
-      }
+      { name: 'Deployment Frequency (Adaptado)', formula: 'Throughput mÃƒÂ©dio semanal', fields: ['closedDate'], interpretation: 'FrequÃƒÂªncia de entregas. Elite: mÃƒÂºltiplas por semana.' },
+      { name: 'Lead Time for Changes (Adaptado)', formula: 'Cycle time mÃƒÂ©dio de User Stories/PBIs', fields: ['cycleTime', 'type'], interpretation: 'Tempo do inÃƒÂ­cio do desenvolvimento atÃƒÂ© entrega. Elite: < 1 semana.' },
+      { name: 'Change Failure Rate (Adaptado)', formula: '(Bugs criados / entregas) Ãƒâ€” 100', fields: ['type = Bug', 'closedDate'], interpretation: 'Taxa de falhas pÃƒÂ³s-entrega. Elite: < 15%.' },
+      { name: 'MTTR Ã¢â‚¬â€ Mean Time to Restore (Adaptado)', formula: 'AVG(cycleTime) WHERE type = Bug', fields: ['type', 'cycleTime'], interpretation: 'Velocidade de correÃƒÂ§ÃƒÂ£o de defeitos. Elite: < 1 dia.' }
     ]
   },
   {
     id: 'sla',
-    title: '📋 SLA Tracking',
-    description: 'Monitoramento de acordos de nível de serviço por prioridade e cliente.',
+    title: 'Ã°Å¸â€œâ€¹ SLA Tracking',
+    description: 'Monitoramento de acordos de nÃƒÂ­vel de serviÃƒÂ§o por prioridade.',
     metrics: [
-      {
-        name: 'SLA por Prioridade',
-        formula: 'Percentual de itens dentro do SLA por P0/P1/P2/P3/P4',
-        fields: ['priority', 'cycleTime', 'SLA definido'],
-        interpretation: 'Conformidade com SLAs por severidade.'
-      },
-      {
-        name: 'Itens Violando SLA',
-        formula: 'COUNT(itens WHERE cycleTime > SLA)',
-        fields: ['cycleTime', 'priority'],
-        interpretation: 'Itens que excederam o tempo acordado.'
-      }
+      { name: 'SLA por Prioridade', formula: '% itens dentro do SLA por P0/P1/P2/P3', fields: ['priority', 'cycleTime'], interpretation: 'Conformidade com SLAs por severidade.' },
+      { name: 'Itens Violando SLA', formula: 'COUNT(cycleTime > SLA definido)', fields: ['cycleTime', 'priority'], interpretation: 'Itens que excederam o tempo acordado.' }
     ]
   },
   {
     id: 'metas',
-    title: '🎯 Metas por Time',
-    description: 'Acompanhamento de metas definidas para cada time.',
+    title: 'Ã°Å¸ÂÂ Metas por Time',
+    description: 'Acompanhamento de metas de throughput e cycle time definidas para cada time.',
     metrics: [
-      {
-        name: 'Meta de Throughput',
-        formula: 'Progresso vs meta definida',
-        fields: ['throughput', 'meta configurada'],
-        interpretation: 'Percentual de atingimento da meta de entregas.'
-      },
-      {
-        name: 'Meta de Cycle Time',
-        formula: 'Cycle Time atual vs meta',
-        fields: ['cycleTime médio', 'meta configurada'],
-        interpretation: 'Comparação com objetivo de velocidade.'
-      }
+      { name: 'Meta de Throughput', formula: 'Throughput atual / meta Ãƒâ€” 100', fields: ['throughput', 'meta configurada'], interpretation: 'Percentual de atingimento da meta de entregas.' },
+      { name: 'Meta de Cycle Time', formula: 'Cycle Time atual vs meta', fields: ['cycleTime', 'meta'], interpretation: 'ComparaÃƒÂ§ÃƒÂ£o com objetivo de velocidade.' }
+    ]
+  },
+  {
+    id: 'period-comparison',
+    title: 'Ã°Å¸â€œÅ  ComparaÃƒÂ§ÃƒÂ£o de PerÃƒÂ­odos',
+    description: 'Compare mÃƒÂ©tricas entre dois perÃƒÂ­odos diferentes para validar impacto de mudanÃƒÂ§as.',
+    metrics: [
+      { name: 'Delta Throughput', formula: 'PerÃƒÂ­odo A - PerÃƒÂ­odo B (COUNT itens fechados)', fields: ['closedDate', 'perÃƒÂ­odo'], interpretation: 'Melhora ou piora na capacidade de entrega entre perÃƒÂ­odos.' },
+      { name: 'Delta Cycle Time', formula: 'AVG(cycleTime) PerÃƒÂ­odo A vs PerÃƒÂ­odo B', fields: ['cycleTime', 'perÃƒÂ­odo'], interpretation: 'EvoluÃƒÂ§ÃƒÂ£o da velocidade de desenvolvimento.' }
+    ]
+  },
+  {
+    id: 'team-comparison',
+    title: 'Ã°Å¸â€˜Â¥ Pessoas & Senioridade',
+    description: 'ComparaÃƒÂ§ÃƒÂ£o individual de performance, senioridade e contribuiÃƒÂ§ÃƒÂ£o por pessoa.',
+    metrics: [
+      { name: 'Entregas por Pessoa', formula: 'COUNT(closedDate) GROUP BY assignedTo', fields: ['assignedTo', 'closedDate'], interpretation: 'Volume de entrega individual.' },
+      { name: 'Cycle Time por Pessoa', formula: 'AVG(cycleTime) GROUP BY assignedTo', fields: ['cycleTime', 'assignedTo'], interpretation: 'Velocidade individual de desenvolvimento.' }
+    ]
+  },
+  {
+    id: 'rootcause',
+    title: 'Ã°Å¸â€Â Root Cause (Issues)',
+    description: 'AnÃƒÂ¡lise de causa raiz para Issues. Utiliza campos customizados do Azure DevOps.',
+    metrics: [
+      { name: 'Issues por Causa Raiz', formula: 'COUNT(issues) GROUP BY causaRaiz', fields: ['causaRaiz (Custom.Raizdoproblema)'], interpretation: 'Causas mais frequentes de issues em produÃƒÂ§ÃƒÂ£o.' },
+      { name: 'P0 por Causa Raiz', formula: 'COUNT(P0) GROUP BY causaRaiz', fields: ['priority = 0', 'causaRaiz'], interpretation: 'Causas de problemas crÃƒÂ­ticos.' },
+      { name: 'Issues por Squad', formula: 'COUNT(issues) GROUP BY squad', fields: ['squad (Custom.Squad)'], interpretation: 'ÃƒÂrea de negÃƒÂ³cio mais afetada.' },
+      { name: 'ReincidÃƒÂªncia', formula: 'SUM(reincidencia) GROUP BY valor', fields: ['reincidencia (Custom.REINCIDENCIA)'], interpretation: 'Problemas recorrentes. Campo numÃƒÂ©rico (1x, 2x, 3x...).' }
+    ]
+  },
+  {
+    id: 'rituals',
+    title: 'Ã°Å¸â€”â€œÃ¯Â¸Â Ritos & Cerimonias',
+    description: 'Controle manual de realizacao de cerimonias ageis (Refinamento, Review, Retrospectiva, Planning, Daily). Permite registro retroativo e importacao de calendario .ics ou Outlook.',
+    metrics: [
+      { name: '% de Realizacao', formula: 'Realizados / (Realizados + Remarcados + Cancelados) Ãƒâ€” 100', fields: ['status = done/rescheduled/cancelled'], interpretation: 'Taxa de realizacao das cerimonias. Alvo: >80%.' },
+      { name: 'Status por Cerimonia', formula: 'COUNT por status (Realizado/Remarcado/Cancelado/Pendente)', fields: ['ritual_type', 'status', 'scheduled_date'], interpretation: 'Saude dos ritos por tipo e time.' },
+      { name: 'Historico por Time', formula: 'Taxa de realizacao mensal GROUP BY team', fields: ['team', 'status', 'month'], interpretation: 'Evolucao da governanca agil ao longo do tempo.' }
+    ],
+    charts: ['Cards de % por rito', 'Tabela semanal por cerimonia', 'Historico 3 meses', 'Visao Geral com filtros']
+  },
+  {
+    id: 'qa-tracker',
+    title: 'Ã°Å¸Â§Âª QA Tracker',
+    description: 'Controle de testes por versao entregue. Rastreia status de teste (Pendente/Testado/Bloqueado), casos de teste, evidencias em imagem e notas por work item.',
+    metrics: [
+      { name: 'Cobertura de Testes', formula: 'Testados / Total Ãƒâ€” 100 por versao', fields: ['qa_test_records.status', 'version'], interpretation: '% de itens validados pelo QA na versao selecionada.' },
+      { name: 'Distribuicao por Status', formula: 'COUNT(status) GROUP BY status para a versao', fields: ['status = pending/done/blocked'], interpretation: 'Visao rapida de quantos itens estao pendentes, testados ou bloqueados.' },
+      { name: 'Por QA Responsavel', formula: 'COUNT(itens) GROUP BY qa_person', fields: ['qa_person', 'version'], interpretation: 'Carga de trabalho de teste por analista.' },
+      { name: 'Historico por Versao', formula: 'Taxa de cobertura das ultimas 12 versoes', fields: ['version', 'status'], interpretation: 'Evolucao da maturidade de QA entre releases.' }
+    ],
+    charts: ['4 cards KPI', 'Donut cobertura', 'BarChart por QA/Tipo/Area', 'Historico versoes', 'Export XLSX com evidencias']
+  },
+  {
+    id: 'devtracker',
+    title: 'Ã°Å¸â€”â€šÃ¯Â¸Â DevTracker',
+    description: 'Gestao de alocacao de desenvolvedores por projeto. Permite registrar capacidade, alocacoes e gerar visao de ocupacao do time.',
+    metrics: [
+      { name: 'Ocupacao por Desenvolvedor', formula: 'SUM(alocacao%) GROUP BY developer', fields: ['devtracker_allocations', 'devtracker_developers'], interpretation: 'Percentual de ocupacao de cada pessoa. >100% = sobrecarga.' },
+      { name: 'Alocacao por Projeto', formula: 'SUM(alocacao%) GROUP BY project', fields: ['devtracker_projects', 'devtracker_allocations'], interpretation: 'Distribuicao de capacidade entre projetos.' }
     ]
   }
 ];
 
 const AZURE_FIELDS_REFERENCE = [
-  { field: 'System.Id', description: 'ID único do Work Item', example: '78645' },
-  { field: 'System.Title', description: 'Título do item', example: 'Corrigir bug no cálculo de impostos' },
-  { field: 'System.State', description: 'Estado atual', example: 'Active, Closed, New' },
-  { field: 'System.WorkItemType', description: 'Tipo do item', example: 'Bug, Issue, PBI, Task' },
-  { field: 'System.AssignedTo', description: 'Pessoa atribuída', example: 'João Silva' },
-  { field: 'System.AreaPath', description: 'Área/Time', example: 'USE\\Frente de Loja' },
-  { field: 'System.IterationPath', description: 'Sprint/Iteração', example: 'USE\\Sprint 45' },
-  { field: 'System.CreatedDate', description: 'Data de criação', example: '2026-01-15T10:30:00Z' },
-  { field: 'System.ChangedDate', description: 'Última modificação', example: '2026-02-10T14:20:00Z' },
-  { field: 'System.Tags', description: 'Tags separadas por ;', example: 'PDV;Urgente;Cliente X' },
-  { field: 'Microsoft.VSTS.Common.ClosedDate', description: 'Data de fechamento', example: '2026-02-11T09:00:00Z' },
+  { field: 'System.Id', description: 'ID unico do Work Item', example: '10001' },
+  { field: 'System.Title', description: 'Titulo do item', example: 'Implementar autenticacao JWT' },
+  { field: 'System.State', description: 'Estado atual', example: 'Active, Closed, New, Pronto' },
+  { field: 'System.WorkItemType', description: 'Tipo do item', example: 'User Story, Bug, Feature, Task, Issue' },
+  { field: 'System.AssignedTo', description: 'Pessoa atribuida', example: 'Marina Duarte' },
+  { field: 'System.AreaPath', description: 'Area/Time (mapeado para o campo team)', example: 'FLEX\\Time Norte' },
+  { field: 'System.IterationPath', description: 'Sprint/Iteracao', example: 'FLEX\\Sprint 12' },
+  { field: 'System.CreatedDate', description: 'Data de criacao', example: '2026-01-15T10:30:00Z' },
+  { field: 'System.ChangedDate', description: 'Ultima modificacao', example: '2026-02-10T14:20:00Z' },
+  { field: 'System.Tags', description: 'Tags separadas por ;', example: 'IMPEDIMENTO; [v1.2]' },
+  { field: 'Microsoft.VSTS.Common.ClosedDate', description: 'Data de fechamento (usada para Cycle Time)', example: '2026-02-11T09:00:00Z' },
   { field: 'Microsoft.VSTS.Common.Priority', description: 'Prioridade (0-4)', example: '1 (P1 = Alta)' },
-  { field: 'Microsoft.VSTS.Common.ActivatedDate', description: 'Data de ativação (início do trabalho)', example: '2026-01-20T08:00:00Z' },
+  { field: 'Microsoft.VSTS.Common.ActivatedDate', description: 'Data de ativacao Ã¢â‚¬â€ inicio do trabalho ativo', example: '2026-01-20T08:00:00Z' },
   { field: 'Microsoft.VSTS.Scheduling.StoryPoints', description: 'Estimativa em Story Points', example: '5' },
-  { field: 'Custom.Tipocliente', description: 'Tipo de cliente', example: 'SLA ONE - CTC' },
-  { field: 'Custom.Type', description: 'Tipo customizado (Issue)', example: 'Correção, Alteração' },
-  { field: 'Custom.Squad', description: 'Squad responsável', example: 'Frente de Loja' },
-  { field: 'Custom.Area', description: 'Área do sistema', example: 'PDV | Vendas | Caixa' },
-  { field: 'Custom.Complexity', description: 'Complexidade', example: 'Baixa, Média, Alta' },
-  { field: 'Custom.Platform', description: 'Plataforma', example: 'WPF, Web, Mobile' },
-  { field: 'Custom.DEV', description: 'Desenvolvedor responsável', example: 'Maria Santos' },
-  { field: 'Custom.QA', description: 'QA responsável', example: 'Pedro Costa' },
-  { field: 'Custom.rootcauseteam', description: 'Time que causou o bug', example: 'Legado' },
-  { field: 'Custom.Rootcausetask', description: 'ID da tarefa origem', example: '71142' },
-  { field: 'Custom.rootcauseversion', description: 'Versão com o bug', example: '3.51.6.6' },
-  { field: 'Custom.REINCIDENCIA', description: 'Número de reincidências (valor numérico)', example: '2' },
-  { field: 'Custom.Raizdoproblema', description: 'Descrição da causa raiz', example: 'Falta de validação' },
-  { field: 'Custom.DOR', description: 'Definition of Ready - data que item ficou pronto para dev', example: '2026-01-18T10:00:00Z' },
-  { field: 'Custom.DOD', description: 'Definition of Done - data de conclusão completa', example: '2026-02-05T16:00:00Z' },
-  { field: 'Custom.7ac99842-e0ec-4f18-b91b-53bfe3e3b3f5', description: 'Identificação da falha (como foi descoberta)', example: 'Cliente, QA, Desenvolvimento' },
-  { field: 'Custom.Falhadoprocesso', description: 'Falha do processo (etapa onde ocorreu)', example: 'Desenvolvimento, Code Review, QA' },
-  { field: 'Custom.ab075d4c-04f5-4f96-b294-4ad0f5987028', description: 'Code Review - Nível 1', example: 'João Silva' },
-  { field: 'Custom.60cee051-7e66-4753-99d6-4bc8717fae0e', description: 'Code Review - Nível 2', example: 'Maria Costa' },
-  { field: 'Custom.PO', description: 'Product Owner responsável', example: 'Ana Souza' },
-  { field: 'Custom.EntryDate', description: 'Data de entrada no sistema', example: '2026-01-10T08:00:00Z' },
+  { field: 'Microsoft.VSTS.Scheduling.OriginalEstimate', description: 'Estimativa original em horas', example: '8' },
+  { field: 'Microsoft.VSTS.Scheduling.RemainingWork', description: 'Trabalho restante em horas', example: '3' },
+  { field: 'Microsoft.VSTS.Scheduling.CompletedWork', description: 'Trabalho concluido em horas', example: '5' },
+  { field: 'Custom.Tipocliente', description: 'Tipo de cliente atendido pelo item', example: 'Veritas Logistica' },
+  { field: 'Custom.Type', description: 'Tipo customizado (usado em Issues)', example: 'Correcao, Alteracao' },
+  { field: 'Custom.Squad', description: 'Squad responsavel', example: 'Core, Integracao, Reports' },
+  { field: 'Custom.Area', description: 'Area funcional do sistema', example: 'Financeiro, Vendas, Estoque' },
+  { field: 'Custom.Complexity', description: 'Complexidade estimada', example: 'Baixa, Media, Alta' },
+  { field: 'Custom.Platform', description: 'Plataforma afetada', example: 'Web, Mobile, API' },
+  { field: 'Custom.DEV', description: 'Desenvolvedor responsavel', example: 'Rafael Alves' },
+  { field: 'Custom.QA', description: 'Analista QA responsavel', example: 'Marina Duarte' },
+  { field: 'Custom.PO', description: 'Product Owner responsavel', example: 'Beatriz Lopes' },
+  { field: 'Custom.rootcauseteam', description: 'Time que introduziu o bug', example: 'Time Norte' },
+  { field: 'Custom.Rootcausetask', description: 'ID da tarefa de origem do bug', example: '10045' },
+  { field: 'Custom.rootcauseversion', description: 'Versao na qual o bug foi introducido', example: 'v1.2' },
+  { field: 'Custom.REINCIDENCIA', description: 'Numero de reincidencias (valor numerico)', example: '2' },
+  { field: 'Custom.Raizdoproblema', description: 'Descricao da causa raiz', example: 'Falta de validacao de entrada' },
+  { field: 'Custom.Falhadoprocesso', description: 'Etapa do processo onde a falha ocorreu', example: 'Desenvolvimento, Code Review, QA' },
+  { field: 'Custom.DOR', description: 'Definition of Ready Ã¢â‚¬â€ data que o item ficou pronto para dev', example: '2026-01-18T10:00:00Z' },
+  { field: 'Custom.DOD', description: 'Definition of Done Ã¢â‚¬â€ data de conclusao completa', example: '2026-02-05T16:00:00Z' },
+  { field: 'Custom.DeliveredVersion', description: 'Versao entregue em producao', example: 'v1.2' },
 ];
 
 const DocumentationDashboard: React.FC = () => {
@@ -630,10 +356,10 @@ const DocumentationDashboard: React.FC = () => {
     <div className="space-y-6">
       {/* Header */}
       <div className="bg-ds-navy p-6 rounded-lg border border-ds-border">
-        <h1 className="text-2xl font-bold text-white mb-2">📖 Documentação do Dashboard</h1>
+        <h1 className="text-2xl font-bold text-white mb-2">Ã°Å¸â€œâ€“ DocumentaÃƒÂ§ÃƒÂ£o do Dashboard</h1>
         <p className="text-ds-text">
-          Esta seção documenta todas as métricas, cálculos e campos do Azure DevOps utilizados em cada aba do dashboard.
-          Use como referência para entender como os indicadores são calculados.
+          Esta seÃƒÂ§ÃƒÂ£o documenta todas as mÃƒÂ©tricas, cÃƒÂ¡lculos e campos do Azure DevOps utilizados em cada aba do dashboard.
+          Use como referÃƒÂªncia para entender como os indicadores sÃƒÂ£o calculados.
         </p>
       </div>
 
@@ -643,7 +369,7 @@ const DocumentationDashboard: React.FC = () => {
           <label className="block text-sm text-ds-text mb-1">Buscar</label>
           <input
             type="text"
-            placeholder="Buscar métrica, campo, fórmula..."
+            placeholder="Buscar mÃƒÂ©trica, campo, fÃƒÂ³rmula..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full bg-ds-dark-blue text-white px-3 py-2 rounded border border-ds-border focus:border-ds-green outline-none"
@@ -664,7 +390,7 @@ const DocumentationDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Documentação das Abas */}
+      {/* DocumentaÃƒÂ§ÃƒÂ£o das Abas */}
       <div className="space-y-6">
         {filteredDocs.map((doc) => (
           <div key={doc.id} className="bg-ds-navy rounded-lg border border-ds-border overflow-hidden">
@@ -674,7 +400,7 @@ const DocumentationDashboard: React.FC = () => {
             </div>
             
             <div className="p-4">
-              <h3 className="text-lg font-semibold text-ds-green mb-3">📊 Métricas</h3>
+              <h3 className="text-lg font-semibold text-ds-green mb-3">Ã°Å¸â€œÅ  MÃƒÂ©tricas</h3>
               <div className="grid gap-4">
                 {doc.metrics.map((metric, idx) => (
                   <div key={idx} className="bg-ds-dark-blue p-4 rounded-lg border border-ds-border">
@@ -683,7 +409,7 @@ const DocumentationDashboard: React.FC = () => {
                         <h4 className="font-bold text-white text-lg">{metric.name}</h4>
                         <div className="mt-2 space-y-2">
                           <div>
-                            <span className="text-ds-text text-sm">Fórmula:</span>
+                            <span className="text-ds-text text-sm">FÃƒÂ³rmula:</span>
                             <code className="ml-2 bg-ds-border px-2 py-1 rounded text-ds-green text-sm">
                               {metric.formula}
                             </code>
@@ -699,7 +425,7 @@ const DocumentationDashboard: React.FC = () => {
                             </div>
                           </div>
                           <div className="text-ds-text text-sm">
-                            <span className="font-semibold">💡 Interpretação:</span> {metric.interpretation}
+                            <span className="font-semibold">Ã°Å¸â€™Â¡ InterpretaÃƒÂ§ÃƒÂ£o:</span> {metric.interpretation}
                           </div>
                         </div>
                       </div>
@@ -710,7 +436,7 @@ const DocumentationDashboard: React.FC = () => {
 
               {doc.charts && (
                 <div className="mt-4">
-                  <h4 className="text-sm font-semibold text-ds-text mb-2">📈 Gráficos nesta aba:</h4>
+                  <h4 className="text-sm font-semibold text-ds-text mb-2">Ã°Å¸â€œË† GrÃƒÂ¡ficos nesta aba:</h4>
                   <div className="flex flex-wrap gap-2">
                     {doc.charts.map((chart, i) => (
                       <span key={i} className="bg-purple-900/50 text-purple-300 px-2 py-1 rounded text-sm">
@@ -725,10 +451,10 @@ const DocumentationDashboard: React.FC = () => {
         ))}
       </div>
 
-      {/* Referência de Campos Azure DevOps */}
+      {/* ReferÃƒÂªncia de Campos Azure DevOps */}
       <div className="bg-ds-navy rounded-lg border border-ds-border overflow-hidden">
         <div className="bg-gradient-to-r from-blue-600/20 to-transparent p-4 border-b border-ds-border">
-          <h2 className="text-xl font-bold text-white">📋 Referência de Campos Azure DevOps</h2>
+          <h2 className="text-xl font-bold text-white">Ã°Å¸â€œâ€¹ ReferÃƒÂªncia de Campos Azure DevOps</h2>
           <p className="text-ds-text mt-1">Campos do Azure DevOps utilizados pelo dashboard e seus significados.</p>
         </div>
         
@@ -737,7 +463,7 @@ const DocumentationDashboard: React.FC = () => {
             <thead>
               <tr className="text-left border-b border-ds-border">
                 <th className="pb-2 text-ds-text font-semibold">Campo</th>
-                <th className="pb-2 text-ds-text font-semibold">Descrição</th>
+                <th className="pb-2 text-ds-text font-semibold">DescriÃƒÂ§ÃƒÂ£o</th>
                 <th className="pb-2 text-ds-text font-semibold">Exemplo</th>
               </tr>
             </thead>
@@ -756,57 +482,57 @@ const DocumentationDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Glossário */}
+      {/* GlossÃƒÂ¡rio */}
       <div className="bg-ds-navy rounded-lg border border-ds-border p-4">
-        <h2 className="text-xl font-bold text-white mb-4">📚 Glossário</h2>
+        <h2 className="text-xl font-bold text-white mb-4">Ã°Å¸â€œÅ¡ GlossÃƒÂ¡rio</h2>
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
           <div className="bg-ds-dark-blue p-3 rounded border-l-4 border-yellow-400">
-            <h4 className="font-bold text-yellow-400">🐛 Bug</h4>
-            <p className="text-ds-text text-sm">Erro detectado <strong>EM DESENVOLVIMENTO</strong>, antes de ir para produção. Não impactou o cliente final. Indica que o processo de QA está funcionando.</p>
+            <h4 className="font-bold text-yellow-400">Ã°Å¸Ââ€º Bug</h4>
+            <p className="text-ds-text text-sm">Erro detectado <strong>EM DESENVOLVIMENTO</strong>, antes de ir para produÃƒÂ§ÃƒÂ£o. NÃƒÂ£o impactou o cliente final. Indica que o processo de QA estÃƒÂ¡ funcionando.</p>
           </div>
           <div className="bg-ds-dark-blue p-3 rounded border-l-4 border-red-400">
-            <h4 className="font-bold text-red-400">⚠️ Issue</h4>
-            <p className="text-ds-text text-sm">Erro que <strong>ESCAPOU PARA PRODUÇÃO</strong> e impactou o cliente. Mais grave que Bug, pois chegou ao usuário final. Pode ter reincidência.</p>
+            <h4 className="font-bold text-red-400">Ã¢Å¡Â Ã¯Â¸Â Issue</h4>
+            <p className="text-ds-text text-sm">Erro que <strong>ESCAPOU PARA PRODUÃƒâ€¡ÃƒÆ’O</strong> e impactou o cliente. Mais grave que Bug, pois chegou ao usuÃƒÂ¡rio final. Pode ter reincidÃƒÂªncia.</p>
           </div>
           <div className="bg-ds-dark-blue p-3 rounded border-l-4 border-orange-400">
-            <h4 className="font-bold text-orange-400">🔄 Reincidência</h4>
-            <p className="text-ds-text text-sm">Issue (erro em produção) que voltou a acontecer. Indica problema não resolvido completamente. Campo exclusivo de Issues.</p>
+            <h4 className="font-bold text-orange-400">Ã°Å¸â€â€ž ReincidÃƒÂªncia</h4>
+            <p className="text-ds-text text-sm">Issue (erro em produÃƒÂ§ÃƒÂ£o) que voltou a acontecer. Indica problema nÃƒÂ£o resolvido completamente. Campo exclusivo de Issues.</p>
           </div>
           <div className="bg-ds-dark-blue p-3 rounded">
             <h4 className="font-bold text-ds-green">Cycle Time</h4>
-            <p className="text-ds-text text-sm">Tempo desde o início do trabalho (ativação) até a conclusão. Mede velocidade de desenvolvimento.</p>
+            <p className="text-ds-text text-sm">Tempo desde o inÃƒÂ­cio do trabalho (ativaÃƒÂ§ÃƒÂ£o) atÃƒÂ© a conclusÃƒÂ£o. Mede velocidade de desenvolvimento.</p>
           </div>
           <div className="bg-ds-dark-blue p-3 rounded">
             <h4 className="font-bold text-ds-green">Lead Time</h4>
-            <p className="text-ds-text text-sm">Tempo total desde a criação do item até sua conclusão. Inclui tempo em fila.</p>
+            <p className="text-ds-text text-sm">Tempo total desde a criaÃƒÂ§ÃƒÂ£o do item atÃƒÂ© sua conclusÃƒÂ£o. Inclui tempo em fila.</p>
           </div>
           <div className="bg-ds-dark-blue p-3 rounded">
             <h4 className="font-bold text-ds-green">Throughput</h4>
-            <p className="text-ds-text text-sm">Quantidade de itens entregues em um período. Mede capacidade de entrega.</p>
+            <p className="text-ds-text text-sm">Quantidade de itens entregues em um perÃƒÂ­odo. Mede capacidade de entrega.</p>
           </div>
           <div className="bg-ds-dark-blue p-3 rounded">
             <h4 className="font-bold text-ds-green">WIP (Work in Progress)</h4>
-            <p className="text-ds-text text-sm">Trabalho em andamento. Itens iniciados mas não concluídos.</p>
+            <p className="text-ds-text text-sm">Trabalho em andamento. Itens iniciados mas nÃƒÂ£o concluÃƒÂ­dos.</p>
           </div>
           <div className="bg-ds-dark-blue p-3 rounded">
             <h4 className="font-bold text-ds-green">Story Points</h4>
-            <p className="text-ds-text text-sm">Unidade de estimativa de esforço relativo. Não representa horas.</p>
+            <p className="text-ds-text text-sm">Unidade de estimativa de esforÃƒÂ§o relativo. NÃƒÂ£o representa horas.</p>
           </div>
           <div className="bg-ds-dark-blue p-3 rounded">
             <h4 className="font-bold text-ds-green">P0/P1/P2/P3/P4</h4>
-            <p className="text-ds-text text-sm">Níveis de prioridade. P0 = crítico, P4 = baixa prioridade.</p>
+            <p className="text-ds-text text-sm">NÃƒÂ­veis de prioridade. P0 = crÃƒÂ­tico, P4 = baixa prioridade.</p>
           </div>
           <div className="bg-ds-dark-blue p-3 rounded">
             <h4 className="font-bold text-ds-green">CFD</h4>
-            <p className="text-ds-text text-sm">Cumulative Flow Diagram. Gráfico de área que mostra acúmulo por estado ao longo do tempo.</p>
+            <p className="text-ds-text text-sm">Cumulative Flow Diagram. GrÃƒÂ¡fico de ÃƒÂ¡rea que mostra acÃƒÂºmulo por estado ao longo do tempo.</p>
           </div>
           <div className="bg-ds-dark-blue p-3 rounded">
             <h4 className="font-bold text-ds-green">Monte Carlo</h4>
-            <p className="text-ds-text text-sm">Simulação estatística usando dados históricos para previsões probabilísticas.</p>
+            <p className="text-ds-text text-sm">SimulaÃƒÂ§ÃƒÂ£o estatÃƒÂ­stica usando dados histÃƒÂ³ricos para previsÃƒÂµes probabilÃƒÂ­sticas.</p>
           </div>
           <div className="bg-ds-dark-blue p-3 rounded">
             <h4 className="font-bold text-ds-green">DORA Metrics</h4>
-            <p className="text-ds-text text-sm">4 métricas DevOps: Deploy Frequency, Lead Time, Change Failure Rate, MTTR.</p>
+            <p className="text-ds-text text-sm">4 mÃƒÂ©tricas DevOps: Deploy Frequency, Lead Time, Change Failure Rate, MTTR.</p>
           </div>
         </div>
       </div>
