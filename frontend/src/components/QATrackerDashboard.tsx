@@ -632,15 +632,16 @@ const QATrackerDashboard: React.FC = () => {
 
     fetch(`${API}/api/qa-tracker/versions`, { headers })
       .then(r => r.json())
-      .then((v: string[]) => {
-        setVersions(v);
-        setVersion(prev => prev || v[0] || '');
+      .then((v: any) => {
+        const safeV = Array.isArray(v) ? v : Array.isArray(v?.versions) ? v.versions : [];
+        setVersions(safeV);
+        setVersion(prev => prev || safeV[0] || '');
       })
       .catch(() => setError('Erro ao carregar versões'));
 
     fetch(`${API}/api/qa-tracker/qa-persons`, { headers })
       .then(r => r.json())
-      .then(setQaPersons)
+      .then(d => setQaPersons(Array.isArray(d) ? d : []))
       .catch(() => {});
   }, [token]);
 
@@ -653,8 +654,8 @@ const QATrackerDashboard: React.FC = () => {
         fetch(`${API}/api/qa-tracker/items?version=${encodeURIComponent(version)}`, { headers: { Authorization: `Bearer ${token}` } }),
         fetch(`${API}/api/qa-tracker/records?version=${encodeURIComponent(version)}`, { headers: { Authorization: `Bearer ${token}` } }),
       ]);
-      if (itemsRes.ok) setItems(await itemsRes.json());
-      if (recordsRes.ok) setRecords(await recordsRes.json());
+      if (itemsRes.ok) { const d = await itemsRes.json(); setItems(Array.isArray(d) ? d : []); }
+      if (recordsRes.ok) { const d = await recordsRes.json(); setRecords(Array.isArray(d) ? d : []); }
     } catch { setError('Erro ao carregar dados'); } finally { setLoading(false); }
   }, [version, token]);
 
