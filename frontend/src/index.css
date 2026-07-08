@@ -140,10 +140,6 @@ body { overflow-x: hidden; }
 /* Charts — nunca ultrapassam a largura do container */
 .recharts-wrapper, .recharts-responsive-container { max-width: 100%; }
 
-/* Scrollbar tabs e painéis laterais */
-.tabs-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
-.tabs-scrollbar::-webkit-scrollbar { display: none; }
-
 /* Touch-friendly: área mínima de toque para botões */
 button, a, [role="button"] { min-height: 36px; }
 
