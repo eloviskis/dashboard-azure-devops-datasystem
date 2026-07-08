@@ -4,6 +4,20 @@ import { WorkItem } from '../types';
 import ChartInfoLamp, { FieldMappingButton } from './ChartInfoLamp';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import { startOfMonth, endOfMonth, subMonths, isWithinInterval, parseISO } from 'date-fns';
+import { COMPLETED_STATES } from '../utils/metrics';
+
+// Compara ignorando acentos/maiusculas — dados demo e integracoes reais variam entre
+// "Correção"/"Correcao", "Alteração"/"Alteracao" etc.
+const ACCENT_MAP: Record<string, string> = {
+  'a':'a','á':'a','à':'a','ã':'a','â':'a',
+  'e':'e','é':'e','ê':'e',
+  'i':'i','í':'i',
+  'o':'o','ó':'o','ô':'o','õ':'o',
+  'u':'u','ú':'u',
+  'c':'c','ç':'c',
+};
+const normalizeText = (s: string | null | undefined): string =>
+  (s || '').toLowerCase().trim().split('').map(ch => ACCENT_MAP[ch] || ch).join('');
 
 interface Props {
   data: WorkItem[];
@@ -177,7 +191,7 @@ export const RootCauseDashboard: React.FC<Props> = ({ data, allData, periodStart
 
   // Filtros e métricas - data já vem filtrado pelo período do App.tsx
   const issues = data.filter(w => w.type === 'Issue');
-  const issuesFechadas = issues.filter(w => w.state === 'Closed');
+  const issuesFechadas = issues.filter(w => COMPLETED_STATES.includes(w.state));
   
   // Issues Criadas: filtrar por createdDate dentro do período
   // Usa allData se disponível, senão usa data
@@ -199,11 +213,11 @@ export const RootCauseDashboard: React.FC<Props> = ({ data, allData, periodStart
   const hasCustomTypeData = issuesFechadas.some(w => w.customType && w.customType.trim() !== '');
   
   // Se customType está disponível, usa para filtrar; senão, considera todas as Issues fechadas como Correção
-  const issuesCorrecao = hasCustomTypeData 
-    ? issuesFechadas.filter(w => w.customType === 'Correção')
+  const issuesCorrecao = hasCustomTypeData
+    ? issuesFechadas.filter(w => normalizeText(w.customType) === normalizeText('Correção'))
     : issuesFechadas; // Sem campo customType, todas Issues fechadas são tratadas como correção
-  const issuesOutrosType = hasCustomTypeData 
-    ? issuesFechadas.filter(w => w.customType !== 'Correção')
+  const issuesOutrosType = hasCustomTypeData
+    ? issuesFechadas.filter(w => normalizeText(w.customType) !== normalizeText('Correção'))
     : []; // Sem customType, não há "outras"
   // Usa causaRaiz (Microsoft.VSTS.CMMI.RootCause) para verificar causa raiz - nas Issues FECHADAS de Correção
   const issuesSemCausaRaiz = issuesCorrecao.filter(w => isCausaRaizEmpty(w.causaRaiz));
