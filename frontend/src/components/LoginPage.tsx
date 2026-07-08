@@ -50,7 +50,7 @@ function generateCaptcha() {
 }
 
 const LoginPage: React.FC = () => {
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [captchaInput, setCaptchaInput] = useState('');
   const [captcha, setCaptcha] = useState(generateCaptcha);
@@ -86,9 +86,9 @@ const LoginPage: React.FC = () => {
     setLoading(true);
 
     try {
-      const success = await login(username, password);
+      const success = await login(email, password);
       if (!success) {
-        setError('Usuário ou senha inválidos');
+        setError('E-mail ou senha inválidos');
         setFailCount(f => f + 1);
       }
     } catch (err) {
@@ -130,18 +130,19 @@ const LoginPage: React.FC = () => {
               
               <form onSubmit={handleSubmit} className="space-y-5">
                 <div>
-                  <label htmlFor="username" className="block text-sm font-medium text-ds-light-text mb-2">
-                    Usuário
+                  <label htmlFor="email" className="block text-sm font-medium text-ds-light-text mb-2">
+                    E-mail
                   </label>
                   <input
-                    id="username"
-                    type="text"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
+                    id="email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
                     className="login-input w-full px-4 py-3 rounded-lg"
-                    placeholder="Digite seu usuário"
+                    placeholder="Digite seu e-mail"
                     required
                     disabled={loading}
+                    autoComplete="username"
                   />
                 </div>
 

@@ -129,7 +129,7 @@ async function initSaasTables() {
       'work_items', 'pull_requests', 'users', 'app_settings',
       'team_member_avatars', 'sync_log', 'qa_test_records',
       'devtracker_developers', 'devtracker_projects', 'devtracker_allocations',
-      'ceremony_config', 'ceremony_records'
+      'devtracker_tags', 'ceremony_config', 'ceremony_records'
     ];
     for (const t of tables) {
       try {
@@ -147,6 +147,40 @@ async function initSaasTables() {
       await sql`ALTER TABLE users DROP CONSTRAINT IF EXISTS users_username_key`;
       await sql`ALTER TABLE users ADD CONSTRAINT users_username_tenant_unique UNIQUE (username, tenant_id)`;
     } catch { /* já existe */ }
+
+    // app_settings: chave (field_mappings, azure_config, etc.) passa a ser por tenant
+    try {
+      await sql`ALTER TABLE app_settings DROP CONSTRAINT IF EXISTS app_settings_pkey`;
+      await sql`ALTER TABLE app_settings ADD CONSTRAINT app_settings_key_tenant_unique PRIMARY KEY (key, tenant_id)`;
+    } catch { /* já existe */ }
+
+    // devtracker_tags: chave composta original nao incluia tenant_id
+    try {
+      await sql`ALTER TABLE devtracker_tags DROP CONSTRAINT IF EXISTS devtracker_tags_pkey`;
+      await sql`ALTER TABLE devtracker_tags ADD CONSTRAINT devtracker_tags_pkey PRIMARY KEY (entity_type, entity_id, tag, tenant_id)`;
+    } catch { /* já existe */ }
+
+    // Constraints de unicidade que ainda nao contemplavam tenant_id — sem isso,
+    // dois tenants com o mesmo work_item_id/pull_request_id/nome de pessoa
+    // colidiriam e um sobrescreveria o dado do outro (ON CONFLICT).
+    const compositeUniqueFixes = [
+      { table: 'work_items', cols: ['work_item_id', 'tenant_id'] },
+      { table: 'pull_requests', cols: ['pull_request_id', 'tenant_id'] },
+      { table: 'team_member_avatars', cols: ['name', 'tenant_id'] },
+      { table: 'ceremony_config', cols: ['team', 'ritual_type', 'tenant_id'] },
+    ];
+    for (const { table, cols } of compositeUniqueFixes) {
+      try {
+        const cons = await sql`
+          SELECT constraint_name FROM information_schema.table_constraints
+          WHERE table_name = ${table} AND constraint_type IN ('UNIQUE', 'PRIMARY KEY')
+        `;
+        for (const c of cons) {
+          await pool.query(`ALTER TABLE ${table} DROP CONSTRAINT IF EXISTS "${c.constraint_name}"`);
+        }
+        await pool.query(`ALTER TABLE ${table} ADD CONSTRAINT ${table}_tenant_unique UNIQUE (${cols.join(', ')})`);
+      } catch { /* já existe ou nao aplicavel */ }
+    }
 
     console.log('✅ SaaS tables ready');
   } catch (err) {

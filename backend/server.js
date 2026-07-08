@@ -487,22 +487,21 @@ initDatabase().then(() => {
 // Monta rotas SaaS em /api
 app.use('/api', saas.router);
 
-// ─── Carrega mapeamentos de campos customizados do banco ──────────────────────
-let _cachedFieldMappings = null;
-let _fieldMappingsCachedAt = 0;
+// ─── Carrega mapeamentos de campos customizados do banco (por tenant) ─────────
+const _fieldMappingsCache = new Map(); // tenantId -> { value, cachedAt }
 
-async function loadFieldMappings() {
+async function loadFieldMappings(tenantId = 1) {
   // Cache por 5 minutos para nao bater no banco a cada item
-  if (_cachedFieldMappings && Date.now() - _fieldMappingsCachedAt < 300000) {
-    return _cachedFieldMappings;
+  const cached = _fieldMappingsCache.get(tenantId);
+  if (cached && Date.now() - cached.cachedAt < 300000) {
+    return cached.value;
   }
   try {
     if (!sql) return {};
-    const rows = await sql`SELECT value FROM app_settings WHERE key = 'field_mappings'`;
+    const rows = await sql`SELECT value FROM app_settings WHERE key = 'field_mappings' AND tenant_id = ${tenantId}`;
     if (rows[0]?.value) {
       const parsed = typeof rows[0].value === 'string' ? JSON.parse(rows[0].value) : rows[0].value;
-      _cachedFieldMappings = parsed;
-      _fieldMappingsCachedAt = Date.now();
+      _fieldMappingsCache.set(tenantId, { value: parsed, cachedAt: Date.now() });
       return parsed;
     }
   } catch {}
@@ -510,7 +509,7 @@ async function loadFieldMappings() {
 }
 
 // Limpa cache quando campo e salvo
-function invalidateFieldMappingsCache() { _cachedFieldMappings = null; }
+function invalidateFieldMappingsCache(tenantId = 1) { _fieldMappingsCache.delete(tenantId); }
 
 // Azure DevOps configuration
 const AZURE_CONFIG = {
@@ -537,10 +536,38 @@ const getAuthHeader = () => {
   return { 'Authorization': `Basic ${credentials}` };
 };
 
-// Sync Data function
-async function syncData() {
-  if (!isConfigured()) {
-    console.log('⚠️ Azure DevOps not configured - skipping sync');
+// ─── Config Azure DevOps por tenant ────────────────────────────────────────────
+// Tenant 1 ("default") usa AZURE_CONFIG (env vars) se ainda nao tiver config
+// propria salva em tenants.azure_org/azure_project/azure_pat_enc. Demais tenants
+// so funcionam se tiverem configurado o proprio Azure DevOps (via signup ou
+// PUT /api/admin/azure-settings).
+async function getAzureConfigForTenant(tenantId) {
+  const tenant = await saas.getTenantById(tenantId);
+  if (tenant?.azure_org && tenant?.azure_project && tenant?.azure_pat_enc) {
+    return {
+      organization: tenant.azure_org,
+      project: tenant.azure_project,
+      pat: saas.decryptPAT(tenant.azure_pat_enc),
+    };
+  }
+  if (tenantId === 1 && isConfigured()) return AZURE_CONFIG;
+  return null;
+}
+
+function isAzureConfigValid(cfg) {
+  return !!(cfg && cfg.organization && cfg.project && cfg.pat);
+}
+
+function getAzureAuthHeaderFor(pat) {
+  const credentials = Buffer.from(`:${pat}`).toString('base64');
+  return { 'Authorization': `Basic ${credentials}` };
+}
+
+// Sync Data function — sincroniza os work items de UM tenant especifico
+async function syncData(tenantId = 1) {
+  const cfg = await getAzureConfigForTenant(tenantId);
+  if (!isAzureConfigValid(cfg)) {
+    console.log(`⚠️ Tenant ${tenantId}: Azure DevOps not configured - skipping sync`);
     return { status: 'skipped', message: 'Not configured' };
   }
   if (!sql) {
@@ -549,20 +576,21 @@ async function syncData() {
   }
 
   const startTime = new Date();
-  console.log(`🔄 Starting sync at ${startTime.toISOString()}`);
+  console.log(`🔄 [tenant ${tenantId}] Starting sync at ${startTime.toISOString()}`);
 
   try {
-    const baseUrl = `https://dev.azure.com/${AZURE_CONFIG.organization}/${AZURE_CONFIG.project}`;
-    
+    const baseUrl = `https://dev.azure.com/${cfg.organization}/${cfg.project}`;
+    const authHeader = getAzureAuthHeaderFor(cfg.pat);
+
     // Fetch Work Items usando WIQL
     const wiqlUrl = `${baseUrl}/_apis/wit/wiql?api-version=7.0`;
     const wiqlQuery = {
-      query: `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = '${AZURE_CONFIG.project}' AND [System.ChangedDate] >= @Today - 180 ORDER BY [System.ChangedDate] DESC`
+      query: `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = '${cfg.project}' AND [System.ChangedDate] >= @Today - 180 ORDER BY [System.ChangedDate] DESC`
     };
 
-    const wiqlResponse = await axios.post(wiqlUrl, wiqlQuery, { headers: getAuthHeader() });
+    const wiqlResponse = await axios.post(wiqlUrl, wiqlQuery, { headers: authHeader });
     const workItemIds = wiqlResponse.data.workItems?.map(wi => wi.id) || [];
-    
+
     console.log(`   Found ${workItemIds.length} work items`);
 
     if (workItemIds.length > 0) {
@@ -574,14 +602,14 @@ async function syncData() {
         const batch = workItemIds.slice(i, i + batchSize);
         const idsParam = batch.join(',');
         const detailsUrl = `${baseUrl}/_apis/wit/workitems?ids=${idsParam}&$expand=all&api-version=7.0`;
-        
-        const detailsResponse = await axios.get(detailsUrl, { headers: getAuthHeader() });
+
+        const detailsResponse = await axios.get(detailsUrl, { headers: authHeader });
         allWorkItems = allWorkItems.concat(detailsResponse.data.value || []);
       }
 
       // Salvar no banco
       // Carrega mapeamentos de campos customizados (configurados pelo admin) uma vez para todo o sync
-      const fm = await loadFieldMappings();
+      const fm = await loadFieldMappings(tenantId);
 
       // Coletar avatars dos membros durante a sync
       const memberAvatars = new Map();
@@ -596,9 +624,9 @@ async function syncData() {
       for (const [name, imageUrl] of memberAvatars) {
         try {
           await sql`
-            INSERT INTO team_member_avatars (name, image_url, updated_at)
-            VALUES (${name}, ${imageUrl}, CURRENT_TIMESTAMP)
-            ON CONFLICT (name) DO UPDATE SET
+            INSERT INTO team_member_avatars (name, image_url, updated_at, tenant_id)
+            VALUES (${name}, ${imageUrl}, CURRENT_TIMESTAMP, ${tenantId})
+            ON CONFLICT (name, tenant_id) DO UPDATE SET
               image_url = EXCLUDED.image_url,
               updated_at = CURRENT_TIMESTAMP
           `;
@@ -626,14 +654,14 @@ async function syncData() {
             code_review_level1, code_review_level2, custom_type, root_cause_status, squad, area, complexity,
             reincidencia, performance_days, qa, causa_raiz, root_cause_legacy, created_by, po, ready_date, done_date,
             root_cause_task, root_cause_team, root_cause_version, dev, platform, application, branch_base, delivered_version, base_version,
-            identificacao, falha_do_processo, impedimento, bloqueio, categoria, synced_at)
+            identificacao, falha_do_processo, impedimento, bloqueio, categoria, synced_at, tenant_id)
           VALUES (${workItemId}, ${title}, ${state}, ${type}, ${assignedTo}, ${team}, ${areaPath}, ${iterationPath},
             ${createdDate}, ${changedDate}, ${closedDate}, ${storyPoints}, ${tags}, ${tipoCliente}, ${priority}, ${url}, ${activatedDate || null},
             ${codeReviewLevel1}, ${codeReviewLevel2}, ${customType}, ${rootCauseStatus}, ${squad}, ${area}, ${complexity},
             ${reincidencia}, ${performanceDays}, ${qa}, ${causaRaiz}, ${rootCauseLegacy}, ${createdBy}, ${po}, ${readyDate}, ${doneDate},
             ${rootCauseTask}, ${rootCauseTeam}, ${rootCauseVersion}, ${dev}, ${platform}, ${application}, ${branchBase}, ${deliveredVersion}, ${baseVersion},
-            ${identificacao}, ${falhaDoProcesso}, ${impedimento}, ${bloqueio}, ${categoria}, ${new Date().toISOString()})
-          ON CONFLICT (work_item_id) DO UPDATE SET
+            ${identificacao}, ${falhaDoProcesso}, ${impedimento}, ${bloqueio}, ${categoria}, ${new Date().toISOString()}, ${tenantId})
+          ON CONFLICT (work_item_id, tenant_id) DO UPDATE SET
             title = EXCLUDED.title, state = EXCLUDED.state, type = EXCLUDED.type, assigned_to = EXCLUDED.assigned_to,
             team = EXCLUDED.team, area_path = EXCLUDED.area_path, iteration_path = EXCLUDED.iteration_path,
             created_date = EXCLUDED.created_date, changed_date = EXCLUDED.changed_date, closed_date = EXCLUDED.closed_date,
@@ -679,24 +707,24 @@ async function syncData() {
 
     // Log sync
     await sql`
-      INSERT INTO sync_log (sync_time, items_count, status)
-      VALUES (${new Date().toISOString()}, ${workItemIds.length}, 'success')
+      INSERT INTO sync_log (sync_time, items_count, status, tenant_id)
+      VALUES (${new Date().toISOString()}, ${workItemIds.length}, 'success', ${tenantId})
     `;
 
     const endTime = new Date();
-    console.log(`✅ Sync completed in ${(endTime - startTime) / 1000}s`);
+    console.log(`✅ [tenant ${tenantId}] Sync completed in ${(endTime - startTime) / 1000}s`);
 
     return { status: 'success', itemsCount: workItemIds.length };
   } catch (error) {
-    console.error('❌ Sync error:', error.message);
-    
+    console.error(`❌ [tenant ${tenantId}] Sync error:`, error.message);
+
     if (sql) {
       await sql`
-        INSERT INTO sync_log (sync_time, items_count, status, error_message)
-        VALUES (${new Date().toISOString()}, 0, 'error', ${error.message})
+        INSERT INTO sync_log (sync_time, items_count, status, error_message, tenant_id)
+        VALUES (${new Date().toISOString()}, 0, 'error', ${error.message}, ${tenantId})
       `;
     }
-    
+
     return { status: 'error', message: error.message };
   }
 }
@@ -705,9 +733,10 @@ async function syncData() {
 // PULL REQUESTS SYNC
 // ===========================================
 
-async function syncPullRequests() {
-  if (!isConfigured()) {
-    console.log('⚠️ Azure DevOps not configured - skipping PR sync');
+async function syncPullRequests(tenantId = 1) {
+  const cfg = await getAzureConfigForTenant(tenantId);
+  if (!isAzureConfigValid(cfg)) {
+    console.log(`⚠️ Tenant ${tenantId}: Azure DevOps not configured - skipping PR sync`);
     return { status: 'skipped', message: 'Not configured' };
   }
   if (!sql) {
@@ -716,16 +745,17 @@ async function syncPullRequests() {
   }
 
   const startTime = new Date();
-  console.log(`🔄 Starting Pull Requests sync at ${startTime.toISOString()}`);
+  console.log(`🔄 [tenant ${tenantId}] Starting Pull Requests sync at ${startTime.toISOString()}`);
 
   try {
-    const baseUrl = `https://dev.azure.com/${AZURE_CONFIG.organization}/${AZURE_CONFIG.project}`;
-    
+    const baseUrl = `https://dev.azure.com/${cfg.organization}/${cfg.project}`;
+    const authHeader = getAzureAuthHeaderFor(cfg.pat);
+
     // First get all repositories in the project
     const reposUrl = `${baseUrl}/_apis/git/repositories?api-version=7.0`;
-    const reposResponse = await axios.get(reposUrl, { headers: getAuthHeader() });
+    const reposResponse = await axios.get(reposUrl, { headers: authHeader });
     const repositories = reposResponse.data.value || [];
-    
+
     console.log(`   Found ${repositories.length} repositories`);
 
     let totalPRs = 0;
@@ -739,17 +769,17 @@ async function syncPullRequests() {
 
         while (hasMore) {
           const prUrl = `${baseUrl}/_apis/git/repositories/${repo.id}/pullrequests?searchCriteria.status=${status}&$top=${top}&$skip=${skip}&api-version=7.0`;
-          
+
           let prResponse;
           try {
-            prResponse = await axios.get(prUrl, { headers: getAuthHeader() });
+            prResponse = await axios.get(prUrl, { headers: authHeader });
           } catch (err) {
             console.log(`   ⚠️ Error fetching ${status} PRs for repo ${repo.name}: ${err.message}`);
             break;
           }
 
           const pullRequests = prResponse.data.value || [];
-          
+
           if (pullRequests.length === 0) {
             hasMore = false;
             break;
@@ -761,7 +791,7 @@ async function syncPullRequests() {
 
           for (const pr of pullRequests) {
             const createdDate = pr.creationDate || '';
-            
+
             // Skip old completed/abandoned PRs
             if (status !== 'active' && createdDate && new Date(createdDate) < cutoffDate) {
               hasMore = false;
@@ -788,12 +818,12 @@ async function syncPullRequests() {
             await sql`
               INSERT INTO pull_requests (pull_request_id, title, description, status, created_by, created_date, closed_date,
                 source_ref_name, target_ref_name, repository_id, repository_name, labels, reviewers, votes,
-                has_valida_cr_label, url, synced_at)
+                has_valida_cr_label, url, synced_at, tenant_id)
               VALUES (${pr.pullRequestId}, ${pr.title || ''}, ${(pr.description || '').substring(0, 500)}, ${status},
                 ${createdBy}, ${createdDate}, ${closedDate}, ${sourceRef}, ${targetRef},
                 ${repo.id}, ${repo.name}, ${labels}, ${reviewers}, ${votes},
-                ${hasValidaCR}, ${url}, ${new Date().toISOString()})
-              ON CONFLICT (pull_request_id) DO UPDATE SET
+                ${hasValidaCR}, ${url}, ${new Date().toISOString()}, ${tenantId})
+              ON CONFLICT (pull_request_id, tenant_id) DO UPDATE SET
                 title = EXCLUDED.title, description = EXCLUDED.description, status = EXCLUDED.status,
                 created_by = EXCLUDED.created_by, closed_date = EXCLUDED.closed_date,
                 labels = EXCLUDED.labels, reviewers = EXCLUDED.reviewers, votes = EXCLUDED.votes,
@@ -811,12 +841,36 @@ async function syncPullRequests() {
     console.log(`   ✅ Synced ${totalPRs} pull requests`);
 
     const endTime = new Date();
-    console.log(`✅ PR sync completed in ${(endTime - startTime) / 1000}s`);
+    console.log(`✅ [tenant ${tenantId}] PR sync completed in ${(endTime - startTime) / 1000}s`);
 
     return { status: 'success', pullRequestsCount: totalPRs };
   } catch (error) {
-    console.error('❌ PR Sync error:', error.message);
+    console.error(`❌ [tenant ${tenantId}] PR Sync error:`, error.message);
     return { status: 'error', message: error.message };
+  }
+}
+
+// Roda work items + PRs para UM tenant (usado no gatilho manual "Sincronizar" do admin)
+async function syncDataForTenant(tenantId) {
+  const [wiResult, prResult] = await Promise.all([syncData(tenantId), syncPullRequests(tenantId)]);
+  return { workItems: wiResult, pullRequests: prResult };
+}
+
+// Roda a sincronização de TODOS os tenants com Azure DevOps configurado, um de cada
+// vez (evita sobrecarregar a VPS/API do Azure com chamadas em paralelo). Usado pelo
+// job agendado a cada 30 min.
+async function syncAllTenants() {
+  if (!sql) return;
+  try {
+    const tenants = await sql`SELECT id FROM tenants ORDER BY id`;
+    for (const t of tenants) {
+      const cfg = await getAzureConfigForTenant(t.id);
+      if (!isAzureConfigValid(cfg)) continue; // tenant sem Azure DevOps configurado ainda
+      await syncData(t.id).catch(e => console.error(`❌ [tenant ${t.id}] Scheduled sync error (non-fatal):`, e.message));
+      await syncPullRequests(t.id).catch(e => console.error(`❌ [tenant ${t.id}] Scheduled PR sync error (non-fatal):`, e.message));
+    }
+  } catch (e) {
+    console.error('❌ syncAllTenants error:', e.message);
   }
 }
 
@@ -837,6 +891,8 @@ const authenticateToken = (req, res, next) => {
       return res.status(403).json({ error: 'Token inválido ou expirado' });
     }
     req.user = user;
+    // tenantId usado por toda query de dados de negocio para isolar clientes
+    req.tenantId = user.tenant_id || 1;
     next();
   });
 };
@@ -856,7 +912,7 @@ app.get('/api/debug/users-schema', authenticateToken, requireAdmin, async (req, 
       FROM information_schema.columns 
       WHERE table_name = 'users'
     `;
-    const users = await sql`SELECT id, username, email, role, password IS NOT NULL as has_password FROM users`;
+    const users = await sql`SELECT id, username, email, role, password IS NOT NULL as has_password FROM users WHERE tenant_id = ${req.tenantId}`;
     res.json({ columns, users });
   } catch (error) {
     res.json({ error: error.message });
@@ -876,33 +932,35 @@ app.post('/api/init-db', authenticateToken, requireAdmin, async (req, res) => {
 });
 
 // Debug endpoint para verificar configuração do Azure (requer admin)
-app.get('/api/debug/azure-config', authenticateToken, requireAdmin, (req, res) => {
+app.get('/api/debug/azure-config', authenticateToken, requireAdmin, async (req, res) => {
+  const cfg = await getAzureConfigForTenant(req.tenantId);
   res.json({
-    organization: AZURE_CONFIG.organization,
-    project: AZURE_CONFIG.project,
-    patConfigured: !!AZURE_CONFIG.pat && AZURE_CONFIG.pat.length > 10,
-    patLength: AZURE_CONFIG.pat?.length || 0,
-    isConfigured: isConfigured()
+    organization: cfg?.organization || '',
+    project: cfg?.project || '',
+    patConfigured: !!cfg?.pat && cfg.pat.length > 10,
+    patLength: cfg?.pat?.length || 0,
+    isConfigured: isAzureConfigValid(cfg)
   });
 });
 
-// ─── Catálogo de campos do Azure DevOps (metadados do processo) ───────────────
-let _cachedAzureFields = null;
-let _azureFieldsCachedAt = 0;
+// ─── Catálogo de campos do Azure DevOps (metadados do processo, por tenant) ───
+const _azureFieldsCache = new Map(); // tenantId -> { fields, cachedAt }
 const AZURE_FIELDS_TTL = 30 * 60 * 1000; // 30 min — catálogo muda raramente
 
 app.get('/api/admin/azure-fields', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    if (!isConfigured()) {
+    const cfg = await getAzureConfigForTenant(req.tenantId);
+    if (!isAzureConfigValid(cfg)) {
       return res.status(400).json({ error: 'Azure DevOps não configurado' });
     }
     const forceRefresh = req.query.refresh === '1';
-    if (!forceRefresh && _cachedAzureFields && Date.now() - _azureFieldsCachedAt < AZURE_FIELDS_TTL) {
-      return res.json({ fields: _cachedAzureFields, cachedAt: _azureFieldsCachedAt, fromCache: true });
+    const cached = _azureFieldsCache.get(req.tenantId);
+    if (!forceRefresh && cached && Date.now() - cached.cachedAt < AZURE_FIELDS_TTL) {
+      return res.json({ fields: cached.fields, cachedAt: cached.cachedAt, fromCache: true });
     }
 
-    const url = `https://dev.azure.com/${AZURE_CONFIG.organization}/${AZURE_CONFIG.project}/_apis/wit/fields?api-version=7.1`;
-    const response = await axios.get(url, { headers: getAuthHeader(), timeout: 15000 });
+    const url = `https://dev.azure.com/${cfg.organization}/${cfg.project}/_apis/wit/fields?api-version=7.1`;
+    const response = await axios.get(url, { headers: getAzureAuthHeaderFor(cfg.pat), timeout: 15000 });
     const fields = (response.data.value || []).map(f => ({
       name: f.name,
       referenceName: f.referenceName,
@@ -911,9 +969,9 @@ app.get('/api/admin/azure-fields', authenticateToken, requireAdmin, async (req, 
       isPicklist: !!f.isPicklist,
     })).sort((a, b) => a.referenceName.localeCompare(b.referenceName));
 
-    _cachedAzureFields = fields;
-    _azureFieldsCachedAt = Date.now();
-    res.json({ fields, cachedAt: _azureFieldsCachedAt, fromCache: false });
+    const cachedAt = Date.now();
+    _azureFieldsCache.set(req.tenantId, { fields, cachedAt });
+    res.json({ fields, cachedAt, fromCache: false });
   } catch (error) {
     console.error('❌ Error fetching Azure DevOps fields catalog:', error.response?.data || error.message);
     res.status(502).json({ error: 'Erro ao buscar catálogo de campos do Azure DevOps', detail: error.message });
@@ -924,18 +982,19 @@ app.get('/api/admin/azure-fields', authenticateToken, requireAdmin, async (req, 
 app.get('/api/admin/field-preview', authenticateToken, requireAdmin, async (req, res) => {
   const { field } = req.query;
   if (!field) return res.status(400).json({ error: 'Parâmetro "field" é obrigatório' });
-  if (!isConfigured()) return res.status(400).json({ error: 'Azure DevOps não configurado' });
+  const cfg = await getAzureConfigForTenant(req.tenantId);
+  if (!isAzureConfigValid(cfg)) return res.status(400).json({ error: 'Azure DevOps não configurado' });
   try {
-    const baseUrl = `https://dev.azure.com/${AZURE_CONFIG.organization}/${AZURE_CONFIG.project}`;
+    const baseUrl = `https://dev.azure.com/${cfg.organization}/${cfg.project}`;
     const wiqlQuery = {
-      query: `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = '${AZURE_CONFIG.project}' AND [${field}] <> '' ORDER BY [System.ChangedDate] DESC`
+      query: `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = '${cfg.project}' AND [${field}] <> '' ORDER BY [System.ChangedDate] DESC`
     };
-    const wiqlResponse = await axios.post(`${baseUrl}/_apis/wit/wiql?api-version=7.0`, wiqlQuery, { headers: getAuthHeader(), timeout: 15000 });
+    const wiqlResponse = await axios.post(`${baseUrl}/_apis/wit/wiql?api-version=7.0`, wiqlQuery, { headers: getAzureAuthHeaderFor(cfg.pat), timeout: 15000 });
     const ids = (wiqlResponse.data.workItems || []).slice(0, 3).map(w => w.id);
     if (ids.length === 0) return res.json({ field, samples: [], hasData: false });
 
     const detailsUrl = `${baseUrl}/_apis/wit/workitems?ids=${ids.join(',')}&fields=${encodeURIComponent(field)}&api-version=7.0`;
-    const detailsResponse = await axios.get(detailsUrl, { headers: getAuthHeader(), timeout: 15000 });
+    const detailsResponse = await axios.get(detailsUrl, { headers: getAzureAuthHeaderFor(cfg.pat), timeout: 15000 });
     const samples = (detailsResponse.data.value || []).map(item => {
       const raw = item.fields?.[field];
       const display = raw?.displayName || (typeof raw === 'object' ? JSON.stringify(raw) : raw);
@@ -952,14 +1011,17 @@ app.get('/api/admin/field-preview', authenticateToken, requireAdmin, async (req,
 // Login
 app.post('/api/auth/login', async (req, res) => {
   try {
-    const { username, password } = req.body;
-    console.log('📝 Login attempt for:', username);
+    const { username, email, password } = req.body;
+    // Login por e-mail (unico em todo o banco) — username sozinho nao identifica
+    // o tenant certo quando ha mais de um cliente na mesma instancia.
+    const identifier = (email || username || '').trim();
+    console.log('📝 Login attempt for:', identifier);
 
-    if (!username || !password) {
-      return res.status(400).json({ error: 'Username e password são obrigatórios' });
+    if (!identifier || !password) {
+      return res.status(400).json({ error: 'E-mail e password são obrigatórios' });
     }
 
-    const users = await sql`SELECT * FROM users WHERE username = ${username}`;
+    const users = await sql`SELECT * FROM users WHERE email = ${identifier}`;
     console.log('📝 Users found:', users.length);
     const user = users[0];
 
@@ -1066,7 +1128,7 @@ app.put('/api/auth/change-password', authenticateToken, async (req, res) => {
 
 app.get('/api/users', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const users = await sql`SELECT id, username, email, role, tab_permissions, created_at, updated_at FROM users ORDER BY created_at DESC`;
+    const users = await sql`SELECT id, username, email, role, tab_permissions, created_at, updated_at FROM users WHERE tenant_id = ${req.tenantId} ORDER BY created_at DESC`;
     res.json(users.map(u => ({ ...u, tab_permissions: u.tab_permissions ? JSON.parse(u.tab_permissions) : null })));
   } catch (error) {
     console.error('❌ Error fetching users:', error);
@@ -1082,7 +1144,8 @@ app.post('/api/users', authenticateToken, requireAdmin, async (req, res) => {
       return res.status(400).json({ error: 'Username, email e password são obrigatórios' });
     }
 
-    const existing = await sql`SELECT id FROM users WHERE username = ${username} OR email = ${email}`;
+    // username so precisa ser unico DENTRO do tenant; email e unico em todo o banco (usado no login)
+    const existing = await sql`SELECT id FROM users WHERE (username = ${username} AND tenant_id = ${req.tenantId}) OR email = ${email}`;
     if (existing.length > 0) {
       return res.status(400).json({ error: 'Username ou email já existe' });
     }
@@ -1090,8 +1153,8 @@ app.post('/api/users', authenticateToken, requireAdmin, async (req, res) => {
     const hashedPassword = bcrypt.hashSync(password, 10);
     const tabPermsJson = tab_permissions ? JSON.stringify(tab_permissions) : null;
     const result = await sql`
-      INSERT INTO users (username, email, password, role, tab_permissions) 
-      VALUES (${username}, ${email}, ${hashedPassword}, ${role}, ${tabPermsJson})
+      INSERT INTO users (username, email, password, role, tab_permissions, tenant_id)
+      VALUES (${username}, ${email}, ${hashedPassword}, ${role}, ${tabPermsJson}, ${req.tenantId})
       RETURNING id
     `;
 
@@ -1113,7 +1176,7 @@ app.put('/api/users/:id', authenticateToken, requireAdmin, async (req, res) => {
     const { id } = req.params;
     const { username, email, password, role } = req.body;
 
-    const existingUsers = await sql`SELECT * FROM users WHERE id = ${id}`;
+    const existingUsers = await sql`SELECT * FROM users WHERE id = ${id} AND tenant_id = ${req.tenantId}`;
     if (existingUsers.length === 0) {
       return res.status(404).json({ error: 'Usuário não encontrado' });
     }
@@ -1122,8 +1185,8 @@ app.put('/api/users/:id', authenticateToken, requireAdmin, async (req, res) => {
 
     if (username || email) {
       const conflict = await sql`
-        SELECT id FROM users 
-        WHERE (username = ${username || existingUser.username} OR email = ${email || existingUser.email}) 
+        SELECT id FROM users
+        WHERE ((username = ${username || existingUser.username} AND tenant_id = ${req.tenantId}) OR email = ${email || existingUser.email})
         AND id != ${id}
       `;
       if (conflict.length > 0) {
@@ -1149,10 +1212,10 @@ app.put('/api/users/:id', authenticateToken, requireAdmin, async (req, res) => {
         role = ${newRole},
         tab_permissions = ${newTabPermsJson},
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = ${id}
+      WHERE id = ${id} AND tenant_id = ${req.tenantId}
     `;
 
-    const updated = await sql`SELECT id, username, email, role, tab_permissions, created_at, updated_at FROM users WHERE id = ${id}`;
+    const updated = await sql`SELECT id, username, email, role, tab_permissions, created_at, updated_at FROM users WHERE id = ${id} AND tenant_id = ${req.tenantId}`;
     const u = updated[0];
     res.json({ ...u, tab_permissions: u.tab_permissions ? JSON.parse(u.tab_permissions) : null });
   } catch (error) {
@@ -1169,12 +1232,12 @@ app.delete('/api/users/:id', authenticateToken, requireAdmin, async (req, res) =
       return res.status(400).json({ error: 'Não é possível deletar seu próprio usuário' });
     }
 
-    const users = await sql`SELECT * FROM users WHERE id = ${id}`;
+    const users = await sql`SELECT * FROM users WHERE id = ${id} AND tenant_id = ${req.tenantId}`;
     if (users.length === 0) {
       return res.status(404).json({ error: 'Usuário não encontrado' });
     }
 
-    await sql`DELETE FROM users WHERE id = ${id}`;
+    await sql`DELETE FROM users WHERE id = ${id} AND tenant_id = ${req.tenantId}`;
     res.json({ message: 'Usuário deletado com sucesso' });
   } catch (error) {
     console.error('❌ Error deleting user:', error);
@@ -1186,11 +1249,11 @@ app.delete('/api/users/:id', authenticateToken, requireAdmin, async (req, res) =
 // APP SETTINGS ENDPOINTS
 // ===========================================
 
-// Leitura de configuração global (qualquer usuário autenticado)
+// Leitura de configuração do tenant (qualquer usuário autenticado do tenant)
 app.get('/api/settings/:key', authenticateToken, async (req, res) => {
   try {
     const { key } = req.params;
-    const rows = await sql`SELECT value, updated_by, updated_at FROM app_settings WHERE key = ${key}`;
+    const rows = await sql`SELECT value, updated_by, updated_at FROM app_settings WHERE key = ${key} AND tenant_id = ${req.tenantId}`;
     if (rows.length === 0) {
       return res.json({ value: null });
     }
@@ -1201,7 +1264,7 @@ app.get('/api/settings/:key', authenticateToken, async (req, res) => {
   }
 });
 
-// Escrita de configuração global (somente admin)
+// Escrita de configuração do tenant (somente admin do tenant)
 app.put('/api/settings/:key', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { key } = req.params;
@@ -1212,16 +1275,16 @@ app.put('/api/settings/:key', authenticateToken, requireAdmin, async (req, res) 
     const jsonValue = JSON.stringify(value);
     const updatedBy = req.user.username;
     await sql`
-      INSERT INTO app_settings (key, value, updated_by, updated_at)
-      VALUES (${key}, ${jsonValue}, ${updatedBy}, CURRENT_TIMESTAMP)
-      ON CONFLICT (key) DO UPDATE SET
+      INSERT INTO app_settings (key, value, updated_by, updated_at, tenant_id)
+      VALUES (${key}, ${jsonValue}, ${updatedBy}, CURRENT_TIMESTAMP, ${req.tenantId})
+      ON CONFLICT (key, tenant_id) DO UPDATE SET
         value = EXCLUDED.value,
         updated_by = EXCLUDED.updated_by,
         updated_at = CURRENT_TIMESTAMP
     `;
     res.json({ success: true, key, updated_by: updatedBy });
     // Invalida cache de field_mappings se foi esse o campo salvo
-    if (key === 'field_mappings') invalidateFieldMappingsCache();
+    if (key === 'field_mappings') invalidateFieldMappingsCache(req.tenantId);
   } catch (error) {
     console.error('❌ Error saving setting:', error);
     res.status(500).json({ error: 'Erro ao salvar configuração' });
@@ -1265,33 +1328,34 @@ app.put('/api/admin/azure-settings', authenticateToken, async (req, res) => {
   if (!organization || !project || !pat) {
     return res.status(400).json({ error: 'organization, project e pat são obrigatórios' });
   }
-  // Atualiza em memória imediatamente
-  AZURE_CONFIG.organization = organization.trim();
-  AZURE_CONFIG.project = project.trim();
-  AZURE_CONFIG.pat = pat.trim();
-  // Salva no banco para persistir após restart
-  const encPat = saas.encryptPAT ? saas.encryptPAT(pat.trim()) : pat.trim();
+  const org = organization.trim(), proj = project.trim(), patTrim = pat.trim();
+  const encPat = saas.encryptPAT(patTrim);
+  // Salva a config do Azure DevOps no proprio tenant (nao mais numa chave global)
   await sql`
-    INSERT INTO app_settings (key, value, updated_at)
-    VALUES ('azure_config', ${JSON.stringify({ organization: organization.trim(), project: project.trim(), pat_enc: encPat })}, NOW())
-    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
+    UPDATE tenants SET azure_org = ${org}, azure_project = ${proj}, azure_pat_enc = ${encPat}, updated_at = NOW()
+    WHERE id = ${req.tenantId}
   `;
-  // Dispara sincronização imediata
-  if (isConfigured()) {
-    syncData().catch(console.error);
+  // Tenant "default" tambem atualiza o singleton em memoria (compat com codigo legado)
+  if (req.tenantId === 1) {
+    AZURE_CONFIG.organization = org;
+    AZURE_CONFIG.project = proj;
+    AZURE_CONFIG.pat = patTrim;
   }
-  res.json({ ok: true, organization: AZURE_CONFIG.organization, project: AZURE_CONFIG.project });
+  // Dispara sincronização imediata só deste tenant
+  syncDataForTenant(req.tenantId).catch(console.error);
+  res.json({ ok: true, organization: org, project: proj });
 });
 
-// Lê configuração Azure atual (admin)
+// Lê configuração Azure atual do tenant (admin)
 app.get('/api/admin/azure-settings', authenticateToken, async (req, res) => {
   if (!req.user?.isAdmin && req.user?.role !== 'admin') {
     return res.status(403).json({ error: 'Acesso negado' });
   }
+  const cfg = await getAzureConfigForTenant(req.tenantId);
   res.json({
-    organization: AZURE_CONFIG.organization !== 'your-organization' ? AZURE_CONFIG.organization : '',
-    project: AZURE_CONFIG.project !== 'your-project' ? AZURE_CONFIG.project : '',
-    configured: isConfigured(),
+    organization: cfg?.organization || '',
+    project: cfg?.project || '',
+    configured: isAzureConfigValid(cfg),
   });
 });
 
@@ -1302,7 +1366,7 @@ app.get('/api/admin/azure-settings', authenticateToken, async (req, res) => {
 // Buscar todos os avatars dos membros (extraídos do Azure DevOps)
 app.get('/api/team-avatars', authenticateToken, async (req, res) => {
   try {
-    const rows = await sql`SELECT name, image_url, updated_at FROM team_member_avatars ORDER BY name`;
+    const rows = await sql`SELECT name, image_url, updated_at FROM team_member_avatars WHERE tenant_id = ${req.tenantId} ORDER BY name`;
     const avatars = {};
     for (const row of rows) {
       avatars[row.name] = row.image_url;
@@ -1375,7 +1439,7 @@ app.get('/api/items', authenticateToken, async (req, res) => {
   try {
     console.log('📊 GET /api/items - Fetching work items...');
     
-    const rows = await sql`SELECT * FROM work_items ORDER BY changed_date DESC`;
+    const rows = await sql`SELECT * FROM work_items WHERE tenant_id = ${req.tenantId} ORDER BY changed_date DESC`;
     
     console.log(`   Found ${rows.length} items in database`);
 
@@ -1460,8 +1524,8 @@ app.get('/api/items/period/:days', authenticateToken, async (req, res) => {
     const cutoffDateStr = cutoffDate.toISOString();
 
     const rows = await sql`
-      SELECT * FROM work_items 
-      WHERE changed_date >= ${cutoffDateStr} 
+      SELECT * FROM work_items
+      WHERE changed_date >= ${cutoffDateStr} AND tenant_id = ${req.tenantId}
       ORDER BY changed_date DESC
     `;
 
@@ -1528,14 +1592,15 @@ app.get('/api/sync/status', authenticateToken, async (req, res) => {
     // Estratégia híbrida: verifica sync_log E última atualização dos dados reais
     
     // 1. Tenta buscar do sync_log (sincronização via API)
-    let syncLogRows = await sql`SELECT * FROM sync_log WHERE status = 'success' ORDER BY sync_time DESC LIMIT 1`;
-    
+    let syncLogRows = await sql`SELECT * FROM sync_log WHERE status = 'success' AND tenant_id = ${req.tenantId} ORDER BY sync_time DESC LIMIT 1`;
+
     // 2. Verifica última atualização real dos work_items (sincronização externa)
     const dataCheckRows = await sql`
-      SELECT 
+      SELECT
         MAX(changed_date) as last_update,
         COUNT(*) as total_items
       FROM work_items
+      WHERE tenant_id = ${req.tenantId}
     `;
     
     const lastDataUpdate = dataCheckRows && dataCheckRows.length > 0 ? dataCheckRows[0] : null;
@@ -1591,7 +1656,7 @@ app.get('/api/sync/status', authenticateToken, async (req, res) => {
 
 app.get('/api/sync/log', authenticateToken, async (req, res) => {
   try {
-    const rows = await sql`SELECT * FROM sync_log ORDER BY sync_time DESC LIMIT 50`;
+    const rows = await sql`SELECT * FROM sync_log WHERE tenant_id = ${req.tenantId} ORDER BY sync_time DESC LIMIT 50`;
     res.json(rows);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch sync log' });
@@ -1600,9 +1665,9 @@ app.get('/api/sync/log', authenticateToken, async (req, res) => {
 
 app.post('/api/sync', authenticateToken, async (req, res) => {
   try {
-    console.log('🔄 Manual sync triggered');
-    const [wiResult, prResult] = await Promise.all([syncData(), syncPullRequests()]);
-    res.json({ workItems: wiResult, pullRequests: prResult });
+    console.log(`🔄 Manual sync triggered (tenant ${req.tenantId})`);
+    const result = await syncDataForTenant(req.tenantId);
+    res.json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -1617,10 +1682,10 @@ app.get('/api/stats', authenticateToken, async (req, res) => {
     const cutoffDateStr = cutoffDate.toISOString();
 
     const [total, byState, byType, byTeam] = await Promise.all([
-      sql`SELECT COUNT(*) as count FROM work_items WHERE changed_date >= ${cutoffDateStr}`,
-      sql`SELECT state, COUNT(*) as count FROM work_items WHERE changed_date >= ${cutoffDateStr} GROUP BY state`,
-      sql`SELECT type, COUNT(*) as count FROM work_items WHERE changed_date >= ${cutoffDateStr} GROUP BY type`,
-      sql`SELECT team, COUNT(*) as count FROM work_items WHERE changed_date >= ${cutoffDateStr} GROUP BY team`
+      sql`SELECT COUNT(*) as count FROM work_items WHERE changed_date >= ${cutoffDateStr} AND tenant_id = ${req.tenantId}`,
+      sql`SELECT state, COUNT(*) as count FROM work_items WHERE changed_date >= ${cutoffDateStr} AND tenant_id = ${req.tenantId} GROUP BY state`,
+      sql`SELECT type, COUNT(*) as count FROM work_items WHERE changed_date >= ${cutoffDateStr} AND tenant_id = ${req.tenantId} GROUP BY type`,
+      sql`SELECT team, COUNT(*) as count FROM work_items WHERE changed_date >= ${cutoffDateStr} AND tenant_id = ${req.tenantId} GROUP BY team`
     ]);
 
     res.json({
@@ -1641,7 +1706,7 @@ app.get('/api/stats', authenticateToken, async (req, res) => {
 app.get('/api/pull-requests', authenticateToken, async (req, res) => {
   try {
     console.log('📊 GET /api/pull-requests - Fetching pull requests...');
-    const rows = await sql`SELECT * FROM pull_requests ORDER BY created_date DESC`;
+    const rows = await sql`SELECT * FROM pull_requests WHERE tenant_id = ${req.tenantId} ORDER BY created_date DESC`;
     console.log(`   Found ${rows.length} pull requests`);
 
     const items = rows.map(row => {
@@ -1684,8 +1749,8 @@ app.get('/api/pull-requests', authenticateToken, async (req, res) => {
 
 app.post('/api/sync/pull-requests', authenticateToken, async (req, res) => {
   try {
-    console.log('🔄 Manual PR sync triggered');
-    const result = await syncPullRequests();
+    console.log(`🔄 Manual PR sync triggered (tenant ${req.tenantId})`);
+    const result = await syncPullRequests(req.tenantId);
     res.json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1724,6 +1789,7 @@ app.get('/api/devtracker/developers', authenticateToken, async (req, res) => {
       FROM devtracker_developers d
       LEFT JOIN devtracker_allocations a ON a.developer_id = d.id
       LEFT JOIN devtracker_projects p ON p.id = a.project_id
+      WHERE d.tenant_id = ${req.tenantId}
       GROUP BY d.id
       ORDER BY d.name
     `;
@@ -1745,12 +1811,12 @@ app.get('/api/devtracker/ado-members', authenticateToken, async (req, res) => {
         (
           SELECT w2.categoria FROM work_items w2
           WHERE LOWER(w2.assigned_to) = LOWER(w.assigned_to)
-            AND w2.categoria IS NOT NULL AND w2.categoria != ''
+            AND w2.categoria IS NOT NULL AND w2.categoria != '' AND w2.tenant_id = ${req.tenantId}
           GROUP BY w2.categoria ORDER BY COUNT(*) DESC LIMIT 1
         ) AS categoria
       FROM work_items w
-      LEFT JOIN team_member_avatars a ON LOWER(a.name) = LOWER(w.assigned_to)
-      WHERE w.assigned_to IS NOT NULL AND w.assigned_to != ''
+      LEFT JOIN team_member_avatars a ON LOWER(a.name) = LOWER(w.assigned_to) AND a.tenant_id = ${req.tenantId}
+      WHERE w.assigned_to IS NOT NULL AND w.assigned_to != '' AND w.tenant_id = ${req.tenantId}
       ORDER BY LOWER(w.assigned_to)
     `;
     res.json(members);
@@ -1782,11 +1848,11 @@ app.post('/api/devtracker/import-from-ado', authenticateToken, async (req, res) 
       const name = typeof member === 'string' ? member : member.name;
       const adoCategoria = typeof member === 'object' ? member.categoria : null;
       const category = mapAdoCategoria(adoCategoria);
-      const existing = await sql`SELECT id FROM devtracker_developers WHERE LOWER(name) = LOWER(${name})`;
+      const existing = await sql`SELECT id FROM devtracker_developers WHERE LOWER(name) = LOWER(${name}) AND tenant_id = ${req.tenantId}`;
       if (existing.length > 0) { skipped++; continue; }
       await sql`
-        INSERT INTO devtracker_developers (name, role, category, active)
-        VALUES (${name}, ${role}, ${category}, true)
+        INSERT INTO devtracker_developers (name, role, category, active, tenant_id)
+        VALUES (${name}, ${role}, ${category}, true, ${req.tenantId})
       `;
       imported++;
     }
@@ -1803,8 +1869,8 @@ app.post('/api/devtracker/developers', authenticateToken, async (req, res) => {
     const { name, role = 'Dev Pleno', email, category, client } = req.body;
     if (!name || !category) return res.status(400).json({ error: 'name e category são obrigatórios' });
     const result = await sql`
-      INSERT INTO devtracker_developers (name, role, email, category, client)
-      VALUES (${name}, ${role}, ${email || null}, ${category}, ${client || null})
+      INSERT INTO devtracker_developers (name, role, email, category, client, tenant_id)
+      VALUES (${name}, ${role}, ${email || null}, ${category}, ${client || null}, ${req.tenantId})
       RETURNING *
     `;
     res.status(201).json(result[0]);
@@ -1827,7 +1893,7 @@ app.put('/api/devtracker/developers/:id', authenticateToken, async (req, res) =>
           category = ${category},
           client = ${client || null},
           active = ${active !== undefined ? active : true}
-      WHERE id = ${id}
+      WHERE id = ${id} AND tenant_id = ${req.tenantId}
       RETURNING *
     `;
     if (result.length === 0) return res.status(404).json({ error: 'Developer not found' });
@@ -1842,7 +1908,7 @@ app.put('/api/devtracker/developers/:id', authenticateToken, async (req, res) =>
 app.delete('/api/devtracker/developers/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    await sql`UPDATE devtracker_developers SET active = false WHERE id = ${id}`;
+    await sql`UPDATE devtracker_developers SET active = false WHERE id = ${id} AND tenant_id = ${req.tenantId}`;
     res.json({ success: true });
   } catch (err) {
     console.error('❌ DELETE /api/devtracker/developers/:id:', err.message);
@@ -1869,6 +1935,7 @@ app.get('/api/devtracker/projects', authenticateToken, async (req, res) => {
       FROM devtracker_projects p
       LEFT JOIN devtracker_allocations a ON a.project_id = p.id
       LEFT JOIN devtracker_developers d ON d.id = a.developer_id
+      WHERE p.tenant_id = ${req.tenantId}
       GROUP BY p.id
       ORDER BY p.created_at DESC
     `;
@@ -1885,8 +1952,8 @@ app.post('/api/devtracker/projects', authenticateToken, async (req, res) => {
     const { name, client, priority = 'Média', status = 'Em andamento', start_date, deadline } = req.body;
     if (!name) return res.status(400).json({ error: 'name é obrigatório' });
     const result = await sql`
-      INSERT INTO devtracker_projects (name, client, priority, status, start_date, deadline)
-      VALUES (${name}, ${client || null}, ${priority}, ${status}, ${start_date || null}, ${deadline || null})
+      INSERT INTO devtracker_projects (name, client, priority, status, start_date, deadline, tenant_id)
+      VALUES (${name}, ${client || null}, ${priority}, ${status}, ${start_date || null}, ${deadline || null}, ${req.tenantId})
       RETURNING *
     `;
     res.status(201).json(result[0]);
@@ -1910,7 +1977,7 @@ app.put('/api/devtracker/projects/:id', authenticateToken, async (req, res) => {
           start_date = ${start_date || null},
           deadline = ${deadline || null},
           updated_at = NOW()
-      WHERE id = ${id}
+      WHERE id = ${id} AND tenant_id = ${req.tenantId}
       RETURNING *
     `;
     if (result.length === 0) return res.status(404).json({ error: 'Project not found' });
@@ -1925,7 +1992,7 @@ app.put('/api/devtracker/projects/:id', authenticateToken, async (req, res) => {
 app.delete('/api/devtracker/projects/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    await sql`DELETE FROM devtracker_projects WHERE id = ${id}`;
+    await sql`DELETE FROM devtracker_projects WHERE id = ${id} AND tenant_id = ${req.tenantId}`;
     res.json({ success: true });
   } catch (err) {
     console.error('❌ DELETE /api/devtracker/projects/:id:', err.message);
@@ -1939,7 +2006,7 @@ app.post('/api/devtracker/projects/:id/complete', authenticateToken, async (req,
     const { id } = req.params;
     const result = await sql`
       UPDATE devtracker_projects SET status = 'Concluído', updated_at = NOW()
-      WHERE id = ${id} RETURNING *
+      WHERE id = ${id} AND tenant_id = ${req.tenantId} RETURNING *
     `;
     if (result.length === 0) return res.status(404).json({ error: 'Project not found' });
     res.json(result[0]);
@@ -1954,9 +2021,13 @@ app.post('/api/devtracker/allocations', authenticateToken, async (req, res) => {
   try {
     const { developer_id, project_id } = req.body;
     if (!developer_id || !project_id) return res.status(400).json({ error: 'developer_id e project_id são obrigatórios' });
+    // Garante que dev e projeto pertencem ao mesmo tenant do usuário autenticado
+    const devOk = await sql`SELECT id FROM devtracker_developers WHERE id = ${developer_id} AND tenant_id = ${req.tenantId}`;
+    const projOk = await sql`SELECT id FROM devtracker_projects WHERE id = ${project_id} AND tenant_id = ${req.tenantId}`;
+    if (devOk.length === 0 || projOk.length === 0) return res.status(404).json({ error: 'Developer ou Project não encontrado' });
     const result = await sql`
-      INSERT INTO devtracker_allocations (developer_id, project_id)
-      VALUES (${developer_id}, ${project_id})
+      INSERT INTO devtracker_allocations (developer_id, project_id, tenant_id)
+      VALUES (${developer_id}, ${project_id}, ${req.tenantId})
       ON CONFLICT (developer_id, project_id) DO NOTHING
       RETURNING *
     `;
@@ -1971,7 +2042,7 @@ app.post('/api/devtracker/allocations', authenticateToken, async (req, res) => {
 app.delete('/api/devtracker/allocations/:developerId/:projectId', authenticateToken, async (req, res) => {
   try {
     const { developerId, projectId } = req.params;
-    await sql`DELETE FROM devtracker_allocations WHERE developer_id = ${developerId} AND project_id = ${projectId}`;
+    await sql`DELETE FROM devtracker_allocations WHERE developer_id = ${developerId} AND project_id = ${projectId} AND tenant_id = ${req.tenantId}`;
     res.json({ success: true });
   } catch (err) {
     console.error('❌ DELETE /api/devtracker/allocations:', err.message);
@@ -1996,18 +2067,19 @@ app.get('/api/devtracker/active-tasks', authenticateToken, async (req, res) => {
         qa_av.image_url AS qa_avatar_url
       FROM work_items w
       LEFT JOIN work_items f
-        ON f.work_item_id = w.parent_id AND f.type = 'Feature'
+        ON f.work_item_id = w.parent_id AND f.type = 'Feature' AND f.tenant_id = ${req.tenantId}
       LEFT JOIN team_member_avatars av
-        ON LOWER(av.name) = LOWER(w.assigned_to)
+        ON LOWER(av.name) = LOWER(w.assigned_to) AND av.tenant_id = ${req.tenantId}
       LEFT JOIN team_member_avatars po_av
-        ON LOWER(po_av.name) = LOWER(w.po)
+        ON LOWER(po_av.name) = LOWER(w.po) AND po_av.tenant_id = ${req.tenantId}
       LEFT JOIN team_member_avatars qa_av
-        ON LOWER(qa_av.name) = LOWER(w.qa)
+        ON LOWER(qa_av.name) = LOWER(w.qa) AND qa_av.tenant_id = ${req.tenantId}
       WHERE w.state NOT IN (
           'Done','Concluído','Closed','Fechado','Finished','Resolved','Pronto','Removed'
         )
         AND w.assigned_to IS NOT NULL
         AND w.type NOT IN ('Feature', 'Epic')
+        AND w.tenant_id = ${req.tenantId}
       ORDER BY w.first_activation_date DESC NULLS LAST
     `;
     res.json(tasks);
@@ -2028,11 +2100,11 @@ app.get('/api/devtracker/features', authenticateToken, async (req, res) => {
         w.story_points, w.tags, w.priority, w.url,
         COALESCE(
           (SELECT json_agg(t.tag) FROM devtracker_tags t
-           WHERE t.entity_type = 'feature' AND t.entity_id = w.work_item_id::text),
+           WHERE t.entity_type = 'feature' AND t.entity_id = w.work_item_id::text AND t.tenant_id = ${req.tenantId}),
           '[]'::json
         ) AS custom_tags
       FROM work_items w
-      WHERE w.type = 'Feature'
+      WHERE w.type = 'Feature' AND w.tenant_id = ${req.tenantId}
       ORDER BY
         CASE WHEN w.state IN ('Done','Concluído','Closed','Fechado','Finished','Resolved','Pronto')
           THEN 1 ELSE 0 END,
@@ -2052,8 +2124,8 @@ app.post('/api/devtracker/tags', authenticateToken, async (req, res) => {
     const { entity_type, entity_id, tag } = req.body;
     if (!entity_type || !entity_id || !tag) return res.status(400).json({ error: 'entity_type, entity_id e tag são obrigatórios' });
     await sql`
-      INSERT INTO devtracker_tags (entity_type, entity_id, tag)
-      VALUES (${entity_type}, ${String(entity_id)}, ${tag.trim()})
+      INSERT INTO devtracker_tags (entity_type, entity_id, tag, tenant_id)
+      VALUES (${entity_type}, ${String(entity_id)}, ${tag.trim()}, ${req.tenantId})
       ON CONFLICT DO NOTHING
     `;
     res.json({ success: true });
@@ -2070,7 +2142,7 @@ app.delete('/api/devtracker/tags', authenticateToken, async (req, res) => {
     if (!entity_type || !entity_id || !tag) return res.status(400).json({ error: 'entity_type, entity_id e tag são obrigatórios' });
     await sql`
       DELETE FROM devtracker_tags
-      WHERE entity_type = ${entity_type} AND entity_id = ${String(entity_id)} AND tag = ${tag}
+      WHERE entity_type = ${entity_type} AND entity_id = ${String(entity_id)} AND tag = ${tag} AND tenant_id = ${req.tenantId}
     `;
     res.json({ success: true });
   } catch (err) {
@@ -2306,8 +2378,8 @@ app.get('/api/ceremonies/config', authenticateToken, async (req, res) => {
   try {
     const { team } = req.query;
     const rows = team
-      ? await sql`SELECT * FROM ceremony_config WHERE team = ${team} AND active = true ORDER BY team, ritual_type`
-      : await sql`SELECT * FROM ceremony_config WHERE active = true ORDER BY team, ritual_type`;
+      ? await sql`SELECT * FROM ceremony_config WHERE team = ${team} AND active = true AND tenant_id = ${req.tenantId} ORDER BY team, ritual_type`
+      : await sql`SELECT * FROM ceremony_config WHERE active = true AND tenant_id = ${req.tenantId} ORDER BY team, ritual_type`;
     res.json(rows);
   } catch (err) {
     console.error('❌ GET /api/ceremonies/config:', err.message);
@@ -2318,7 +2390,7 @@ app.get('/api/ceremonies/config', authenticateToken, async (req, res) => {
 // GET /api/ceremonies/teams — times cadastrados na config
 app.get('/api/ceremonies/teams', authenticateToken, async (req, res) => {
   try {
-    const rows = await sql`SELECT DISTINCT team FROM ceremony_config WHERE active = true ORDER BY team`;
+    const rows = await sql`SELECT DISTINCT team FROM ceremony_config WHERE active = true AND tenant_id = ${req.tenantId} ORDER BY team`;
     res.json(rows.map(r => r.team));
   } catch (err) {
     console.error('❌ GET /api/ceremonies/teams:', err.message);
@@ -2338,9 +2410,9 @@ app.post('/api/ceremonies/config', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'frequency deve ser weekly, biweekly ou monthly' });
     }
     const rows = await sql`
-      INSERT INTO ceremony_config (team, ritual_type, frequency, active)
-      VALUES (${team}, ${ritual_type}, ${frequency}, true)
-      ON CONFLICT (team, ritual_type) DO UPDATE SET frequency = ${frequency}, active = true
+      INSERT INTO ceremony_config (team, ritual_type, frequency, active, tenant_id)
+      VALUES (${team}, ${ritual_type}, ${frequency}, true, ${req.tenantId})
+      ON CONFLICT (team, ritual_type, tenant_id) DO UPDATE SET frequency = ${frequency}, active = true
       RETURNING *
     `;
     res.status(201).json(rows[0]);
@@ -2353,7 +2425,7 @@ app.post('/api/ceremonies/config', authenticateToken, async (req, res) => {
 // DELETE /api/ceremonies/config/:id — desativa rito de um time
 app.delete('/api/ceremonies/config/:id', authenticateToken, async (req, res) => {
   try {
-    await sql`UPDATE ceremony_config SET active = false WHERE id = ${req.params.id}`;
+    await sql`UPDATE ceremony_config SET active = false WHERE id = ${req.params.id} AND tenant_id = ${req.tenantId}`;
     res.json({ success: true });
   } catch (err) {
     console.error('❌ DELETE /api/ceremonies/config/:id:', err.message);
@@ -2370,7 +2442,7 @@ app.get('/api/qa-tracker/qa-persons', authenticateToken, async (req, res) => {
   try {
     const rows = await sql`
       SELECT DISTINCT qa FROM work_items
-      WHERE qa IS NOT NULL AND qa != ''
+      WHERE qa IS NOT NULL AND qa != '' AND tenant_id = ${req.tenantId}
       ORDER BY qa ASC
     `;
     res.json(rows.map(r => r.qa));
@@ -2397,11 +2469,11 @@ app.get('/api/qa-tracker/items-by-qa', authenticateToken, async (req, res) => {
       FROM work_items wi
       LEFT JOIN LATERAL (
         SELECT * FROM qa_test_records r
-        WHERE r.work_item_id = wi.work_item_id AND r.qa_person = ${qa}
+        WHERE r.work_item_id = wi.work_item_id AND r.qa_person = ${qa} AND r.tenant_id = ${req.tenantId}
         ORDER BY r.version DESC
         LIMIT 1
       ) qtr ON true
-      WHERE wi.qa = ${qa} OR qtr.id IS NOT NULL
+      WHERE (wi.qa = ${qa} OR qtr.id IS NOT NULL) AND wi.tenant_id = ${req.tenantId}
       ORDER BY wi.priority ASC NULLS LAST, wi.work_item_id ASC
     `;
     res.json(rows);
@@ -2422,13 +2494,13 @@ app.get('/api/qa-tracker/versions', authenticateToken, async (req, res) => {
       sql`
         SELECT DISTINCT matches[1] AS version
         FROM work_items, regexp_matches(tags, '\\[(\\d+\\.\\d+\\.\\d+\\.\\d+)\\]', 'g') AS matches
-        WHERE tags LIKE '%[%'
+        WHERE tags LIKE '%[%' AND tenant_id = ${req.tenantId}
       `,
       sql`
         SELECT DISTINCT delivered_version AS version
         FROM work_items
         WHERE delivered_version ~ '^\\d+\\.\\d+\\.\\d+\\.\\d+$'
-          AND delivered_version IS NOT NULL AND delivered_version != ''
+          AND delivered_version IS NOT NULL AND delivered_version != '' AND tenant_id = ${req.tenantId}
       `,
     ]);
 
@@ -2466,8 +2538,7 @@ app.get('/api/qa-tracker/items', authenticateToken, async (req, res) => {
         state, priority, tags, delivered_version, tipo_cliente,
         story_points, complexity, squad, dev, po, url
       FROM work_items
-      WHERE tags ILIKE ${tagPattern}
-         OR delivered_version = ${version}
+      WHERE (tags ILIKE ${tagPattern} OR delivered_version = ${version}) AND tenant_id = ${req.tenantId}
       ORDER BY priority ASC NULLS LAST, work_item_id ASC
     `;
     res.json(rows);
@@ -2495,9 +2566,16 @@ async function ensureQATrackerTable() {
       override_area TEXT,
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW(),
-      UNIQUE(work_item_id, version)
+      tenant_id INT NOT NULL DEFAULT 1,
+      UNIQUE(work_item_id, version, tenant_id)
     )
   `;
+  // Migração segura para instâncias que já tinham a tabela sem tenant_id
+  try { await sql`ALTER TABLE qa_test_records ADD COLUMN IF NOT EXISTS tenant_id INT NOT NULL DEFAULT 1`; } catch {}
+  try {
+    await sql`ALTER TABLE qa_test_records DROP CONSTRAINT IF EXISTS qa_test_records_work_item_id_version_key`;
+    await sql`ALTER TABLE qa_test_records ADD CONSTRAINT qa_test_records_tenant_unique UNIQUE (work_item_id, version, tenant_id)`;
+  } catch {}
 }
 
 // GET /api/qa-tracker/records?version=3.66.0.0
@@ -2506,7 +2584,7 @@ app.get('/api/qa-tracker/records', authenticateToken, async (req, res) => {
     await ensureQATrackerTable();
     const { version } = req.query;
     if (!version) return res.status(400).json({ error: 'version obrigatório' });
-    const rows = await sql`SELECT * FROM qa_test_records WHERE version = ${version} ORDER BY work_item_id ASC`;
+    const rows = await sql`SELECT * FROM qa_test_records WHERE version = ${version} AND tenant_id = ${req.tenantId} ORDER BY work_item_id ASC`;
     res.json(rows);
   } catch (err) {
     console.error('❌ GET /api/qa-tracker/records:', err.message);
@@ -2526,12 +2604,12 @@ app.post('/api/qa-tracker/records', authenticateToken, async (req, res) => {
     const rows = await sql`
       INSERT INTO qa_test_records
         (work_item_id, version, qa_person, status, obs, cts, attachments,
-         override_desc, override_client, override_tipo, override_area, updated_at)
+         override_desc, override_client, override_tipo, override_area, updated_at, tenant_id)
       VALUES
         (${work_item_id}, ${version}, ${qa_person || null}, ${status || 'pending'},
          ${obs || null}, ${ctsJson}::jsonb, ${attachJson}::jsonb,
-         ${override_desc || null}, ${override_client || null}, ${override_tipo || null}, ${override_area || null}, NOW())
-      ON CONFLICT (work_item_id, version) DO UPDATE SET
+         ${override_desc || null}, ${override_client || null}, ${override_tipo || null}, ${override_area || null}, NOW(), ${req.tenantId})
+      ON CONFLICT (work_item_id, version, tenant_id) DO UPDATE SET
         qa_person     = EXCLUDED.qa_person,
         status        = EXCLUDED.status,
         obs           = EXCLUDED.obs,
@@ -2570,7 +2648,7 @@ app.put('/api/qa-tracker/records/:id', authenticateToken, async (req, res) => {
         override_tipo   = ${override_tipo || null},
         override_area   = ${override_area || null},
         updated_at    = NOW()
-      WHERE id = ${req.params.id}
+      WHERE id = ${req.params.id} AND tenant_id = ${req.tenantId}
       RETURNING *
     `;
     if (!rows.length) return res.status(404).json({ error: 'Registro não encontrado' });
@@ -2584,7 +2662,7 @@ app.put('/api/qa-tracker/records/:id', authenticateToken, async (req, res) => {
 // DELETE /api/qa-tracker/records/:id
 app.delete('/api/qa-tracker/records/:id', authenticateToken, async (req, res) => {
   try {
-    await sql`DELETE FROM qa_test_records WHERE id = ${req.params.id}`;
+    await sql`DELETE FROM qa_test_records WHERE id = ${req.params.id} AND tenant_id = ${req.tenantId}`;
     res.json({ success: true });
   } catch (err) {
     console.error('❌ DELETE /api/qa-tracker/records/:id:', err.message);
@@ -2609,8 +2687,8 @@ app.get('/api/qa-tracker/version-items', authenticateToken, async (req, res) => 
         qtr.override_desc, qtr.override_client, qtr.override_tipo, qtr.override_area
       FROM work_items wi
       LEFT JOIN qa_test_records qtr
-        ON qtr.work_item_id = wi.work_item_id AND qtr.version = ${version}
-      WHERE wi.tags ILIKE ${tagPattern} OR wi.delivered_version = ${version}
+        ON qtr.work_item_id = wi.work_item_id AND qtr.version = ${version} AND qtr.tenant_id = ${req.tenantId}
+      WHERE (wi.tags ILIKE ${tagPattern} OR wi.delivered_version = ${version}) AND wi.tenant_id = ${req.tenantId}
       ORDER BY wi.priority ASC NULLS LAST, wi.work_item_id ASC
     `;
     res.json(rows);
@@ -2640,16 +2718,16 @@ app.post('/api/qa-tracker/auto-populate', authenticateToken, async (req, res) =>
       FROM (
         SELECT DISTINCT matches[1] AS version, work_item_id
         FROM work_items, regexp_matches(tags, '\\[(\\d+\\.\\d+\\.\\d+\\.\\d+)\\]', 'g') AS matches
-        WHERE tags LIKE '%[%'
+        WHERE tags LIKE '%[%' AND tenant_id = ${req.tenantId}
         UNION
         SELECT DISTINCT delivered_version AS version, work_item_id
         FROM work_items
         WHERE delivered_version ~ '^\\d+\\.\\d+\\.\\d+\\.\\d+$'
-          AND delivered_version IS NOT NULL AND delivered_version != ''
+          AND delivered_version IS NOT NULL AND delivered_version != '' AND tenant_id = ${req.tenantId}
       ) v
-      JOIN work_items wi ON wi.work_item_id = v.work_item_id
+      JOIN work_items wi ON wi.work_item_id = v.work_item_id AND wi.tenant_id = ${req.tenantId}
       LEFT JOIN qa_test_records qtr
-        ON qtr.work_item_id = v.work_item_id AND qtr.version = v.version
+        ON qtr.work_item_id = v.work_item_id AND qtr.version = v.version AND qtr.tenant_id = ${req.tenantId}
     `;
 
     const VERSION_PATTERN = /^\d+\.\d+\.\d+\.\d+$/;
@@ -2694,11 +2772,11 @@ app.post('/api/qa-tracker/auto-populate', authenticateToken, async (req, res) =>
       const BATCH = 500;
       for (let i = 0; i < toInsert.length; i += BATCH) {
         const chunk = toInsert.slice(i, i + BATCH);
-        const placeholders = chunk.map((_, j) => `($${j * 3 + 1}, $${j * 3 + 2}, $${j * 3 + 3})`).join(',');
-        const flatValues = chunk.flatMap(r => [r.work_item_id, r.version, r.status]);
+        const placeholders = chunk.map((_, j) => `($${j * 4 + 1}, $${j * 4 + 2}, $${j * 4 + 3}, $${j * 4 + 4})`).join(',');
+        const flatValues = chunk.flatMap(r => [r.work_item_id, r.version, r.status, req.tenantId]);
         await pool.query(
-          `INSERT INTO qa_test_records (work_item_id, version, status) VALUES ${placeholders}
-           ON CONFLICT (work_item_id, version) DO NOTHING`,
+          `INSERT INTO qa_test_records (work_item_id, version, status, tenant_id) VALUES ${placeholders}
+           ON CONFLICT (work_item_id, version, tenant_id) DO NOTHING`,
           flatValues
         );
       }
@@ -2716,8 +2794,9 @@ app.post('/api/qa-tracker/auto-populate', authenticateToken, async (req, res) =>
          FROM unnest($1::int[], $2::text[], $3::text[]) AS upd(work_item_id, version, status)
          WHERE q.work_item_id = upd.work_item_id
            AND q.version = upd.version
-           AND q.status = 'pending'`,
-        [ids, versions, statuses]
+           AND q.status = 'pending'
+           AND q.tenant_id = $4`,
+        [ids, versions, statuses, req.tenantId]
       );
       updated = toUpdate.length;
     }
@@ -2729,6 +2808,8 @@ app.post('/api/qa-tracker/auto-populate', authenticateToken, async (req, res) =>
       SET status = 'pending', updated_at = NOW()
       FROM work_items wi
       WHERE q.work_item_id = wi.work_item_id
+        AND q.tenant_id = wi.tenant_id
+        AND q.tenant_id = $1
         AND q.status = 'done'
         AND (q.qa_person IS NULL OR q.qa_person = '')
         AND NOT (
@@ -2737,7 +2818,7 @@ app.post('/api/qa-tracker/auto-populate', authenticateToken, async (req, res) =>
           -- Demais tipos: precisa de delivered_version E tag com versão
           OR (wi.type != 'Eventuality' AND wi.delivered_version ~ '^\\d+\\.\\d+\\.\\d+\\.\\d+$' AND wi.tags ~ '\\d+\\.\\d+\\.\\d+\\.\\d+')
         )
-    `);
+    `, [req.tenantId]);
     const corrected = retrofix.rowCount ?? 0;
 
     const versionsProcessed = new Set(allPairs.map(p => p.version)).size;
@@ -2752,7 +2833,7 @@ app.post('/api/qa-tracker/auto-populate', authenticateToken, async (req, res) =>
 app.get('/api/qa-tracker/version-summary', authenticateToken, async (req, res) => {
   try {
     // Reutiliza a mesma lógica de /versions para obter a lista ordenada
-    const tagRows = await sql`SELECT tags FROM work_items WHERE tags IS NOT NULL AND tags LIKE '%[%'`;
+    const tagRows = await sql`SELECT tags FROM work_items WHERE tags IS NOT NULL AND tags LIKE '%[%' AND tenant_id = ${req.tenantId}`;
     const versionSet = new Set();
     const versionPattern = /\[(\d+\.\d+\.\d+\.\d+)\]/g;
     for (const row of tagRows) {
@@ -2760,7 +2841,7 @@ app.get('/api/qa-tracker/version-summary', authenticateToken, async (req, res) =
       while ((m = versionPattern.exec(row.tags || '')) !== null) versionSet.add(m[1]);
       versionPattern.lastIndex = 0;
     }
-    const dvRows = await sql`SELECT DISTINCT delivered_version FROM work_items WHERE delivered_version IS NOT NULL AND delivered_version != ''`;
+    const dvRows = await sql`SELECT DISTINCT delivered_version FROM work_items WHERE delivered_version IS NOT NULL AND delivered_version != '' AND tenant_id = ${req.tenantId}`;
     dvRows.forEach(r => { if (/^\d+\.\d+\.\d+\.\d+$/.test(r.delivered_version)) versionSet.add(r.delivered_version); });
 
     const candidates = [...versionSet].sort((a, b) => {
@@ -2775,14 +2856,14 @@ app.get('/api/qa-tracker/version-summary', authenticateToken, async (req, res) =
       const tagPattern = `%[${v}]%`;
       const itemRows = await sql`
         SELECT work_item_id FROM work_items
-        WHERE tags ILIKE ${tagPattern} OR delivered_version = ${v}
+        WHERE (tags ILIKE ${tagPattern} OR delivered_version = ${v}) AND tenant_id = ${req.tenantId}
       `;
       const total = itemRows.length;
       if (total === 0) continue;
       const ids = itemRows.map(r => r.work_item_id);
       const recRows = await sql`
         SELECT status FROM qa_test_records
-        WHERE version = ${v} AND work_item_id = ANY(${ids})
+        WHERE version = ${v} AND work_item_id = ANY(${ids}) AND tenant_id = ${req.tenantId}
       `;
       const done    = recRows.filter(r => r.status === 'done').length;
       const blocked = recRows.filter(r => r.status === 'blocked').length;
@@ -2805,21 +2886,21 @@ app.get('/api/ceremonies/records/overview', authenticateToken, async (req, res) 
 
     let rows;
     if (team && ritual_type && status) {
-      rows = await sql`SELECT * FROM ceremony_records WHERE scheduled_date BETWEEN ${startDate}::date AND ${endDate}::date AND team = ${team} AND ritual_type = ${ritual_type} AND status = ${status} ORDER BY scheduled_date DESC, team, ritual_type`;
+      rows = await sql`SELECT * FROM ceremony_records WHERE scheduled_date BETWEEN ${startDate}::date AND ${endDate}::date AND team = ${team} AND ritual_type = ${ritual_type} AND status = ${status} AND tenant_id = ${req.tenantId} ORDER BY scheduled_date DESC, team, ritual_type`;
     } else if (team && ritual_type) {
-      rows = await sql`SELECT * FROM ceremony_records WHERE scheduled_date BETWEEN ${startDate}::date AND ${endDate}::date AND team = ${team} AND ritual_type = ${ritual_type} ORDER BY scheduled_date DESC, team, ritual_type`;
+      rows = await sql`SELECT * FROM ceremony_records WHERE scheduled_date BETWEEN ${startDate}::date AND ${endDate}::date AND team = ${team} AND ritual_type = ${ritual_type} AND tenant_id = ${req.tenantId} ORDER BY scheduled_date DESC, team, ritual_type`;
     } else if (team && status) {
-      rows = await sql`SELECT * FROM ceremony_records WHERE scheduled_date BETWEEN ${startDate}::date AND ${endDate}::date AND team = ${team} AND status = ${status} ORDER BY scheduled_date DESC, ritual_type`;
+      rows = await sql`SELECT * FROM ceremony_records WHERE scheduled_date BETWEEN ${startDate}::date AND ${endDate}::date AND team = ${team} AND status = ${status} AND tenant_id = ${req.tenantId} ORDER BY scheduled_date DESC, ritual_type`;
     } else if (ritual_type && status) {
-      rows = await sql`SELECT * FROM ceremony_records WHERE scheduled_date BETWEEN ${startDate}::date AND ${endDate}::date AND ritual_type = ${ritual_type} AND status = ${status} ORDER BY scheduled_date DESC, team`;
+      rows = await sql`SELECT * FROM ceremony_records WHERE scheduled_date BETWEEN ${startDate}::date AND ${endDate}::date AND ritual_type = ${ritual_type} AND status = ${status} AND tenant_id = ${req.tenantId} ORDER BY scheduled_date DESC, team`;
     } else if (team) {
-      rows = await sql`SELECT * FROM ceremony_records WHERE scheduled_date BETWEEN ${startDate}::date AND ${endDate}::date AND team = ${team} ORDER BY scheduled_date DESC, ritual_type`;
+      rows = await sql`SELECT * FROM ceremony_records WHERE scheduled_date BETWEEN ${startDate}::date AND ${endDate}::date AND team = ${team} AND tenant_id = ${req.tenantId} ORDER BY scheduled_date DESC, ritual_type`;
     } else if (ritual_type) {
-      rows = await sql`SELECT * FROM ceremony_records WHERE scheduled_date BETWEEN ${startDate}::date AND ${endDate}::date AND ritual_type = ${ritual_type} ORDER BY scheduled_date DESC, team`;
+      rows = await sql`SELECT * FROM ceremony_records WHERE scheduled_date BETWEEN ${startDate}::date AND ${endDate}::date AND ritual_type = ${ritual_type} AND tenant_id = ${req.tenantId} ORDER BY scheduled_date DESC, team`;
     } else if (status) {
-      rows = await sql`SELECT * FROM ceremony_records WHERE scheduled_date BETWEEN ${startDate}::date AND ${endDate}::date AND status = ${status} ORDER BY scheduled_date DESC, team, ritual_type`;
+      rows = await sql`SELECT * FROM ceremony_records WHERE scheduled_date BETWEEN ${startDate}::date AND ${endDate}::date AND status = ${status} AND tenant_id = ${req.tenantId} ORDER BY scheduled_date DESC, team, ritual_type`;
     } else {
-      rows = await sql`SELECT * FROM ceremony_records WHERE scheduled_date BETWEEN ${startDate}::date AND ${endDate}::date ORDER BY scheduled_date DESC, team, ritual_type`;
+      rows = await sql`SELECT * FROM ceremony_records WHERE scheduled_date BETWEEN ${startDate}::date AND ${endDate}::date AND tenant_id = ${req.tenantId} ORDER BY scheduled_date DESC, team, ritual_type`;
     }
 
     const total       = rows.length;
@@ -2866,11 +2947,11 @@ app.get('/api/ceremonies/records', authenticateToken, async (req, res) => {
       const end = `${month}-${String(lastDay).padStart(2, '0')}`;
       rows = await sql`
         SELECT * FROM ceremony_records
-        WHERE team = ${team} AND scheduled_date BETWEEN ${start}::date AND ${end}::date
+        WHERE team = ${team} AND scheduled_date BETWEEN ${start}::date AND ${end}::date AND tenant_id = ${req.tenantId}
         ORDER BY scheduled_date, ritual_type
       `;
     } else if (team) {
-      rows = await sql`SELECT * FROM ceremony_records WHERE team = ${team} ORDER BY scheduled_date DESC, ritual_type`;
+      rows = await sql`SELECT * FROM ceremony_records WHERE team = ${team} AND tenant_id = ${req.tenantId} ORDER BY scheduled_date DESC, ritual_type`;
     } else if (month) {
       const [yr, mo] = month.split('-').map(Number);
       const start = `${month}-01`;
@@ -2878,11 +2959,11 @@ app.get('/api/ceremonies/records', authenticateToken, async (req, res) => {
       const end = `${month}-${String(lastDay).padStart(2, '0')}`;
       rows = await sql`
         SELECT * FROM ceremony_records
-        WHERE scheduled_date BETWEEN ${start}::date AND ${end}::date
+        WHERE scheduled_date BETWEEN ${start}::date AND ${end}::date AND tenant_id = ${req.tenantId}
         ORDER BY team, scheduled_date, ritual_type
       `;
     } else {
-      rows = await sql`SELECT * FROM ceremony_records ORDER BY scheduled_date DESC LIMIT 200`;
+      rows = await sql`SELECT * FROM ceremony_records WHERE tenant_id = ${req.tenantId} ORDER BY scheduled_date DESC LIMIT 200`;
     }
     res.json(rows);
   } catch (err) {
@@ -2903,8 +2984,8 @@ app.post('/api/ceremonies/records', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'status inválido' });
     }
     const rows = await sql`
-      INSERT INTO ceremony_records (team, ritual_type, scheduled_date, status, reason, notes, imported_from, created_by)
-      VALUES (${team}, ${ritual_type}, ${scheduled_date}::date, ${status}, ${reason || null}, ${notes || null}, ${imported_from || null}, ${req.user.username})
+      INSERT INTO ceremony_records (team, ritual_type, scheduled_date, status, reason, notes, imported_from, created_by, tenant_id)
+      VALUES (${team}, ${ritual_type}, ${scheduled_date}::date, ${status}, ${reason || null}, ${notes || null}, ${imported_from || null}, ${req.user.username}, ${req.tenantId})
       RETURNING *
     `;
     res.status(201).json(rows[0]);
@@ -2929,7 +3010,7 @@ app.put('/api/ceremonies/records/:id', authenticateToken, async (req, res) => {
         notes  = COALESCE(${notes  !== undefined ? notes  : null}, notes),
         scheduled_date = COALESCE(${scheduled_date ? scheduled_date + '::date' : null}::date, scheduled_date),
         updated_at = NOW()
-      WHERE id = ${req.params.id}
+      WHERE id = ${req.params.id} AND tenant_id = ${req.tenantId}
       RETURNING *
     `;
     if (rows.length === 0) return res.status(404).json({ error: 'Registro não encontrado' });
@@ -2943,7 +3024,7 @@ app.put('/api/ceremonies/records/:id', authenticateToken, async (req, res) => {
 // DELETE /api/ceremonies/records/:id — remover ocorrência
 app.delete('/api/ceremonies/records/:id', authenticateToken, async (req, res) => {
   try {
-    await sql`DELETE FROM ceremony_records WHERE id = ${req.params.id}`;
+    await sql`DELETE FROM ceremony_records WHERE id = ${req.params.id} AND tenant_id = ${req.tenantId}`;
     res.json({ success: true });
   } catch (err) {
     console.error('❌ DELETE /api/ceremonies/records/:id:', err.message);
@@ -3017,8 +3098,8 @@ app.post('/api/ceremonies/calendar-import/confirm', authenticateToken, async (re
     for (const ev of events) {
       if (!ev.team || !ev.ritual_type || !ev.date) continue;
       const rows = await sql`
-        INSERT INTO ceremony_records (team, ritual_type, scheduled_date, status, notes, imported_from, created_by)
-        VALUES (${ev.team}, ${ev.ritual_type}, ${ev.date}::date, 'done', ${ev.title || null}, 'calendar', ${req.user.username})
+        INSERT INTO ceremony_records (team, ritual_type, scheduled_date, status, notes, imported_from, created_by, tenant_id)
+        VALUES (${ev.team}, ${ev.ritual_type}, ${ev.date}::date, 'done', ${ev.title || null}, 'calendar', ${req.user.username}, ${req.tenantId})
         ON CONFLICT DO NOTHING
         RETURNING *
       `;
@@ -3046,14 +3127,13 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
-// Schedule sync every 30 minutes
-if (isConfigured()) {
+// Schedule sync every 30 minutes — roda para todos os tenants com Azure DevOps configurado
+if (DATABASE_URL) {
   schedule.scheduleJob('*/30 * * * *', () => {
-    console.log('🔄 Running scheduled sync...');
-    syncData().catch(e => console.error('❌ Scheduled sync error (non-fatal):', e.message));
-    syncPullRequests().catch(e => console.error('❌ Scheduled PR sync error (non-fatal):', e.message));
+    console.log('🔄 Running scheduled sync (all tenants)...');
+    syncAllTenants().catch(e => console.error('❌ Scheduled sync error (non-fatal):', e.message));
   });
-  console.log('⏰ Scheduled sync every 30 minutes');
+  console.log('⏰ Scheduled sync every 30 minutes (all tenants)');
 }
 
 // Previne crash do processo por erros não capturados (ex: timeout VPS)
@@ -3079,10 +3159,9 @@ const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`✅ Server running on http://localhost:${PORT}`);
   
-  if (isConfigured() && DATABASE_URL) {
-    console.log('🔄 Starting initial sync...');
-    syncData();
-    syncPullRequests();
+  if (DATABASE_URL) {
+    console.log('🔄 Starting initial sync (all tenants)...');
+    syncAllTenants();
   }
 });
 
