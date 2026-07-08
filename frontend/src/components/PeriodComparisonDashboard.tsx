@@ -3,6 +3,7 @@ import { WorkItem } from '../types';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, Cell } from 'recharts';
 import { startOfMonth, endOfMonth, subMonths, isWithinInterval, parseISO, format, subDays, startOfWeek, endOfWeek } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { FieldMappingButton } from './ChartInfoLamp';
 
 interface Props {
   data: WorkItem[];
@@ -323,7 +324,8 @@ export const PeriodComparisonDashboard: React.FC<Props> = ({ data }) => {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h2 className="text-xl font-bold text-white">📊 Comparação de Períodos</h2>
-        
+        <FieldMappingButton chartId="period-comparison" />
+
         {/* Filtro de Time */}
         <div className="flex items-center gap-2">
           <label className="text-ds-text text-sm">Time:</label>

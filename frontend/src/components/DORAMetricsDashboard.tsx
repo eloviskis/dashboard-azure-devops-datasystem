@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { WorkItem } from '../types';
 import { CHART_COLORS } from '../constants';
 import { getPercentile } from '../utils/metrics';
-import ChartInfoLamp from './ChartInfoLamp';
+import ChartInfoLamp, { FieldMappingButton } from './ChartInfoLamp';
 import {
   ResponsiveContainer, BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Legend, ReferenceLine, Cell
 } from 'recharts';
@@ -121,6 +121,10 @@ const DORAMetricsDashboard: React.FC<Props> = ({ data }) => {
 
   return (
     <div className="space-y-6">
+      <div className="flex items-center justify-end gap-2">
+        <span className="text-xs text-ds-text/50">Campos Azure DevOps</span>
+        <FieldMappingButton chartId="dora" />
+      </div>
       {/* DORA KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[

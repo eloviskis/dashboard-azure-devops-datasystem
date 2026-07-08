@@ -1,7 +1,7 @@
 import React, { useState, useMemo, Component, ErrorInfo, ReactNode } from 'react';
 import './RootCauseDashboard.css';
 import { WorkItem } from '../types';
-import ChartInfoLamp from './ChartInfoLamp';
+import ChartInfoLamp, { FieldMappingButton } from './ChartInfoLamp';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import { startOfMonth, endOfMonth, subMonths, isWithinInterval, parseISO } from 'date-fns';
 
@@ -543,6 +543,12 @@ export const RootCauseDashboard: React.FC<Props> = ({ data, allData, periodStart
     <div className="space-y-6">
       {/* Modal */}
       <ItemListModal data={modalData} onClose={() => setModalData(null)} />
+
+      {/* Botao de configuracao de campos */}
+      <div className="flex items-center justify-end gap-2">
+        <span className="text-xs text-ds-text/50">Campos Azure DevOps</span>
+        <FieldMappingButton chartId="rootcause" />
+      </div>
 
       {/* Cards de métricas */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">

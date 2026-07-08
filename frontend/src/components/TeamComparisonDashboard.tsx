@@ -7,7 +7,7 @@ import {
 import { format, subMonths, startOfMonth, endOfMonth, isWithinInterval, eachMonthOfInterval, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { WorkItem } from '../types';
-import ChartInfoLamp from './ChartInfoLamp';
+import ChartInfoLamp, { FieldMappingButton } from './ChartInfoLamp';
 import { useAuth } from '../contexts/AuthContext';
 
 // ─── tipos ───────────────────────────────────────────────────────────────────
@@ -1092,6 +1092,10 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
 
   return (
     <div className="space-y-6">
+      <div className="flex items-center justify-end gap-2">
+        <span className="text-xs text-ds-text/50">Campos Azure DevOps</span>
+        <FieldMappingButton chartId="team-comparison" />
+      </div>
       {/* ── barra de filtros ── */}
       <div className="relative">
         <button

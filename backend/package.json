@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node server.js",
     "build": "echo \"Backend build not required - using Node.js directly\"",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "test:fields": "node test_field_mapping.js"
   },
   "keywords": [],
   "author": "",

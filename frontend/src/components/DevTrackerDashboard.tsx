@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { FieldMappingButton } from './ChartInfoLamp';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -1241,6 +1242,8 @@ const DevTrackerDashboard: React.FC = () => {
           <h2 className="text-xl font-bold text-ds-light-text">DevTracker</h2>
           <p className="text-sm text-ds-text mt-0.5">Acompanhe devs e features do time</p>
         </div>
+        <div className="flex items-center gap-3">
+        <FieldMappingButton chartId="devtracker" />
         <button
           onClick={fetchData}
           disabled={loading}
@@ -1249,6 +1252,7 @@ const DevTrackerDashboard: React.FC = () => {
           <span className={loading ? 'animate-spin inline-block' : ''}>🔄</span>
           Atualizar
         </button>
+        </div>
       </div>
 
       {/* Sub-navigation */}

@@ -4,7 +4,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieCha
 import { parseISO, differenceInDays } from 'date-fns';
 import { CHART_COLORS } from '../constants';
 import { COMPLETED_STATES } from '../utils/metrics';
-import ChartInfoLamp from './ChartInfoLamp';
+import ChartInfoLamp, { FieldMappingButton } from './ChartInfoLamp';
 
 interface Props {
   data: WorkItem[];
@@ -476,6 +476,12 @@ export const POAnalysisDashboard: React.FC<Props> = ({ data }) => {
     <div className="space-y-6">
       {/* Modal */}
       <ItemListModal data={modalData} onClose={() => setModalData(null)} />
+
+      {/* Botao de configuracao de campos */}
+      <div className="flex items-center justify-end gap-2">
+        <span className="text-xs text-ds-text/50">Campos Azure DevOps</span>
+        <FieldMappingButton chartId="po-analysis" />
+      </div>
 
       {/* Cards de métricas */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">

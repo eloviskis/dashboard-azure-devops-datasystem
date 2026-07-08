@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { WorkItem } from '../types';
 import { COMPLETED_STATES } from '../utils/metrics';
-import ChartInfoLamp from './ChartInfoLamp';
+import ChartInfoLamp, { FieldMappingButton } from './ChartInfoLamp';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, Legend, Cell, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, CartesianGrid } from 'recharts';
 
 interface Props {
@@ -273,6 +273,10 @@ const BacklogAnalysisDashboard: React.FC<Props> = ({ data }) => {
 
   return (
     <div className="space-y-6">
+      <div className="flex items-center justify-end gap-2">
+        <span className="text-xs text-ds-text/50">Campos Azure DevOps</span>
+        <FieldMappingButton chartId="backlog" />
+      </div>
       {/* Cards de Métricas Gerais */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <div className="bg-linear-to-br from-blue-600 to-blue-800 text-white p-6 rounded-lg shadow-lg">

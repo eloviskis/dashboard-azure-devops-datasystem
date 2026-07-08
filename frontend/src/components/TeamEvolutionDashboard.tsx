@@ -8,6 +8,7 @@ import { startOfWeek, subWeeks, isWithinInterval, format, getDay } from 'date-fn
 import { ptBR } from 'date-fns/locale/pt-BR';
 import { WorkItem } from '../types';
 import { COMPLETED_STATES, IN_PROGRESS_STATES } from '../utils/metrics';
+import { FieldMappingButton } from './ChartInfoLamp';
 
 interface TeamEvolutionDashboardProps {
   data: WorkItem[];
@@ -387,6 +388,10 @@ const TeamEvolutionDashboard: React.FC<TeamEvolutionDashboardProps> = ({ data })
   return (
     <>
     <ItemListModal data={modalData} onClose={() => setModalData(null)} />
+    <div className="flex items-center justify-end gap-2 mb-2">
+      <span className="text-xs text-ds-text/50">Campos Azure DevOps</span>
+      <FieldMappingButton chartId="team-evolution" />
+    </div>
     <div className="space-y-6">
 
       {/* Header + seletor ───────────────────────────────────────────────── */}

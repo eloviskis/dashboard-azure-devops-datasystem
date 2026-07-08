@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { WorkItem } from '../types';
 import { CHART_COLORS } from '../constants';
-import ChartInfoLamp from './ChartInfoLamp';
+import ChartInfoLamp, { FieldMappingButton } from './ChartInfoLamp';
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend, Cell, PieChart, Pie
 } from 'recharts';
@@ -91,6 +91,10 @@ const SLATrackingDashboard: React.FC<Props> = ({ data }) => {
 
   return (
     <div className="space-y-6">
+      <div className="flex items-center justify-end gap-2">
+        <span className="text-xs text-ds-text/50">Campos Azure DevOps</span>
+        <FieldMappingButton chartId="sla" />
+      </div>
       {/* SLA Config */}
       <div className="bg-ds-navy p-4 rounded-lg border border-ds-border flex items-center gap-4 flex-wrap">
         <label htmlFor="sla-target" className="text-ds-text text-sm">Meta de SLA (Cycle Time máximo):</label>

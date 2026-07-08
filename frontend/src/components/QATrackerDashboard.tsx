@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { FieldMappingButton } from './ChartInfoLamp';
 
 // ─── types ────────────────────────────────────────────────────────────────────
 type QAStatus = 'pending' | 'done' | 'blocked';
@@ -883,6 +884,7 @@ const QATrackerDashboard: React.FC = () => {
           <h2 className="text-base font-semibold text-ds-light-text whitespace-nowrap">
             {version ? <>v<span className="text-ds-green font-mono">{version}</span></> : 'Selecione uma versão'}
           </h2>
+          <FieldMappingButton chartId="qa-tracker" />
           <div className="flex-1" />
           <button
             onClick={handleExport}

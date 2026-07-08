@@ -17,7 +17,7 @@ import { useAzureDevOpsData } from './hooks/useAzureDevOpsData.ts';
 import Header from './components/Header.tsx';
 import { useTheme } from './hooks/useTheme';
 import FilterBar from './components/FilterBar.tsx';
-import ChartInfoLamp from './components/ChartInfoLamp';
+import ChartInfoLamp, { FieldMappingButton } from './components/ChartInfoLamp';
 import SummaryCard from './components/SummaryCard.tsx';
 import StatusPieChart from './components/StatusPieChart.tsx';
 import TeamPerformanceBarChart from './components/TeamPerformanceBarChart.tsx';
@@ -440,6 +440,10 @@ const App = () => {
         return (
           <>
             <SectionHeader title="Visão Geral de Performance" />
+            <div className="flex items-center justify-end gap-2 -mt-2 mb-2">
+              <span className="text-xs text-ds-text/50">Campos Azure DevOps</span>
+              <FieldMappingButton chartId="performance" />
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-6">
               <SummaryCard title="Total de Itens" value={total} />
               <SummaryCard title="Concluídos no Período" value={completed} />
@@ -528,6 +532,10 @@ const App = () => {
         return (
           <>
             <SectionHeader title="Análise de Qualidade" />
+            <div className="flex items-center justify-end gap-2 -mt-2 mb-2">
+              <span className="text-xs text-ds-text/50">Campos Azure DevOps</span>
+              <FieldMappingButton chartId="quality" />
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6 mb-6">
                 <SummaryCard title="Bugs Abertos (Retrabalho)" value={openBugs} />
                 <SummaryCard title="Issues em Aberto (Prod.)" value={openIssues} />
@@ -570,6 +578,10 @@ const App = () => {
         return (
           <>
             <SectionHeader title="Análise por Cliente" />
+            <div className="flex items-center justify-end gap-2 -mt-2 mb-2">
+              <span className="text-xs text-ds-text/50">Campos Azure DevOps</span>
+              <FieldMappingButton chartId="clients" />
+            </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
                   <ChartInfoLamp info="Mostra a quantidade de itens por cliente, ajudando a identificar clientes mais ativos e oportunidades de relacionamento." />
@@ -593,6 +605,10 @@ const App = () => {
         return (
           <>
             <SectionHeader title="Métricas de Fluxo e Kanban" />
+            <div className="flex items-center justify-end gap-2 -mt-2 mb-2">
+              <span className="text-xs text-ds-text/50">Campos Azure DevOps</span>
+              <FieldMappingButton chartId="kanban" />
+            </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="lg:col-span-2 bg-ds-navy p-4 rounded-lg border border-ds-border">
                   <ChartInfoLamp info="O diagrama de fluxo cumulativo mostra o volume de trabalho em cada etapa do processo. Ajuda a visualizar gargalos e o andamento do fluxo." />
@@ -619,6 +635,10 @@ const App = () => {
         return (
             <>
                 <SectionHeader title="Análise Detalhada de Vazão (Throughput)" />
+                <div className="flex items-center justify-end gap-2 -mt-2 mb-2">
+                  <span className="text-xs text-ds-text/50">Campos Azure DevOps</span>
+                  <FieldMappingButton chartId="detailed-throughput" />
+                </div>
                 <div className="grid grid-cols-1 gap-6">
                     <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
                       <ChartInfoLamp info="Mostra a tendência de vazão semanal por time, facilitando a análise de desempenho e previsibilidade das equipes." />
@@ -644,6 +664,10 @@ const App = () => {
             return (
                 <>
                     <SectionHeader title="Análise de Gargalos" />
+                    <div className="flex items-center justify-end gap-2 -mt-2 mb-2">
+                      <span className="text-xs text-ds-text/50">Campos Azure DevOps</span>
+                      <FieldMappingButton chartId="bottlenecks" />
+                    </div>
                      <div className="grid grid-cols-1 gap-6">
                         <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
                           <ChartInfoLamp info="Mostra o tempo médio em cada status, facilitando a identificação de gargalos e etapas que precisam de atenção." />
@@ -657,6 +681,10 @@ const App = () => {
              return (
                 <>
                     <SectionHeader title="Análise por Tags" />
+                    <div className="flex items-center justify-end gap-2 -mt-2 mb-2">
+                      <span className="text-xs text-ds-text/50">Campos Azure DevOps</span>
+                      <FieldMappingButton chartId="tags" />
+                    </div>
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
                           <ChartInfoLamp info="Exibe as tags mais utilizadas, útil para identificar temas recorrentes e oportunidades de padronização." />
@@ -675,6 +703,10 @@ const App = () => {
         return (
             <>
                 {/* Monte Carlo não tem um título simples, então não usamos SectionHeader */}
+                <div className="flex items-center justify-end gap-2 mb-2">
+                  <span className="text-xs text-ds-text/50">Campos Azure DevOps</span>
+                  <FieldMappingButton chartId="montecarlo" />
+                </div>
                 <MonteCarloSimulation data={metricsWorkItems} filters={workItemFilters} />
             </>
         );
@@ -682,6 +714,10 @@ const App = () => {
         return (
             <>
                 <SectionHeader title="Lista de Itens de Trabalho" />
+                <div className="flex items-center justify-end gap-2 -mt-2 mb-2">
+                  <span className="text-xs text-ds-text/50">Campos Azure DevOps</span>
+                  <FieldMappingButton chartId="item-list" />
+                </div>
                 <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
                     <WorkItemTable data={quickFilteredWorkItems} />
                 </div>
@@ -753,6 +789,10 @@ const App = () => {
         return (
           <>
             <SectionHeader title="Scrum Dashboard — CTC/Franquia" />
+            <div className="flex items-center justify-end gap-2 -mt-2 mb-2">
+              <span className="text-xs text-ds-text/50">Campos Azure DevOps</span>
+              <FieldMappingButton chartId="scrum-ctc" />
+            </div>
             <ScrumCTCDashboard data={metricsWorkItems} />
             {/* Story Points vs Cycle Time — movido para cá pois é métrica Scrum */}
             <div className="mt-6">

@@ -12,6 +12,9 @@ require('dotenv').config();
 // Módulo SaaS (tenants, planos, pagamento, super-admin)
 const saas = require('./saas');
 
+// Extração de campos de work items (testável isoladamente, ver test_field_mapping.js)
+const { extractTeam, extractWorkItemFields, extractAvatarCandidates } = require('./fieldExtraction');
+
 // Database driver: PostgreSQL (pg) with connection pooling
 const { Pool } = require('pg');
 
@@ -139,13 +142,6 @@ const dbGetAsync = async (query, params = []) => {
     throw err;
   }
 };
-
-// Extract team from Area Path
-function extractTeam(areaPath) {
-  if (!areaPath) return 'Sem Time';
-  const parts = areaPath.split('\\');
-  return parts.length > 1 ? parts[parts.length - 1] : areaPath;
-}
 
 // Calculate difference in days
 function calculateDaysBetween(startDate, endDate) {
@@ -491,6 +487,31 @@ initDatabase().then(() => {
 // Monta rotas SaaS em /api
 app.use('/api', saas.router);
 
+// ─── Carrega mapeamentos de campos customizados do banco ──────────────────────
+let _cachedFieldMappings = null;
+let _fieldMappingsCachedAt = 0;
+
+async function loadFieldMappings() {
+  // Cache por 5 minutos para nao bater no banco a cada item
+  if (_cachedFieldMappings && Date.now() - _fieldMappingsCachedAt < 300000) {
+    return _cachedFieldMappings;
+  }
+  try {
+    if (!sql) return {};
+    const rows = await sql`SELECT value FROM app_settings WHERE key = 'field_mappings'`;
+    if (rows[0]?.value) {
+      const parsed = typeof rows[0].value === 'string' ? JSON.parse(rows[0].value) : rows[0].value;
+      _cachedFieldMappings = parsed;
+      _fieldMappingsCachedAt = Date.now();
+      return parsed;
+    }
+  } catch {}
+  return {};
+}
+
+// Limpa cache quando campo e salvo
+function invalidateFieldMappingsCache() { _cachedFieldMappings = null; }
+
 // Azure DevOps configuration
 const AZURE_CONFIG = {
   organization: (process.env.AZURE_ORG || 'your-organization').replace(/[\r\n]/g, '').trim(),
@@ -559,28 +580,15 @@ async function syncData() {
       }
 
       // Salvar no banco
+      // Carrega mapeamentos de campos customizados (configurados pelo admin) uma vez para todo o sync
+      const fm = await loadFieldMappings();
+
       // Coletar avatars dos membros durante a sync
       const memberAvatars = new Map();
       for (const item of allWorkItems) {
         const fields = item.fields || {};
-        // Extrair avatar do AssignedTo
-        const assignedToObj = fields['System.AssignedTo'];
-        if (assignedToObj?.displayName && assignedToObj?.imageUrl) {
-          memberAvatars.set(assignedToObj.displayName, assignedToObj.imageUrl);
-        }
-        // Extrair avatar do CreatedBy
-        const createdByObj = fields['System.CreatedBy'];
-        if (createdByObj?.displayName && createdByObj?.imageUrl) {
-          memberAvatars.set(createdByObj.displayName, createdByObj.imageUrl);
-        }
-        // Extrair avatar do PO e QA
-        const poObj = fields['Custom.PO'] || fields['Custom.ProductOwner'];
-        if (poObj?.displayName && poObj?.imageUrl) {
-          memberAvatars.set(poObj.displayName, poObj.imageUrl);
-        }
-        const qaObj = fields['Custom.QA'];
-        if (qaObj?.displayName && qaObj?.imageUrl) {
-          memberAvatars.set(qaObj.displayName, qaObj.imageUrl);
+        for (const { displayName, imageUrl } of extractAvatarCandidates(fields, fm)) {
+          memberAvatars.set(displayName, imageUrl);
         }
       }
 
@@ -601,62 +609,16 @@ async function syncData() {
       for (const item of allWorkItems) {
         const fields = item.fields || {};
         const workItemId = item.id;
-        const title = fields['System.Title'] || '';
-        const state = fields['System.State'] || '';
-        const type = fields['System.WorkItemType'] || '';
-        const assignedTo = fields['System.AssignedTo']?.displayName || '';
-        const areaPath = fields['System.AreaPath'] || '';
-        const team = extractTeam(areaPath);
-        const iterationPath = fields['System.IterationPath'] || '';
-        const createdDate = fields['System.CreatedDate'] || '';
-        const changedDate = fields['System.ChangedDate'] || '';
-        const closedDate = fields['Microsoft.VSTS.Common.ClosedDate'] || '';
-        const storyPoints = fields['Microsoft.VSTS.Scheduling.StoryPoints'] || null;
-        const tags = fields['System.Tags'] || '';
-        const tipoCliente = fields['Custom.Tipocliente'] || fields['Custom.TipoCliente'] || fields['Custom.tipocliente'] || '';
-        const priority = fields['Microsoft.VSTS.Common.Priority']?.toString() || '';
         const url = item._links?.html?.href || '';
-        const activatedDate = fields['Microsoft.VSTS.Common.ActivatedDate'] || '';
 
-        // Campos customizados adicionais
-        // Nível 1 e Nível 2 - campos identity com GUID no Azure DevOps
-        const nivel1Field = fields['Custom.ab075d4c-04f5-4f96-b294-4ad0f5987028'];
-        const nivel2Field = fields['Custom.60cee051-7e66-4753-99d6-4bc8717fae0e'];
-        const codeReviewLevel1 = nivel1Field?.displayName || (typeof nivel1Field === 'string' ? nivel1Field : '') || '';
-        const codeReviewLevel2 = nivel2Field?.displayName || (typeof nivel2Field === 'string' ? nivel2Field : '') || '';
-        const customType = fields['Custom.Type'] || fields['Custom.CustomType'] || '';
-        const rootCauseStatus = fields['Custom.RootCauseStatus'] || fields['Custom.StatusCausaRaiz'] || '';
-        const squad = fields['Custom.Squad'] || '';
-        const area = fields['Custom.Area'] || '';
-        const complexity = fields['Custom.Complexity'] || fields['Custom.Complexidade'] || '';
-        const reincidencia = fields['Custom.REINCIDENCIA'] || fields['Custom.Reincidencia'] || fields['Custom.Reincidência'] || '';
-        const performanceDays = fields['Custom.PerformanceDays'] || fields['Custom.DiasPerformance'] || '';
-        const qaField = fields['Custom.QA'];
-        const qa = qaField?.displayName || (typeof qaField === 'string' ? qaField : '') || '';
-        const causaRaiz = fields['Custom.Raizdoproblema'] || '';
-        const rootCauseLegacy = fields['Microsoft.VSTS.CMMI.RootCause'] || '';
-        const createdBy = fields['System.CreatedBy']?.displayName || '';
-        const poField = fields['Custom.PO'] || fields['Custom.ProductOwner'];
-        const po = poField?.displayName || (typeof poField === 'string' ? poField : '') || '';
-        const readyDate = fields['Custom.DOR'] || '';
-        const doneDate = fields['Custom.DOD'] || '';
-        // Novos campos de Root Cause
-        const rootCauseTask = fields['Custom.Rootcausetask'] || '';
-        const rootCauseTeam = fields['Custom.rootcauseteam'] || '';
-        const rootCauseVersion = fields['Custom.rootcauseversion'] || '';
-        const devField = fields['Custom.DEV'];
-        const dev = devField?.displayName || (typeof devField === 'string' ? devField : '') || '';
-        const platform = fields['Custom.Platform'] || '';
-        const application = fields['Custom.Aplication'] || fields['Custom.Application'] || '';
-        const branchBase = fields['Custom.BranchBase'] || '';
-        const deliveredVersion = fields['Custom.DeliveredVersion'] || '';
-        const baseVersion = fields['Custom.BaseVersion'] || '';
-        // Campos de Identificação e Falha do Processo
-        const identificacao = fields['Custom.7ac99842-e0ec-4f18-b91b-53bfe3e3b3f5'] || '';
-        const falhaDoProcesso = fields['Custom.Falhadoprocesso'] || '';
-        const impedimento = fields['Custom.Impedimento'] === true;
-        const bloqueio    = fields['Custom.Bloqueio']    === true;
-        const categoria = fields['Custom.Category'] || fields['Custom.Categoria'] || null;
+        const {
+          title, state, type, assignedTo, areaPath, team, iterationPath, createdDate, changedDate, closedDate,
+          tags, priority, activatedDate, storyPoints, tipoCliente,
+          codeReviewLevel1, codeReviewLevel2, customType, rootCauseStatus, squad, area, complexity,
+          reincidencia, performanceDays, qa, causaRaiz, rootCauseLegacy, createdBy, po, readyDate, doneDate,
+          rootCauseTask, rootCauseTeam, rootCauseVersion, dev, platform, application, branchBase,
+          deliveredVersion, baseVersion, identificacao, falhaDoProcesso, impedimento, bloqueio, categoria,
+        } = extractWorkItemFields(fields, fm);
 
         await sql`
           INSERT INTO work_items (work_item_id, title, state, type, assigned_to, team, area_path, iteration_path,
@@ -922,6 +884,69 @@ app.get('/api/debug/azure-config', authenticateToken, requireAdmin, (req, res) =
     patLength: AZURE_CONFIG.pat?.length || 0,
     isConfigured: isConfigured()
   });
+});
+
+// ─── Catálogo de campos do Azure DevOps (metadados do processo) ───────────────
+let _cachedAzureFields = null;
+let _azureFieldsCachedAt = 0;
+const AZURE_FIELDS_TTL = 30 * 60 * 1000; // 30 min — catálogo muda raramente
+
+app.get('/api/admin/azure-fields', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    if (!isConfigured()) {
+      return res.status(400).json({ error: 'Azure DevOps não configurado' });
+    }
+    const forceRefresh = req.query.refresh === '1';
+    if (!forceRefresh && _cachedAzureFields && Date.now() - _azureFieldsCachedAt < AZURE_FIELDS_TTL) {
+      return res.json({ fields: _cachedAzureFields, cachedAt: _azureFieldsCachedAt, fromCache: true });
+    }
+
+    const url = `https://dev.azure.com/${AZURE_CONFIG.organization}/${AZURE_CONFIG.project}/_apis/wit/fields?api-version=7.1`;
+    const response = await axios.get(url, { headers: getAuthHeader(), timeout: 15000 });
+    const fields = (response.data.value || []).map(f => ({
+      name: f.name,
+      referenceName: f.referenceName,
+      type: f.type,
+      isIdentity: !!f.isIdentity,
+      isPicklist: !!f.isPicklist,
+    })).sort((a, b) => a.referenceName.localeCompare(b.referenceName));
+
+    _cachedAzureFields = fields;
+    _azureFieldsCachedAt = Date.now();
+    res.json({ fields, cachedAt: _azureFieldsCachedAt, fromCache: false });
+  } catch (error) {
+    console.error('❌ Error fetching Azure DevOps fields catalog:', error.response?.data || error.message);
+    res.status(502).json({ error: 'Erro ao buscar catálogo de campos do Azure DevOps', detail: error.message });
+  }
+});
+
+// ─── Preview ao vivo de um campo específico (testa antes de salvar mapeamento) ─
+app.get('/api/admin/field-preview', authenticateToken, requireAdmin, async (req, res) => {
+  const { field } = req.query;
+  if (!field) return res.status(400).json({ error: 'Parâmetro "field" é obrigatório' });
+  if (!isConfigured()) return res.status(400).json({ error: 'Azure DevOps não configurado' });
+  try {
+    const baseUrl = `https://dev.azure.com/${AZURE_CONFIG.organization}/${AZURE_CONFIG.project}`;
+    const wiqlQuery = {
+      query: `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = '${AZURE_CONFIG.project}' AND [${field}] <> '' ORDER BY [System.ChangedDate] DESC`
+    };
+    const wiqlResponse = await axios.post(`${baseUrl}/_apis/wit/wiql?api-version=7.0`, wiqlQuery, { headers: getAuthHeader(), timeout: 15000 });
+    const ids = (wiqlResponse.data.workItems || []).slice(0, 3).map(w => w.id);
+    if (ids.length === 0) return res.json({ field, samples: [], hasData: false });
+
+    const detailsUrl = `${baseUrl}/_apis/wit/workitems?ids=${ids.join(',')}&fields=${encodeURIComponent(field)}&api-version=7.0`;
+    const detailsResponse = await axios.get(detailsUrl, { headers: getAuthHeader(), timeout: 15000 });
+    const samples = (detailsResponse.data.value || []).map(item => {
+      const raw = item.fields?.[field];
+      const display = raw?.displayName || (typeof raw === 'object' ? JSON.stringify(raw) : raw);
+      return { workItemId: item.id, value: display ?? null };
+    });
+    res.json({ field, samples, hasData: samples.some(s => s.value != null) });
+  } catch (error) {
+    // WIQL com "<> ''" pode falhar dependendo do tipo do campo (numerico, data, picklist) —
+    // tratamos como "sem dado encontrado", nao como erro de rede, pra nao travar a UI.
+    res.json({ field, samples: [], hasData: false, error: 'Campo não encontrado ou tipo incompatível com a busca' });
+  }
 });
 
 // Login
@@ -1195,6 +1220,8 @@ app.put('/api/settings/:key', authenticateToken, requireAdmin, async (req, res) 
         updated_at = CURRENT_TIMESTAMP
     `;
     res.json({ success: true, key, updated_by: updatedBy });
+    // Invalida cache de field_mappings se foi esse o campo salvo
+    if (key === 'field_mappings') invalidateFieldMappingsCache();
   } catch (error) {
     console.error('❌ Error saving setting:', error);
     res.status(500).json({ error: 'Erro ao salvar configuração' });

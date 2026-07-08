@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { FieldMappingButton } from './ChartInfoLamp';
 
 interface DocSection {
   id: string;
@@ -232,6 +233,10 @@ const DocumentationDashboard: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      <div className="flex items-center justify-end gap-2">
+        <span className="text-xs text-ds-text/50">Campos Azure DevOps</span>
+        <FieldMappingButton chartId="documentation" />
+      </div>
       <div className="bg-ds-navy p-6 rounded-lg border border-ds-border">
         <h1 className="text-2xl font-bold text-ds-light-text mb-2">Documentacao do Dashboard</h1>
         <p className="text-ds-text text-sm">

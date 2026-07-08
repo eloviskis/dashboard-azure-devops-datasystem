@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { WorkItem } from '../types';
 import { CHART_COLORS } from '../constants';
-import ChartInfoLamp from './ChartInfoLamp';
+import ChartInfoLamp, { FieldMappingButton } from './ChartInfoLamp';
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ReferenceLine,
   RadialBarChart, RadialBar, Legend
@@ -239,6 +239,10 @@ const MetasDashboard: React.FC<MetasDashboardProps> = ({ data, periodDays }) => 
 
   return (
     <div className="space-y-6">
+      <div className="flex items-center justify-end gap-2">
+        <span className="text-xs text-ds-text/50">Campos Azure DevOps</span>
+        <FieldMappingButton chartId="metas" />
+      </div>
       {/* Header: Team selector + Edit targets */}
       <div className="flex flex-wrap items-center gap-4">
         <div>
