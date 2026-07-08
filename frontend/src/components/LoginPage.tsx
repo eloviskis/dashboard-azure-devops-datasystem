@@ -109,7 +109,15 @@ const LoginPage: React.FC = () => {
             <div className="text-center mb-8">
               {branding.logo_url
                 ? <img src={branding.logo_url} alt={branding.company_name} className="mx-auto mb-4 h-20 object-contain" />
-                : <div className="mx-auto mb-4 h-20 flex items-center justify-center">
+                : <div className="mx-auto mb-4 flex flex-col items-center justify-center">
+                    <svg width="56" height="56" viewBox="0 0 48 48" fill="none" className="mb-2">
+                      <circle cx="24" cy="24" r="22" fill="#1A6EBD" opacity="0.15"/>
+                      <circle cx="24" cy="24" r="22" stroke="#1A6EBD" strokeWidth="2"/>
+                      <path d="M12 20 Q24 10 36 20" stroke="#4BA3E3" strokeWidth="2.5" strokeLinecap="round" fill="none"/>
+                      <path d="M30 16 L36 20 L30 24" stroke="#4BA3E3" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+                      <path d="M36 28 Q24 38 12 28" stroke="#74C0F5" strokeWidth="2.5" strokeLinecap="round" fill="none"/>
+                      <path d="M18 32 L12 28 L18 24" stroke="#74C0F5" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+                    </svg>
                     <span className="text-3xl font-bold text-ds-green tracking-tight">{branding.company_name}</span>
                   </div>
               }

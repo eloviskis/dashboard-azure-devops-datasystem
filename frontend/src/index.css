@@ -121,7 +121,7 @@ body {
   box-shadow: 0 0 0 2px rgba(127, 211, 32, 0.15);
 }
 .login-btn {
-  background: linear-gradient(90deg, #7FD320, #00C4B4);
+  background: #1A6EBD;
   color: white;
   font-weight: 600;
   border-radius: 0.5rem;
@@ -171,7 +171,7 @@ button, a, [role="button"] { min-height: 36px; }
   box-shadow: 0 0 0 2px rgba(75, 154, 212, 0.20);
 }
 [data-theme="bluey"] .login-btn {
-  background: linear-gradient(90deg, #4B9AD4, #26B5A0);
+  background: #1A6EBD;
 }
 [data-theme="bluey"] .login-icon-bg {
   background: linear-gradient(135deg, #4B9AD4, #26B5A0);
