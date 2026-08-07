@@ -7,10 +7,20 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const multer = require('multer');
 const ical = require('node-ical');
+const crypto = require('crypto');
 require('dotenv').config();
 
+const emailService = require('./services/email');
+const { findUserByName, getAdminEmails, isNotifiable, getReportRecipients } = require('./services/userMatch');
+const { generateWeeklyInsight, generateTeamNarrative, shortenTitles } = require('./services/ai');
+const { sendTeamsMessage } = require('./services/teams');
+
 // Database driver: PostgreSQL (pg) with connection pooling
-const { Pool } = require('pg');
+const { Pool, types } = require('pg');
+// pg retorna NUMERIC/DECIMAL como string por padrão (evita perda de precisão em valores arbitrários),
+// mas aqui são só horas/estimativas — sem isso, campos como original_estimate viravam string e
+// quebravam contas no frontend (concatenação em vez de soma, gerando NaN em vez de número).
+types.setTypeParser(1700, val => (val === null ? null : parseFloat(val)));
 
 // JWT Secret (warn but don't crash — CORS must always work)
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -223,7 +233,9 @@ const initDatabase = async () => {
         delivered_version TEXT,
         base_version TEXT,
         identificacao TEXT,
-        falha_do_processo TEXT
+        falha_do_processo TEXT,
+        linked_pr_ids TEXT,
+        linked_pr_votes TEXT
       )
     `;
     console.log('✅ work_items table ready');
@@ -239,7 +251,14 @@ const initDatabase = async () => {
       'original_estimate REAL', 'remaining_work REAL', 'completed_work REAL',
       'parent_id INTEGER',
       'categoria TEXT',
-      'bloqueio BOOLEAN DEFAULT FALSE'
+      'bloqueio BOOLEAN DEFAULT FALSE',
+      'impedimento BOOLEAN DEFAULT FALSE',
+      'root_cause_legacy TEXT',
+      'linked_pr_ids TEXT',
+      'linked_pr_votes TEXT',
+      'start_date TEXT',
+      'target_date TEXT',
+      'last_alerted_state TEXT'
     ];
     for (const colDef of columnsToEnsure) {
       const [colName] = colDef.split(' ');
@@ -318,6 +337,7 @@ const initDatabase = async () => {
         password TEXT NOT NULL,
         role TEXT DEFAULT 'user',
         tab_permissions TEXT DEFAULT NULL,
+        notifications_enabled BOOLEAN DEFAULT TRUE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
@@ -326,7 +346,36 @@ const initDatabase = async () => {
     try {
       await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS tab_permissions TEXT DEFAULT NULL`;
     } catch (e) { /* coluna já existe */ }
+    // Adiciona coluna notifications_enabled se não existir (migração para bancos existentes)
+    try {
+      await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS notifications_enabled BOOLEAN DEFAULT TRUE`;
+    } catch (e) { /* coluna já existe */ }
     console.log('✅ users table ready');
+
+    // Tokens de redefinição de senha ("esqueci minha senha")
+    await sql`
+      CREATE TABLE IF NOT EXISTS password_reset_tokens (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        token TEXT UNIQUE NOT NULL,
+        expires_at TIMESTAMP NOT NULL,
+        used BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `;
+    console.log('✅ password_reset_tokens table ready');
+
+    // Log de notificações enviadas (auditoria + deduplicação de eventos "marco")
+    await sql`
+      CREATE TABLE IF NOT EXISTS notification_log (
+        id SERIAL PRIMARY KEY,
+        type TEXT NOT NULL,
+        recipient_email TEXT NOT NULL,
+        related_key TEXT,
+        sent_at TIMESTAMP DEFAULT NOW()
+      )
+    `;
+    console.log('✅ notification_log table ready');
 
     // Tabela de configurações globais (chave-valor)
     await sql`
@@ -486,6 +535,11 @@ const AZURE_CONFIG = {
   pat: (process.env.AZURE_PAT || 'your-token').replace(/[\r\n]/g, '').trim()
 };
 
+// Estados elegíveis pro alerta de PRs sem review do Teams (e pra busca de votos que o alimenta na sync).
+// Fonte única — o gate da sync e a query do alerta usam exatamente essa lista, senão itens nos estados
+// novos nunca teriam linked_pr_votes calculado.
+const PR_REVIEW_ELIGIBLE_STATES = ['aguardando code review', 'fazendo code review', 'aguardando qa', 'testando qa'];
+
 const isConfigured = () => {
   return AZURE_CONFIG.organization !== 'your-organization' && 
          AZURE_CONFIG.project !== 'your-project' && 
@@ -503,6 +557,29 @@ const getAuthHeader = () => {
   const credentials = Buffer.from(`:${AZURE_CONFIG.pat}`).toString('base64');
   return { 'Authorization': `Basic ${credentials}` };
 };
+
+// A sync (via WIQL) só sabe adicionar/atualizar itens que o Azure DevOps ainda retorna — um item excluído
+// lá simplesmente para de aparecer na query, e a linha local fica congelada pra sempre no último estado
+// sincronizado (ex.: ainda contando como impedimento/WIP mesmo não existindo mais). A lixeira do Azure
+// DevOps (recycle bin) é a fonte oficial de "isto foi excluído" — usada aqui pra remover essas linhas.
+async function purgeDeletedWorkItems() {
+  try {
+    const response = await axios.get(
+      `https://dev.azure.com/${AZURE_CONFIG.organization}/${AZURE_CONFIG.project}/_apis/wit/recyclebin?api-version=7.0`,
+      { headers: getAuthHeader() }
+    );
+    const deletedIds = (response.data.value || []).map(v => v.id);
+    if (!deletedIds.length) return;
+    const removed = await sql`DELETE FROM work_items WHERE work_item_id = ANY(${deletedIds}) RETURNING work_item_id`;
+    if (removed.length) {
+      console.log(`   🗑️ Removidos ${removed.length} item(ns) excluído(s) no Azure DevOps (lixeira)`);
+    }
+  } catch (error) {
+    // Não trava a sync — se a lixeira falhar (permissão do PAT, rede etc.), os itens excluídos só
+    // continuam congelados até a próxima sync bem-sucedida dessa checagem.
+    console.error('⚠️ Não foi possível checar a lixeira do Azure DevOps para remover itens excluídos:', error.message);
+  }
+}
 
 // Sync Data function
 async function syncData() {
@@ -643,8 +720,98 @@ async function syncData() {
         const identificacao = fields['Custom.7ac99842-e0ec-4f18-b91b-53bfe3e3b3f5'] || '';
         const falhaDoProcesso = fields['Custom.Falhadoprocesso'] || '';
         const impedimento = fields['Custom.Impedimento'] === true;
-        const bloqueio    = fields['Custom.Bloqueio']    === true;
+        const bloqueio    = fields['Custom.Block']       === true; // campo renomeado no Azure DevOps (era Custom.Bloqueio)
         const categoria = fields['Custom.Category'] || fields['Custom.Categoria'] || null;
+        // Campos de estimativa (Tasks) — existiam na tabela e na API, mas nunca eram lidos da sync, por
+        // isso "Horas Total" no burndown do Scrum Dashboard sempre dava 0h.
+        const originalEstimate = fields['Microsoft.VSTS.Scheduling.OriginalEstimate'] ?? null;
+        const remainingWork = fields['Microsoft.VSTS.Scheduling.RemainingWork'] ?? null;
+        const completedWork = fields['Microsoft.VSTS.Scheduling.CompletedWork'] ?? null;
+        // Datas de planejamento (Gantt por time)
+        const startDate = fields['Microsoft.VSTS.Scheduling.StartDate'] || '';
+        const targetDate = fields['Microsoft.VSTS.Scheduling.TargetDate'] || '';
+        // Item pai (hierarquia Feature > User Story/Issue > Task) — vem de relations (Hierarchy-Reverse
+        // aponta do filho pro pai), não de um campo simples. Coluna já existia mas nunca era populada.
+        const parentRelation = (item.relations || []).find(r => r.rel === 'System.LinkTypes.Hierarchy-Reverse');
+        const parentId = parentRelation ? parseInt((parentRelation.url || '').split('/').pop(), 10) || null : null;
+
+        // Pull Requests vinculadas via link "Pull Request" no work item (relations, vem do $expand=all).
+        // URL no formato vstfs:///Git/PullRequestId/{projectId}%2F{repositoryId}%2F{pullRequestId} — repositoryId
+        // e pullRequestId são os dois últimos segmentos. O repositoryId é único na organização, então dá pra
+        // buscar a PR direto (sem precisar do nome do projeto) mesmo quando ela vive num projeto diferente do
+        // configurado em AZURE_PROJECT — foi o caso real encontrado: várias PRs vinculadas ficam em outro projeto.
+        const prRelations = (item.relations || [])
+          .filter(r => r.rel === 'ArtifactLink' && r.attributes?.name === 'Pull Request')
+          .map(r => {
+            const segments = (r.url || '').split(/%2[fF]/);
+            const prId = segments[segments.length - 1];
+            const repoId = segments[segments.length - 2];
+            return (/^\d+$/.test(prId) && repoId) ? { repoId, prId: parseInt(prId, 10) } : null;
+          })
+          .filter(Boolean);
+        const linkedPrIds = JSON.stringify(prRelations.map(p => p.prId));
+
+        // Busca os votos, comentários e histórico de push da PR ao vivo — só pra itens parados em code review,
+        // que é o único lugar que usa esse dado hoje (alerta do Teams). Não vale a pena pagar essas chamadas
+        // extra de API por PR pra todo o board.
+        let linkedPrVotes = null;
+        if (prRelations.length && PR_REVIEW_ELIGIBLE_STATES.includes((state || '').toLowerCase())) {
+          let chosenReviewers = null;
+          let chosenMergeStatus = null;
+          let chosenRepoId = null;
+          let chosenPrId = null;
+          let hasInactivePrs = false;
+          for (const { repoId, prId } of prRelations) {
+            try {
+              const prDetailUrl = `https://dev.azure.com/${AZURE_CONFIG.organization}/_apis/git/repositories/${repoId}/pullrequests/${prId}?api-version=7.0`;
+              const prDetailRes = await axios.get(prDetailUrl, { headers: getAuthHeader() });
+              // Só PR ativa conta — sem fallback pra uma já fechada/abandonada (pedido explícito: "e o PR
+              // esteja como ativo"). Se nenhuma das PRs vinculadas estiver ativa, linkedPrVotes fica null,
+              // igual ao caso de não ter PR nenhuma — o item some do alerta.
+              if (prDetailRes.data.status !== 'active') {
+                hasInactivePrs = true;
+                continue;
+              }
+              if (!chosenReviewers) {
+                chosenReviewers = (prDetailRes.data.reviewers || []).map(r => ({ name: r.displayName, vote: r.vote, isRequired: !!r.isRequired }));
+                chosenMergeStatus = prDetailRes.data.mergeStatus || null;
+                chosenRepoId = repoId;
+                chosenPrId = prId;
+              }
+            } catch (err) {
+              // PR pode ter sido excluída ou o PAT não ter acesso ao repositório — não trava a sync
+              console.warn(`⚠️ Erro ao buscar PR ${prId} do item ${workItemId}: ${err.message}`);
+            }
+          }
+          // Log quando há PRs vinculadas mas linkedPrVotes fica null (ajuda a debugar por que itens não aparecem)
+          if (prRelations.length && !chosenReviewers) {
+            console.warn(`⚠️ Item ${workItemId} "${title}" tem ${prRelations.length} PR(s) vinculada(s) mas nenhuma está ativa — não aparecerá nos alertas`);
+          }
+
+          if (chosenReviewers && chosenRepoId && chosenPrId) {
+            let pushCount = null;
+            let commentCount = null;
+            try {
+              const iterationsUrl = `https://dev.azure.com/${AZURE_CONFIG.organization}/_apis/git/repositories/${chosenRepoId}/pullrequests/${chosenPrId}/iterations?api-version=7.0`;
+              const iterationsRes = await axios.get(iterationsUrl, { headers: getAuthHeader() });
+              pushCount = (iterationsRes.data.value || []).length;
+            } catch (err) {
+              // segue sem o dado de pushes — não é crítico pro alerta
+            }
+            try {
+              const threadsUrl = `https://dev.azure.com/${AZURE_CONFIG.organization}/_apis/git/repositories/${chosenRepoId}/pullrequests/${chosenPrId}/threads?api-version=7.0`;
+              const threadsRes = await axios.get(threadsUrl, { headers: getAuthHeader() });
+              // commentType 'system' são gerados automaticamente (ex: "Fulano voted 10", "Policy status has been
+              // updated") — só 'text' é comentário real de humano.
+              commentCount = (threadsRes.data.value || [])
+                .flatMap(t => t.comments || [])
+                .filter(c => c.commentType === 'text' && !c.isDeleted).length;
+            } catch (err) {
+              // segue sem o dado de comentários — não é crítico pro alerta
+            }
+            linkedPrVotes = JSON.stringify({ votes: chosenReviewers, pushCount, commentCount, mergeStatus: chosenMergeStatus });
+          }
+        }
 
         await sql`
           INSERT INTO work_items (work_item_id, title, state, type, assigned_to, team, area_path, iteration_path,
@@ -652,13 +819,15 @@ async function syncData() {
             code_review_level1, code_review_level2, custom_type, root_cause_status, squad, area, complexity,
             reincidencia, performance_days, qa, causa_raiz, root_cause_legacy, created_by, po, ready_date, done_date,
             root_cause_task, root_cause_team, root_cause_version, dev, platform, application, branch_base, delivered_version, base_version,
-            identificacao, falha_do_processo, impedimento, bloqueio, categoria, synced_at)
+            identificacao, falha_do_processo, impedimento, bloqueio, categoria, linked_pr_ids, linked_pr_votes,
+            original_estimate, remaining_work, completed_work, start_date, target_date, parent_id, synced_at)
           VALUES (${workItemId}, ${title}, ${state}, ${type}, ${assignedTo}, ${team}, ${areaPath}, ${iterationPath},
             ${createdDate}, ${changedDate}, ${closedDate}, ${storyPoints}, ${tags}, ${tipoCliente}, ${priority}, ${url}, ${activatedDate || null},
             ${codeReviewLevel1}, ${codeReviewLevel2}, ${customType}, ${rootCauseStatus}, ${squad}, ${area}, ${complexity},
             ${reincidencia}, ${performanceDays}, ${qa}, ${causaRaiz}, ${rootCauseLegacy}, ${createdBy}, ${po}, ${readyDate}, ${doneDate},
             ${rootCauseTask}, ${rootCauseTeam}, ${rootCauseVersion}, ${dev}, ${platform}, ${application}, ${branchBase}, ${deliveredVersion}, ${baseVersion},
-            ${identificacao}, ${falhaDoProcesso}, ${impedimento}, ${bloqueio}, ${categoria}, ${new Date().toISOString()})
+            ${identificacao}, ${falhaDoProcesso}, ${impedimento}, ${bloqueio}, ${categoria}, ${linkedPrIds}, ${linkedPrVotes},
+            ${originalEstimate}, ${remainingWork}, ${completedWork}, ${startDate}, ${targetDate}, ${parentId}, ${new Date().toISOString()})
           ON CONFLICT (work_item_id) DO UPDATE SET
             title = EXCLUDED.title, state = EXCLUDED.state, type = EXCLUDED.type, assigned_to = EXCLUDED.assigned_to,
             team = EXCLUDED.team, area_path = EXCLUDED.area_path, iteration_path = EXCLUDED.iteration_path,
@@ -696,12 +865,25 @@ async function syncData() {
             impedimento = EXCLUDED.impedimento,
             bloqueio    = EXCLUDED.bloqueio,
             categoria = EXCLUDED.categoria,
+            linked_pr_ids = EXCLUDED.linked_pr_ids,
+            linked_pr_votes = EXCLUDED.linked_pr_votes,
+            original_estimate = EXCLUDED.original_estimate,
+            remaining_work = EXCLUDED.remaining_work,
+            completed_work = EXCLUDED.completed_work,
+            start_date = EXCLUDED.start_date,
+            target_date = EXCLUDED.target_date,
+            parent_id = EXCLUDED.parent_id,
             synced_at = EXCLUDED.synced_at
         `;
       }
 
       console.log(`   ✅ Saved ${allWorkItems.length} work items to database`);
+
+      // Alertas imediatos: detecta tarefas que acabaram de entrar em estado de code review
+      await checkAndSendImmediateAlerts(workItemIds);
     }
+
+    await purgeDeletedWorkItems();
 
     // Log sync
     await sql`
@@ -802,7 +984,8 @@ async function syncPullRequests() {
             const reviewers = JSON.stringify((pr.reviewers || []).map(r => ({
               name: r.displayName,
               vote: r.vote,
-              isRequired: r.isRequired || false
+              isRequired: r.isRequired || false,
+              isContainer: r.isContainer || false
             })));
             const votes = JSON.stringify((pr.reviewers || []).map(r => ({
               name: r.displayName,
@@ -873,6 +1056,10 @@ const requireAdmin = (req, res, next) => {
   }
   next();
 };
+
+// 'admin' mantém acesso elevado (requireAdmin acima). QA/PO/DEV/GESTOR/user são só etiquetas funcionais,
+// usadas para rotear os relatórios automáticos por email — não alteram permissão nenhuma.
+const VALID_ROLES = ['admin', 'QA', 'PO', 'DEV', 'GESTOR', 'user'];
 
 // Debug endpoint para verificar tabela users (requer admin)
 app.get('/api/debug/users-schema', authenticateToken, requireAdmin, async (req, res) => {
@@ -957,7 +1144,8 @@ app.post('/api/auth/login', async (req, res) => {
         username: user.username,
         email: user.email,
         role: user.role,
-        tab_permissions: user.tab_permissions ? JSON.parse(user.tab_permissions) : null
+        tab_permissions: user.tab_permissions ? JSON.parse(user.tab_permissions) : null,
+        notifications_enabled: user.notifications_enabled !== false
       }
     });
   } catch (error) {
@@ -968,7 +1156,7 @@ app.post('/api/auth/login', async (req, res) => {
 
 app.get('/api/auth/verify', authenticateToken, async (req, res) => {
   try {
-    const rows = await sql`SELECT id, username, email, role, tab_permissions FROM users WHERE id = ${req.user.id}`;
+    const rows = await sql`SELECT id, username, email, role, tab_permissions, notifications_enabled FROM users WHERE id = ${req.user.id}`;
     const u = rows[0];
     if (!u) return res.status(401).json({ error: 'Usuário não encontrado' });
     res.json({
@@ -979,10 +1167,26 @@ app.get('/api/auth/verify', authenticateToken, async (req, res) => {
         email: u.email,
         role: u.role,
         tab_permissions: u.tab_permissions ? JSON.parse(u.tab_permissions) : null,
+        notifications_enabled: u.notifications_enabled !== false,
       }
     });
   } catch {
     res.json({ valid: true, user: req.user });
+  }
+});
+
+// Self-service: usuário logado liga/desliga o recebimento de notificações do QA Tracker
+app.put('/api/auth/notification-preferences', authenticateToken, async (req, res) => {
+  try {
+    const { enabled } = req.body;
+    if (typeof enabled !== 'boolean') {
+      return res.status(400).json({ error: 'Campo "enabled" (boolean) é obrigatório' });
+    }
+    await sql`UPDATE users SET notifications_enabled = ${enabled}, updated_at = CURRENT_TIMESTAMP WHERE id = ${req.user.id}`;
+    res.json({ notifications_enabled: enabled });
+  } catch (error) {
+    console.error('❌ Error updating notification preferences:', error);
+    res.status(500).json({ error: 'Erro ao atualizar preferência de notificações' });
   }
 });
 
@@ -1016,10 +1220,89 @@ app.put('/api/auth/change-password', authenticateToken, async (req, res) => {
     const hashedNew = bcrypt.hashSync(newPassword, 10);
     await sql`UPDATE users SET password = ${hashedNew}, updated_at = CURRENT_TIMESTAMP WHERE id = ${req.user.id}`;
 
+    const { subject, html } = emailService.passwordChangedEmail({ username: user.username });
+    emailService.sendEmail({ to: user.email, subject, html, log: { sql, type: 'password_changed' } });
+
     res.json({ message: 'Senha alterada com sucesso' });
   } catch (error) {
     console.error('❌ Error changing password:', error);
     res.status(500).json({ error: 'Erro ao alterar senha' });
+  }
+});
+
+// Esqueci minha senha — solicita link de redefinição por email
+app.post('/api/auth/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ error: 'Email é obrigatório' });
+    }
+
+    // Resposta sempre genérica para não revelar se o email existe
+    const genericResponse = { message: 'Se o email existir, você receberá um link de redefinição de senha.' };
+
+    const users = await sql`SELECT id, username, email FROM users WHERE email = ${email}`;
+    const user = users[0];
+    if (!user) {
+      return res.json(genericResponse);
+    }
+
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 30 * 60 * 1000); // 30 minutos
+
+    await sql`
+      INSERT INTO password_reset_tokens (user_id, token, expires_at)
+      VALUES (${user.id}, ${token}, ${expiresAt})
+    `;
+
+    const resetUrl = `${emailService.FRONTEND_URL}/?reset=${token}`;
+    const { subject, html } = emailService.forgotPasswordEmail({ username: user.username, resetUrl });
+    emailService.sendEmail({ to: user.email, subject, html, log: { sql, type: 'password_reset_requested' } });
+
+    res.json(genericResponse);
+  } catch (error) {
+    console.error('❌ Error in forgot-password:', error);
+    res.status(500).json({ error: 'Erro ao processar solicitação' });
+  }
+});
+
+// Redefinir senha via token recebido por email
+app.post('/api/auth/reset-password', async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+    if (!token || !newPassword) {
+      return res.status(400).json({ error: 'Token e nova senha são obrigatórios' });
+    }
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'A nova senha deve ter no mínimo 6 caracteres' });
+    }
+
+    const tokens = await sql`
+      SELECT * FROM password_reset_tokens
+      WHERE token = ${token} AND used = FALSE AND expires_at > NOW()
+    `;
+    const resetToken = tokens[0];
+    if (!resetToken) {
+      return res.status(400).json({ error: 'Link inválido ou expirado' });
+    }
+
+    const users = await sql`SELECT * FROM users WHERE id = ${resetToken.user_id}`;
+    const user = users[0];
+    if (!user) {
+      return res.status(404).json({ error: 'Usuário não encontrado' });
+    }
+
+    const hashedNew = bcrypt.hashSync(newPassword, 10);
+    await sql`UPDATE users SET password = ${hashedNew}, updated_at = CURRENT_TIMESTAMP WHERE id = ${user.id}`;
+    await sql`UPDATE password_reset_tokens SET used = TRUE WHERE id = ${resetToken.id}`;
+
+    const { subject, html } = emailService.passwordChangedEmail({ username: user.username });
+    emailService.sendEmail({ to: user.email, subject, html, log: { sql, type: 'password_reset' } });
+
+    res.json({ message: 'Senha redefinida com sucesso' });
+  } catch (error) {
+    console.error('❌ Error in reset-password:', error);
+    res.status(500).json({ error: 'Erro ao redefinir senha' });
   }
 });
 
@@ -1044,6 +1327,9 @@ app.post('/api/users', authenticateToken, requireAdmin, async (req, res) => {
     if (!username || !email || !password) {
       return res.status(400).json({ error: 'Username, email e password são obrigatórios' });
     }
+    if (!VALID_ROLES.includes(role)) {
+      return res.status(400).json({ error: `Cargo inválido. Use um de: ${VALID_ROLES.join(', ')}` });
+    }
 
     const existing = await sql`SELECT id FROM users WHERE username = ${username} OR email = ${email}`;
     if (existing.length > 0) {
@@ -1053,10 +1339,13 @@ app.post('/api/users', authenticateToken, requireAdmin, async (req, res) => {
     const hashedPassword = bcrypt.hashSync(password, 10);
     const tabPermsJson = tab_permissions ? JSON.stringify(tab_permissions) : null;
     const result = await sql`
-      INSERT INTO users (username, email, password, role, tab_permissions) 
+      INSERT INTO users (username, email, password, role, tab_permissions)
       VALUES (${username}, ${email}, ${hashedPassword}, ${role}, ${tabPermsJson})
       RETURNING id
     `;
+
+    const { subject, html } = emailService.welcomeEmail({ username, email, tempPassword: password, role });
+    emailService.sendEmail({ to: email, subject, html, log: { sql, type: 'welcome' } });
 
     res.status(201).json({
       id: result[0].id,
@@ -1075,6 +1364,10 @@ app.put('/api/users/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const { username, email, password, role } = req.body;
+
+    if (role && !VALID_ROLES.includes(role)) {
+      return res.status(400).json({ error: `Cargo inválido. Use um de: ${VALID_ROLES.join(', ')}` });
+    }
 
     const existingUsers = await sql`SELECT * FROM users WHERE id = ${id}`;
     if (existingUsers.length === 0) {
@@ -1117,6 +1410,12 @@ app.put('/api/users/:id', authenticateToken, requireAdmin, async (req, res) => {
 
     const updated = await sql`SELECT id, username, email, role, tab_permissions, created_at, updated_at FROM users WHERE id = ${id}`;
     const u = updated[0];
+
+    if (password) {
+      const { subject, html } = emailService.passwordChangedEmail({ username: newUsername });
+      emailService.sendEmail({ to: newEmail, subject, html, log: { sql, type: 'password_changed' } });
+    }
+
     res.json({ ...u, tab_permissions: u.tab_permissions ? JSON.parse(u.tab_permissions) : null });
   } catch (error) {
     console.error('❌ Error updating user:', error);
@@ -1145,14 +1444,146 @@ app.delete('/api/users/:id', authenticateToken, requireAdmin, async (req, res) =
   }
 });
 
+// Gera uma senha temporária legível (sem caracteres ambíguos como 0/O, 1/l/I).
+function generateTempPassword() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+  let pw = '';
+  for (let i = 0; i < 12; i++) pw += chars[crypto.randomInt(chars.length)];
+  return pw;
+}
+
+// Reenvia cadastro/senha: gera uma nova senha temporária, atualiza e envia por email.
+// A senha original nunca é recuperável (só o hash é guardado), então "reenviar" na prática
+// é resetar para uma nova senha temporária e notificar o usuário.
+app.post('/api/users/:id/resend-credentials', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const users = await sql`SELECT * FROM users WHERE id = ${id}`;
+    if (users.length === 0) {
+      return res.status(404).json({ error: 'Usuário não encontrado' });
+    }
+    const user = users[0];
+
+    const tempPassword = generateTempPassword();
+    const hashedPassword = bcrypt.hashSync(tempPassword, 10);
+    await sql`UPDATE users SET password = ${hashedPassword}, updated_at = CURRENT_TIMESTAMP WHERE id = ${id}`;
+
+    const { subject, html } = emailService.resendCredentialsEmail({ username: user.username, tempPassword, role: user.role });
+    await emailService.sendEmail({ to: user.email, subject, html, log: { sql, type: 'resend_credentials' } });
+
+    res.json({ message: 'Credenciais reenviadas com sucesso', tempPassword });
+  } catch (error) {
+    console.error('❌ Error resending credentials:', error);
+    res.status(500).json({ error: 'Erro ao reenviar credenciais' });
+  }
+});
+
+// ===========================================
+// HISTÓRICO E REENVIO DE RELATÓRIOS POR EMAIL
+// ===========================================
+
+// Últimos envios registrados (quem recebeu o quê e quando) — mesma tabela usada pelo resto do sistema de notificações.
+app.get('/api/notifications/history', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const rows = await sql`
+      SELECT type, recipient_email, related_key, sent_at
+      FROM notification_log
+      ORDER BY sent_at DESC
+      LIMIT 200
+    `;
+    res.json(rows);
+  } catch (error) {
+    console.error('❌ Error fetching notification history:', error);
+    res.status(500).json({ error: 'Erro ao buscar histórico de notificações' });
+  }
+});
+
+// Reenvia o resumo diário agora, com os dados atuais (não é o conteúdo exato do último envio — roda a mesma
+// lógica do cron às 8h, na hora). runAdminOverviewDigest é definida mais abaixo no arquivo (hoisting cobre isso).
+app.post('/api/notifications/resend/admin-overview-digest', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { recipients } = req.body || {};
+    await runAdminOverviewDigest(Array.isArray(recipients) && recipients.length ? recipients : undefined);
+    res.json({ message: 'Resumo diário reenviado com sucesso' });
+  } catch (error) {
+    console.error('❌ Error resending admin overview digest:', error);
+    res.status(500).json({ error: 'Erro ao reenviar resumo diário' });
+  }
+});
+
+// Reenvia o informativo semanal agora, com os dados atuais — demora ~2min por causa do espaçamento
+// entre chamadas de IA (limite da camada gratuita do Gemini).
+// Body opcional: { recipients: string[] } — se informado, envia só pra esses emails em vez do mapeamento por cargo.
+app.post('/api/notifications/resend/weekly-team-report', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { recipients } = req.body || {};
+    await runWeeklyTeamReport(Array.isArray(recipients) && recipients.length ? recipients : undefined);
+    res.json({ message: 'Informativo semanal reenviado com sucesso' });
+  } catch (error) {
+    console.error('❌ Error resending weekly team report:', error);
+    res.status(500).json({ error: 'Erro ao reenviar informativo semanal' });
+  }
+});
+
+// "Testar agora" — dispara o alerta de PRs sem review pro Teams na hora, com a config atual.
+// runPrReviewAlert é definida mais abaixo no arquivo (hoisting cobre isso).
+app.post('/api/notifications/resend/pr-review-alert', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    await runPrReviewAlert();
+    res.json({ message: 'Alerta de PRs sem review disparado com sucesso' });
+  } catch (error) {
+    console.error('❌ Error resending PR review alert:', error);
+    res.status(500).json({ error: 'Erro ao disparar alerta de PRs sem review' });
+  }
+});
+
+// Testa um webhook do Teams isoladamente, com a URL que está no campo (não precisa ter salvo a config ainda).
+// sendTeamsMessage é definida em services/teams.js (import já existe no topo do arquivo).
+app.post('/api/notifications/teams/test-webhook', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { webhookUrl, level } = req.body;
+    if (!webhookUrl) {
+      return res.status(400).json({ error: 'Campo "webhookUrl" é obrigatório' });
+    }
+    const label = level === 2 ? 'Nível 2' : 'Nível 1';
+    const message = `🧪 **Teste de conexão — ${label}**\nSe você está vendo esta mensagem, o webhook está configurado corretamente.`;
+    const result = await sendTeamsMessage(webhookUrl, [message], TEAMS_FOOTER);
+    if (result?.success) {
+      res.json({ message: `Mensagem de teste enviada para ${label}` });
+    } else {
+      res.status(502).json({ error: result?.error || 'Não foi possível enviar a mensagem de teste' });
+    }
+  } catch (error) {
+    console.error('❌ Error testing Teams webhook:', error);
+    res.status(500).json({ error: 'Erro ao testar webhook' });
+  }
+});
+
+// Reseta o histórico de alertas imediatos (last_alerted_state) de todos os work items
+app.post('/api/notifications/reset-alert-history', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    await sql`UPDATE work_items SET last_alerted_state = NULL`;
+    res.json({ message: 'Histórico de alertas resetado com sucesso' });
+  } catch (error) {
+    console.error('❌ Error resetting alert history:', error);
+    res.status(500).json({ error: 'Erro ao resetar histórico de alertas' });
+  }
+});
+
 // ===========================================
 // APP SETTINGS ENDPOINTS
 // ===========================================
 
-// Leitura de configuração global (qualquer usuário autenticado)
+// Chaves sensíveis (contêm segredos, tipo URL de webhook) — só admin pode ler, mesmo via chamada direta à API.
+const ADMIN_ONLY_SETTINGS_KEYS = ['teams_pr_review_config'];
+
+// Leitura de configuração global (qualquer usuário autenticado, exceto chaves sensíveis)
 app.get('/api/settings/:key', authenticateToken, async (req, res) => {
   try {
     const { key } = req.params;
+    if (ADMIN_ONLY_SETTINGS_KEYS.includes(key) && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Acesso restrito a administradores' });
+    }
     const rows = await sql`SELECT value, updated_by, updated_at FROM app_settings WHERE key = ${key}`;
     if (rows.length === 0) {
       return res.json({ value: null });
@@ -1344,6 +1775,8 @@ app.get('/api/items', authenticateToken, async (req, res) => {
         remainingWork: row.remaining_work,
         completedWork: row.completed_work,
         parentId: row.parent_id,
+        startDate: row.start_date,
+        targetDate: row.target_date,
         // Campos de Identificação e Falha do Processo
         identificacao: row.identificacao,
         falhaDoProcesso: row.falha_do_processo,
@@ -1417,6 +1850,8 @@ app.get('/api/items/period/:days', authenticateToken, async (req, res) => {
       branchBase: row.branch_base,
       deliveredVersion: row.delivered_version,
       baseVersion: row.base_version,
+      startDate: row.start_date,
+      targetDate: row.target_date,
       // Campos de Identificação e Falha do Processo
       identificacao: row.identificacao,
       falhaDoProcesso: row.falha_do_processo,
@@ -1511,6 +1946,223 @@ app.post('/api/sync', authenticateToken, async (req, res) => {
     const [wiResult, prResult] = await Promise.all([syncData(), syncPullRequests()]);
     res.json({ workItems: wiResult, pullRequests: prResult });
   } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Sincronizar work items específicos por ID (útil para itens fora do filtro de 180 dias)
+app.post('/api/sync-work-item/:id', authenticateToken, async (req, res) => {
+  if (!isConfigured() || !sql) {
+    return res.status(400).json({ error: 'Azure DevOps ou banco de dados não configurado' });
+  }
+  
+  try {
+    const workItemId = parseInt(req.params.id, 10);
+    if (!workItemId || workItemId <= 0) {
+      return res.status(400).json({ error: 'ID de work item inválido' });
+    }
+    
+    console.log(`🔄 Sincronizando work item específico: ${workItemId}`);
+    
+    const baseUrl = `https://dev.azure.com/${AZURE_CONFIG.organization}/${AZURE_CONFIG.project}`;
+    const detailsUrl = `${baseUrl}/_apis/wit/workitems?ids=${workItemId}&$expand=all&api-version=7.0`;
+    
+    const detailsResponse = await axios.get(detailsUrl, { headers: getAuthHeader() });
+    const items = detailsResponse.data.value || [];
+    
+    if (items.length === 0) {
+      return res.status(404).json({ error: `Work item ${workItemId} não encontrado no Azure DevOps` });
+    }
+    
+    // Processar o item usando a mesma lógica da sincronização normal
+    const item = items[0];
+    const fields = item.fields || {};
+    const title = fields['System.Title'] || '';
+    const state = fields['System.State'] || '';
+    const type = fields['System.WorkItemType'] || '';
+    const assignedTo = fields['System.AssignedTo']?.displayName || '';
+    const areaPath = fields['System.AreaPath'] || '';
+    const team = extractTeam(areaPath);
+    const iterationPath = fields['System.IterationPath'] || '';
+    const createdDate = fields['System.CreatedDate'] || '';
+    const changedDate = fields['System.ChangedDate'] || '';
+    const closedDate = fields['Microsoft.VSTS.Common.ClosedDate'] || '';
+    const storyPoints = fields['Microsoft.VSTS.Scheduling.StoryPoints'] || null;
+    const tags = fields['System.Tags'] || '';
+    const tipoCliente = fields['Custom.Tipocliente'] || fields['Custom.TipoCliente'] || fields['Custom.tipocliente'] || '';
+    const priority = fields['Microsoft.VSTS.Common.Priority']?.toString() || '';
+    const url = item._links?.html?.href || '';
+    const activatedDate = fields['Microsoft.VSTS.Common.ActivatedDate'] || '';
+    
+    const nivel1Field = fields['Custom.ab075d4c-04f5-4f96-b294-4ad0f5987028'];
+    const nivel2Field = fields['Custom.60cee051-7e66-4753-99d6-4bc8717fae0e'];
+    const codeReviewLevel1 = nivel1Field?.displayName || (typeof nivel1Field === 'string' ? nivel1Field : '') || '';
+    const codeReviewLevel2 = nivel2Field?.displayName || (typeof nivel2Field === 'string' ? nivel2Field : '') || '';
+    const customType = fields['Custom.Type'] || fields['Custom.CustomType'] || '';
+    const rootCauseStatus = fields['Custom.RootCauseStatus'] || fields['Custom.StatusCausaRaiz'] || '';
+    const squad = fields['Custom.Squad'] || '';
+    const area = fields['Custom.Area'] || '';
+    const complexity = fields['Custom.Complexity'] || fields['Custom.Complexidade'] || '';
+    const reincidencia = fields['Custom.REINCIDENCIA'] || fields['Custom.Reincidencia'] || fields['Custom.Reincidência'] || '';
+    const performanceDays = fields['Custom.PerformanceDays'] || fields['Custom.DiasPerformance'] || '';
+    const qaField = fields['Custom.QA'];
+    const qa = qaField?.displayName || (typeof qaField === 'string' ? qaField : '') || '';
+    const causaRaiz = fields['Custom.Raizdoproblema'] || '';
+    const rootCauseLegacy = fields['Microsoft.VSTS.CMMI.RootCause'] || '';
+    const createdBy = fields['System.CreatedBy']?.displayName || '';
+    const poField = fields['Custom.PO'] || fields['Custom.ProductOwner'];
+    const po = poField?.displayName || (typeof poField === 'string' ? poField : '') || '';
+    const readyDate = fields['Custom.DOR'] || '';
+    const doneDate = fields['Custom.DOD'] || '';
+    const rootCauseTask = fields['Custom.Rootcausetask'] || '';
+    const rootCauseTeam = fields['Custom.rootcauseteam'] || '';
+    const rootCauseVersion = fields['Custom.rootcauseversion'] || '';
+    const devField = fields['Custom.DEV'];
+    const dev = devField?.displayName || (typeof devField === 'string' ? devField : '') || '';
+    const platform = fields['Custom.Platform'] || '';
+    const application = fields['Custom.Aplication'] || fields['Custom.Application'] || '';
+    const branchBase = fields['Custom.BranchBase'] || '';
+    const deliveredVersion = fields['Custom.DeliveredVersion'] || '';
+    const baseVersion = fields['Custom.BaseVersion'] || '';
+    const identificacao = fields['Custom.7ac99842-e0ec-4f18-b91b-53bfe3e3b3f5'] || '';
+    const falhaDoProcesso = fields['Custom.Falhadoprocesso'] || '';
+    const impedimento = fields['Custom.Impedimento'] === true;
+    const bloqueio = fields['Custom.Block'] === true;
+    const categoria = fields['Custom.Category'] || fields['Custom.Categoria'] || null;
+    const originalEstimate = fields['Microsoft.VSTS.Scheduling.OriginalEstimate'] ?? null;
+    const remainingWork = fields['Microsoft.VSTS.Scheduling.RemainingWork'] ?? null;
+    const completedWork = fields['Microsoft.VSTS.Scheduling.CompletedWork'] ?? null;
+    const startDate = fields['Microsoft.VSTS.Scheduling.StartDate'] || '';
+    const targetDate = fields['Microsoft.VSTS.Scheduling.TargetDate'] || '';
+    const parentRelation = (item.relations || []).find(r => r.rel === 'System.LinkTypes.Hierarchy-Reverse');
+    const parentId = parentRelation ? parseInt((parentRelation.url || '').split('/').pop(), 10) || null : null;
+    
+    const prRelations = (item.relations || [])
+      .filter(r => r.rel === 'ArtifactLink' && r.attributes?.name === 'Pull Request')
+      .map(r => {
+        const segments = (r.url || '').split(/%2[fF]/);
+        const prId = segments[segments.length - 1];
+        const repoId = segments[segments.length - 2];
+        return (/^\d+$/.test(prId) && repoId) ? { repoId, prId: parseInt(prId, 10) } : null;
+      })
+      .filter(Boolean);
+    const linkedPrIds = JSON.stringify(prRelations.map(p => p.prId));
+    
+    let linkedPrVotes = null;
+    if (prRelations.length && PR_REVIEW_ELIGIBLE_STATES.includes((state || '').toLowerCase())) {
+      let chosenReviewers = null;
+      let chosenMergeStatus = null;
+      let chosenRepoId = null;
+      let chosenPrId = null;
+      for (const { repoId, prId } of prRelations) {
+        try {
+          const prDetailUrl = `https://dev.azure.com/${AZURE_CONFIG.organization}/_apis/git/repositories/${repoId}/pullrequests/${prId}?api-version=7.0`;
+          const prDetailRes = await axios.get(prDetailUrl, { headers: getAuthHeader() });
+          if (prDetailRes.data.status !== 'active') continue;
+          if (!chosenReviewers) {
+            chosenReviewers = (prDetailRes.data.reviewers || []).map(r => ({ name: r.displayName, vote: r.vote, isRequired: !!r.isRequired }));
+            chosenMergeStatus = prDetailRes.data.mergeStatus || null;
+            chosenRepoId = repoId;
+            chosenPrId = prId;
+          }
+        } catch (err) {
+          console.warn(`⚠️ Erro ao buscar PR ${prId} do item ${workItemId}: ${err.message}`);
+        }
+      }
+      
+      if (chosenReviewers && chosenRepoId && chosenPrId) {
+        let pushCount = null;
+        let commentCount = null;
+        try {
+          const iterationsUrl = `https://dev.azure.com/${AZURE_CONFIG.organization}/_apis/git/repositories/${chosenRepoId}/pullrequests/${chosenPrId}/iterations?api-version=7.0`;
+          const iterationsRes = await axios.get(iterationsUrl, { headers: getAuthHeader() });
+          pushCount = (iterationsRes.data.value || []).length;
+        } catch (err) { /* ignora */ }
+        try {
+          const threadsUrl = `https://dev.azure.com/${AZURE_CONFIG.organization}/_apis/git/repositories/${chosenRepoId}/pullrequests/${chosenPrId}/threads?api-version=7.0`;
+          const threadsRes = await axios.get(threadsUrl, { headers: getAuthHeader() });
+          commentCount = (threadsRes.data.value || [])
+            .flatMap(t => t.comments || [])
+            .filter(c => c.commentType === 'text' && !c.isDeleted).length;
+        } catch (err) { /* ignora */ }
+        linkedPrVotes = JSON.stringify({ votes: chosenReviewers, pushCount, commentCount, mergeStatus: chosenMergeStatus });
+      }
+    }
+    
+    await sql`
+      INSERT INTO work_items (work_item_id, title, state, type, assigned_to, team, area_path, iteration_path,
+        created_date, changed_date, closed_date, story_points, tags, tipo_cliente, priority, url, first_activation_date,
+        code_review_level1, code_review_level2, custom_type, root_cause_status, squad, area, complexity,
+        reincidencia, performance_days, qa, causa_raiz, root_cause_legacy, created_by, po, ready_date, done_date,
+        root_cause_task, root_cause_team, root_cause_version, dev, platform, application, branch_base, delivered_version, base_version,
+        identificacao, falha_do_processo, impedimento, bloqueio, categoria, linked_pr_ids, linked_pr_votes,
+        original_estimate, remaining_work, completed_work, start_date, target_date, parent_id, synced_at)
+      VALUES (${workItemId}, ${title}, ${state}, ${type}, ${assignedTo}, ${team}, ${areaPath}, ${iterationPath},
+        ${createdDate}, ${changedDate}, ${closedDate}, ${storyPoints}, ${tags}, ${tipoCliente}, ${priority}, ${url}, ${activatedDate || null},
+        ${codeReviewLevel1}, ${codeReviewLevel2}, ${customType}, ${rootCauseStatus}, ${squad}, ${area}, ${complexity},
+        ${reincidencia}, ${performanceDays}, ${qa}, ${causaRaiz}, ${rootCauseLegacy}, ${createdBy}, ${po}, ${readyDate}, ${doneDate},
+        ${rootCauseTask}, ${rootCauseTeam}, ${rootCauseVersion}, ${dev}, ${platform}, ${application}, ${branchBase}, ${deliveredVersion}, ${baseVersion},
+        ${identificacao}, ${falhaDoProcesso}, ${impedimento}, ${bloqueio}, ${categoria}, ${linkedPrIds}, ${linkedPrVotes},
+        ${originalEstimate}, ${remainingWork}, ${completedWork}, ${startDate}, ${targetDate}, ${parentId}, ${new Date().toISOString()})
+      ON CONFLICT (work_item_id) DO UPDATE SET
+        title = EXCLUDED.title, state = EXCLUDED.state, type = EXCLUDED.type, assigned_to = EXCLUDED.assigned_to,
+        team = EXCLUDED.team, area_path = EXCLUDED.area_path, iteration_path = EXCLUDED.iteration_path,
+        created_date = EXCLUDED.created_date, changed_date = EXCLUDED.changed_date, closed_date = EXCLUDED.closed_date,
+        story_points = EXCLUDED.story_points, tags = EXCLUDED.tags, tipo_cliente = EXCLUDED.tipo_cliente,
+        priority = EXCLUDED.priority, url = EXCLUDED.url,
+        first_activation_date = COALESCE(EXCLUDED.first_activation_date, work_items.first_activation_date),
+        code_review_level1 = EXCLUDED.code_review_level1,
+        code_review_level2 = EXCLUDED.code_review_level2,
+        custom_type = EXCLUDED.custom_type,
+        root_cause_status = EXCLUDED.root_cause_status,
+        squad = EXCLUDED.squad,
+        area = EXCLUDED.area,
+        complexity = EXCLUDED.complexity,
+        reincidencia = EXCLUDED.reincidencia,
+        performance_days = EXCLUDED.performance_days,
+        qa = EXCLUDED.qa,
+        causa_raiz = EXCLUDED.causa_raiz,
+        root_cause_legacy = EXCLUDED.root_cause_legacy,
+        created_by = EXCLUDED.created_by,
+        po = EXCLUDED.po,
+        ready_date = EXCLUDED.ready_date,
+        done_date = EXCLUDED.done_date,
+        root_cause_task = EXCLUDED.root_cause_task,
+        root_cause_team = EXCLUDED.root_cause_team,
+        root_cause_version = EXCLUDED.root_cause_version,
+        dev = EXCLUDED.dev,
+        platform = EXCLUDED.platform,
+        application = EXCLUDED.application,
+        branch_base = EXCLUDED.branch_base,
+        delivered_version = EXCLUDED.delivered_version,
+        base_version = EXCLUDED.base_version,
+        identificacao = EXCLUDED.identificacao,
+        falha_do_processo = EXCLUDED.falha_do_processo,
+        impedimento = EXCLUDED.impedimento,
+        bloqueio = EXCLUDED.bloqueio,
+        categoria = EXCLUDED.categoria,
+        linked_pr_ids = EXCLUDED.linked_pr_ids,
+        linked_pr_votes = EXCLUDED.linked_pr_votes,
+        original_estimate = EXCLUDED.original_estimate,
+        remaining_work = EXCLUDED.remaining_work,
+        completed_work = EXCLUDED.completed_work,
+        start_date = EXCLUDED.start_date,
+        target_date = EXCLUDED.target_date,
+        parent_id = EXCLUDED.parent_id,
+        synced_at = EXCLUDED.synced_at
+    `;
+    
+    console.log(`✅ Work item ${workItemId} sincronizado com sucesso`);
+    res.json({ 
+      success: true, 
+      workItemId, 
+      title, 
+      state, 
+      linkedPrVotes: linkedPrVotes ? JSON.parse(linkedPrVotes) : null 
+    });
+    
+  } catch (error) {
+    console.error(`❌ Erro ao sincronizar work item ${req.params.id}:`, error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -2422,12 +3074,71 @@ app.get('/api/qa-tracker/records', authenticateToken, async (req, res) => {
 });
 
 // POST /api/qa-tracker/records — upsert
+// Dispara os emails de atenção do QA Tracker (bloqueado / atribuído / versão pronta).
+// Nunca lança — falha de notificação não pode derrubar o salvamento do registro.
+async function notifyQaRecordChange(record, previous) {
+  try {
+    const items = await sql`SELECT title FROM work_items WHERE work_item_id = ${record.work_item_id} LIMIT 1`;
+    const workItemTitle = items[0]?.title || `Item ${record.work_item_id}`;
+
+    const becameBlocked = record.status === 'blocked' && previous?.status !== 'blocked';
+    const gotAssigned = record.qa_person && record.qa_person !== previous?.qa_person;
+
+    if (becameBlocked) {
+      const assignee = await findUserByName(sql, record.qa_person);
+      const assigneeNotifiable = assignee && await isNotifiable(sql, assignee.email);
+      const recipients = assigneeNotifiable ? [assignee.email] : await getAdminEmails(sql);
+      const { subject, html } = emailService.qaBlockedEmail({
+        recipientName: assignee?.username, workItemTitle, workItemId: record.work_item_id,
+        version: record.version, obs: record.obs,
+      });
+      for (const to of recipients) {
+        await emailService.sendEmail({ to, subject, html, log: { sql, type: 'qa_blocked', relatedKey: `${record.work_item_id}:${record.version}` } });
+      }
+    } else if (gotAssigned) {
+      const assignee = await findUserByName(sql, record.qa_person);
+      if (assignee && await isNotifiable(sql, assignee.email)) {
+        const { subject, html } = emailService.qaAssignedEmail({
+          recipientName: assignee.username, workItemTitle, workItemId: record.work_item_id, version: record.version,
+        });
+        await emailService.sendEmail({ to: assignee.email, subject, html, log: { sql, type: 'qa_assigned', relatedKey: `${record.work_item_id}:${record.version}` } });
+      }
+    }
+
+    await checkVersionReady(record.version);
+  } catch (err) {
+    console.error('❌ notifyQaRecordChange error:', err.message);
+  }
+}
+
+// Verifica se todos os itens da versão saíram de "pending" e, se sim, avisa os admins (uma única vez por versão).
+async function checkVersionReady(version) {
+  const rows = await sql`SELECT status FROM qa_test_records WHERE version = ${version}`;
+  if (!rows.length || rows.some(r => r.status === 'pending')) return;
+
+  const already = await sql`SELECT id FROM notification_log WHERE type = 'qa_version_ready' AND related_key = ${version}`;
+  if (already.length) return;
+
+  const doneCount = rows.filter(r => r.status === 'done').length;
+  const blockedCount = rows.filter(r => r.status === 'blocked').length;
+  const { subject, html } = emailService.qaVersionReadyEmail({ version, doneCount, blockedCount, totalCount: rows.length });
+
+  const admins = await getAdminEmails(sql);
+  for (const to of admins) {
+    await emailService.sendEmail({ to, subject, html, log: { sql, type: 'qa_version_ready', relatedKey: version } });
+  }
+}
+
 app.post('/api/qa-tracker/records', authenticateToken, async (req, res) => {
   try {
     await ensureQATrackerTable();
     const { work_item_id, version, qa_person, status, obs, cts, attachments,
             override_desc, override_client, override_tipo, override_area } = req.body;
     if (!work_item_id || !version) return res.status(400).json({ error: 'work_item_id e version obrigatórios' });
+
+    const existing = await sql`SELECT status, qa_person FROM qa_test_records WHERE work_item_id = ${work_item_id} AND version = ${version}`;
+    const previous = existing[0] || null;
+
     const ctsJson = JSON.stringify(cts || []);
     const attachJson = JSON.stringify(attachments || []);
     const rows = await sql`
@@ -2452,6 +3163,7 @@ app.post('/api/qa-tracker/records', authenticateToken, async (req, res) => {
       RETURNING *
     `;
     res.json(rows[0]);
+    notifyQaRecordChange(rows[0], previous);
   } catch (err) {
     console.error('❌ POST /api/qa-tracker/records:', err.message);
     res.status(500).json({ error: err.message });
@@ -2463,6 +3175,10 @@ app.put('/api/qa-tracker/records/:id', authenticateToken, async (req, res) => {
   try {
     const { qa_person, status, obs, cts, attachments,
             override_desc, override_client, override_tipo, override_area } = req.body;
+
+    const existing = await sql`SELECT status, qa_person FROM qa_test_records WHERE id = ${req.params.id}`;
+    const previous = existing[0] || null;
+
     const ctsJson = JSON.stringify(cts || []);
     const attachJson = JSON.stringify(attachments || []);
     const rows = await sql`
@@ -2482,6 +3198,7 @@ app.put('/api/qa-tracker/records/:id', authenticateToken, async (req, res) => {
     `;
     if (!rows.length) return res.status(404).json({ error: 'Registro não encontrado' });
     res.json(rows[0]);
+    notifyQaRecordChange(rows[0], previous);
   } catch (err) {
     console.error('❌ PUT /api/qa-tracker/records/:id:', err.message);
     res.status(500).json({ error: err.message });
@@ -2526,6 +3243,34 @@ app.get('/api/qa-tracker/version-items', authenticateToken, async (req, res) => 
     res.status(500).json({ error: err.message });
   }
 });
+
+// Notifica itens que viraram "blocked" durante o auto-populate em lote
+async function notifyAutoPopulateBlocked(items) {
+  for (const item of items) {
+    try {
+      const rows = await sql`
+        SELECT qtr.qa_person, wi.title
+        FROM qa_test_records qtr
+        JOIN work_items wi ON wi.work_item_id = qtr.work_item_id
+        WHERE qtr.work_item_id = ${item.work_item_id} AND qtr.version = ${item.version}
+      `;
+      const row = rows[0];
+      if (!row) continue;
+      const assignee = await findUserByName(sql, row.qa_person);
+      const assigneeNotifiable = assignee && await isNotifiable(sql, assignee.email);
+      const recipients = assigneeNotifiable ? [assignee.email] : await getAdminEmails(sql);
+      const { subject, html } = emailService.qaBlockedEmail({
+        recipientName: assignee?.username, workItemTitle: row.title,
+        workItemId: item.work_item_id, version: item.version, obs: null,
+      });
+      for (const to of recipients) {
+        await emailService.sendEmail({ to, subject, html, log: { sql, type: 'qa_blocked', relatedKey: `${item.work_item_id}:${item.version}` } });
+      }
+    } catch (err) {
+      console.error('❌ notifyAutoPopulateBlocked item error:', err.message);
+    }
+  }
+}
 
 // POST /api/qa-tracker/auto-populate — cria e atualiza registros QA com base no estado DevOps
 app.post('/api/qa-tracker/auto-populate', authenticateToken, async (req, res) => {
@@ -2649,6 +3394,16 @@ app.post('/api/qa-tracker/auto-populate', authenticateToken, async (req, res) =>
 
     const versionsProcessed = new Set(allPairs.map(p => p.version)).size;
     res.json({ versionsProcessed, inserted, updated, corrected, total: inserted + updated + corrected });
+
+    // Notificações pós-resposta: não atrasam o retorno do endpoint
+    const blockedNow = toUpdate.filter(r => r.status === 'blocked');
+    if (blockedNow.length) {
+      notifyAutoPopulateBlocked(blockedNow).catch(e => console.error('❌ notifyAutoPopulateBlocked error:', e.message));
+    }
+    const affectedVersions = new Set([...toInsert, ...toUpdate].map(r => r.version));
+    for (const version of affectedVersions) {
+      checkVersionReady(version).catch(e => console.error('❌ checkVersionReady error:', e.message));
+    }
   } catch (err) {
     console.error('❌ POST /api/qa-tracker/auto-populate:', err.message);
     res.status(500).json({ error: err.message });
@@ -2757,6 +3512,36 @@ app.get('/api/ceremonies/records/overview', authenticateToken, async (req, res) 
     });
   } catch (err) {
     console.error('❌ GET /api/ceremonies/records/overview:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/ceremonies/records/bulk — limpeza em massa (admin), mesmos filtros da Visão Geral.
+app.delete('/api/ceremonies/records/bulk', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { from, to, team, ritual_type, status } = req.query;
+    if (!from || !to) return res.status(400).json({ error: 'Período (from/to) é obrigatório' });
+    let rows;
+    if (team && ritual_type && status) {
+      rows = await sql`DELETE FROM ceremony_records WHERE scheduled_date BETWEEN ${from}::date AND ${to}::date AND team = ${team} AND ritual_type = ${ritual_type} AND status = ${status} RETURNING id`;
+    } else if (team && ritual_type) {
+      rows = await sql`DELETE FROM ceremony_records WHERE scheduled_date BETWEEN ${from}::date AND ${to}::date AND team = ${team} AND ritual_type = ${ritual_type} RETURNING id`;
+    } else if (team && status) {
+      rows = await sql`DELETE FROM ceremony_records WHERE scheduled_date BETWEEN ${from}::date AND ${to}::date AND team = ${team} AND status = ${status} RETURNING id`;
+    } else if (ritual_type && status) {
+      rows = await sql`DELETE FROM ceremony_records WHERE scheduled_date BETWEEN ${from}::date AND ${to}::date AND ritual_type = ${ritual_type} AND status = ${status} RETURNING id`;
+    } else if (team) {
+      rows = await sql`DELETE FROM ceremony_records WHERE scheduled_date BETWEEN ${from}::date AND ${to}::date AND team = ${team} RETURNING id`;
+    } else if (ritual_type) {
+      rows = await sql`DELETE FROM ceremony_records WHERE scheduled_date BETWEEN ${from}::date AND ${to}::date AND ritual_type = ${ritual_type} RETURNING id`;
+    } else if (status) {
+      rows = await sql`DELETE FROM ceremony_records WHERE scheduled_date BETWEEN ${from}::date AND ${to}::date AND status = ${status} RETURNING id`;
+    } else {
+      rows = await sql`DELETE FROM ceremony_records WHERE scheduled_date BETWEEN ${from}::date AND ${to}::date RETURNING id`;
+    }
+    res.json({ deleted: rows.length });
+  } catch (err) {
+    console.error('❌ DELETE /api/ceremonies/records/bulk:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -2953,15 +3738,1019 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
+// Alerta os admins após falhas consecutivas de sync (evita spam em falhas transitórias).
+// syncData()/syncPullRequests() não rejeitam a Promise em erro — retornam { status: 'error' } — por isso o
+// resultado precisa ser inspecionado aqui, não capturado via .catch().
+let consecutiveSyncFailures = 0;
+async function handleSyncResult(result, label) {
+  if (result?.status === 'error') {
+    consecutiveSyncFailures++;
+    console.warn(`⚠️ ${label} failed (${consecutiveSyncFailures} consecutive failures)`);
+    if (consecutiveSyncFailures === 3) {
+      const admins = await getReportRecipients(sql, 'sync_failure');
+      const { subject, html } = emailService.syncFailureEmail({ failureCount: consecutiveSyncFailures, lastError: result.message });
+      for (const to of admins) {
+        await emailService.sendEmail({ to, subject, html, log: { sql, type: 'sync_failure' } });
+      }
+    }
+  } else {
+    consecutiveSyncFailures = 0;
+  }
+}
+
 // Schedule sync every 30 minutes
 if (isConfigured()) {
   schedule.scheduleJob('*/30 * * * *', () => {
     console.log('🔄 Running scheduled sync...');
-    syncData().catch(e => console.error('❌ Scheduled sync error (non-fatal):', e.message));
-    syncPullRequests().catch(e => console.error('❌ Scheduled PR sync error (non-fatal):', e.message));
+    syncData()
+      .then(r => handleSyncResult(r, 'Sync'))
+      .catch(e => console.error('❌ Scheduled sync error (non-fatal):', e.message));
+    syncPullRequests()
+      .then(r => handleSyncResult(r, 'PR Sync'))
+      .catch(e => console.error('❌ Scheduled PR sync error (non-fatal):', e.message));
   });
   console.log('⏰ Scheduled sync every 30 minutes');
 }
+
+// ===========================================
+// EMAIL / NOTIFICATIONS — resumo diário
+// ===========================================
+
+// Envia, para cada QA com itens pendentes/bloqueados, um resumo diário por email.
+// Não envia nada para quem não tem pendências.
+async function runDailyDigest() {
+  try {
+    const rows = await sql`
+      SELECT qtr.work_item_id, qtr.version, qtr.qa_person, qtr.status, wi.title
+      FROM qa_test_records qtr
+      JOIN work_items wi ON wi.work_item_id = qtr.work_item_id
+      WHERE qtr.status != 'done' AND qtr.qa_person IS NOT NULL AND qtr.qa_person != ''
+    `;
+
+    const byPerson = new Map();
+    for (const row of rows) {
+      if (!byPerson.has(row.qa_person)) byPerson.set(row.qa_person, []);
+      byPerson.get(row.qa_person).push(row);
+    }
+
+    for (const [personName, items] of byPerson) {
+      const user = await findUserByName(sql, personName);
+      if (!user || !(await isNotifiable(sql, user.email))) continue;
+      const pendingCount = items.filter(i => i.status === 'pending').length;
+      const blockedCount = items.filter(i => i.status === 'blocked').length;
+      const { subject, html } = emailService.dailyDigestEmail({ username: user.username, pendingCount, blockedCount, items });
+      await emailService.sendEmail({ to: user.email, subject, html, log: { sql, type: 'daily_digest', relatedKey: String(user.id) } });
+    }
+  } catch (err) {
+    console.error('❌ runDailyDigest (QA) error:', err.message);
+  }
+
+  try {
+    await runAdminOverviewDigest();
+  } catch (err) {
+    console.error('❌ runDailyDigest (admin overview) error:', err.message);
+  }
+}
+
+// Helpers de fluxo (cycle time / lead time) reaproveitados pelo resumo diário de admins e pelo informativo semanal.
+const average = (arr) => arr.length ? Math.round((arr.reduce((a, b) => a + b, 0) / arr.length) * 10) / 10 : 0;
+const percentile85 = (sortedArr) => {
+  if (!sortedArr.length) return 0;
+  const idx = Math.max(0, Math.ceil(sortedArr.length * 0.85) - 1);
+  return Math.round(sortedArr[idx] * 10) / 10;
+};
+
+// rows: itens fechados com created_date/first_activation_date/closed_date.
+// cycle time = fechamento - ativação (tempo realmente em andamento); lead time = fechamento - criação (tempo total).
+function computeFlowTimes(rows) {
+  const leadTimes = [];
+  const cycleTimes = [];
+  for (const r of rows) {
+    const closed = new Date(r.closed_date).getTime();
+    const created = new Date(r.created_date).getTime();
+    const activated = r.first_activation_date ? new Date(r.first_activation_date).getTime() : created;
+    const lt = Math.ceil((closed - created) / 86400000);
+    const ct = Math.ceil((closed - activated) / 86400000);
+    if (lt >= 0 && lt < 1000) leadTimes.push(lt);
+    if (ct >= 0 && ct < 1000) cycleTimes.push(ct);
+  }
+  leadTimes.sort((a, b) => a - b);
+  cycleTimes.sort((a, b) => a - b);
+  return { leadTimes, cycleTimes };
+}
+
+// Agrega quem mais aprovou/votou em Pull Requests no período (linhas já filtradas por data pelo chamador).
+// Ignora identidades de grupo (isContainer=true, ex: "[org]\Code Review", "[org]\QA Review") — não são pessoas.
+// Restringe a desenvolvedores conhecidos (nomes que já apareceram em work_items.dev, o mesmo campo "Desenvolvedor"
+// usado no resto do app) — sem isso, QAs e outros revisores acabam entrando no ranking de quem mais aprova código.
+// Escopo conhecido: só enxerga PRs do projeto principal sincronizado (AZURE_CONFIG.project).
+function getReviewEngagementLeaderboard(prRows, knownDevNames) {
+  const devSet = new Set((knownDevNames || []).map(n => n.toLowerCase().trim()));
+  const byName = new Map();
+  for (const row of prRows) {
+    let reviewers = [];
+    try { reviewers = JSON.parse(row.reviewers || '[]'); } catch { /* ignora PR com reviewers inválido */ }
+    for (const r of reviewers) {
+      if (r.isContainer || !r.name || !r.vote) continue;
+      if (!devSet.has(r.name.toLowerCase().trim())) continue;
+      if (!byName.has(r.name)) byName.set(r.name, { name: r.name, approvals: 0, totalVotes: 0 });
+      const entry = byName.get(r.name);
+      entry.totalVotes += 1;
+      if (r.vote === 10 || r.vote === 5) entry.approvals += 1;
+    }
+  }
+  return [...byName.values()]
+    .sort((a, b) => b.approvals - a.approvals || b.totalVotes - a.totalVotes)
+    .slice(0, 5);
+}
+
+// Visão geral da operação para admins: impedimentos mais antigos (mesma regra da tela "Impedimentos" —
+// tags contendo "IMPEDIMENTO") + resumo simples por time (em andamento, entregues nos últimos 7 dias, bugs abertos).
+// Estados "concluído" reaproveitados de GET /api/devtracker/active-tasks.
+// overrideRecipients: se informado (reenvio manual pra pessoas específicas), ignora o mapeamento por cargo.
+async function runAdminOverviewDigest(overrideRecipients) {
+  const admins = overrideRecipients?.length ? overrideRecipients : await getReportRecipients(sql, 'admin_overview_digest');
+  if (!admins.length) return;
+
+  const sevenDaysAgoStr = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+  const [impedimentRows, newImpedimentRows, externalBlockRows, inProgressRows, deliveredRows, bugRows, closedItemRows, reviewedPrRows, devNameRows] = await Promise.all([
+    sql`
+      SELECT work_item_id, title, team, assigned_to,
+        GREATEST(0, EXTRACT(DAY FROM NOW() - COALESCE(changed_date, created_date)::timestamp))::int AS days_stopped,
+        COUNT(*) OVER() AS total_count
+      FROM work_items
+      WHERE tags IS NOT NULL AND UPPER(tags) LIKE '%IMPEDIMENTO%'
+      ORDER BY days_stopped DESC NULLS LAST
+      LIMIT 10
+    `,
+    // Impedimentos novos: mesma regra de tag, mas criados nos últimos 7 dias — mostrados antes da lista "mais antigos".
+    sql`
+      SELECT work_item_id, title, team, assigned_to,
+        GREATEST(0, EXTRACT(DAY FROM NOW() - COALESCE(changed_date, created_date)::timestamp))::int AS days_stopped
+      FROM work_items
+      WHERE tags IS NOT NULL AND UPPER(tags) LIKE '%IMPEDIMENTO%'
+        AND created_date >= ${sevenDaysAgoStr}
+      ORDER BY created_date DESC
+    `,
+    // Tarefas com Bloqueio Externo (Custom.Block no Azure DevOps) ainda em aberto.
+    sql`
+      SELECT work_item_id, title, team, assigned_to
+      FROM work_items
+      WHERE bloqueio = true
+        AND state NOT IN ('Done','Concluído','Closed','Fechado','Finished','Resolved','Pronto','Removed')
+      ORDER BY team, work_item_id
+    `,
+    sql`
+      SELECT team, COUNT(*) AS count FROM work_items
+      WHERE team IS NOT NULL AND team != ''
+        AND state NOT IN ('Done','Concluído','Closed','Fechado','Finished','Resolved','Pronto','Removed')
+      GROUP BY team
+    `,
+    sql`
+      SELECT team, COUNT(*) AS count FROM work_items
+      WHERE team IS NOT NULL AND team != ''
+        AND state IN ('Done','Concluído','Closed','Fechado','Finished','Resolved','Pronto')
+        AND changed_date >= ${sevenDaysAgoStr}
+      GROUP BY team
+    `,
+    sql`
+      SELECT team, COUNT(*) AS count FROM work_items
+      WHERE team IS NOT NULL AND team != ''
+        AND type = 'Bug'
+        AND state NOT IN ('Done','Concluído','Closed','Fechado','Finished','Resolved','Pronto','Removed')
+      GROUP BY team
+    `,
+    // Itens entregues na semana com datas para cycle time (fechamento - ativação) e lead time (fechamento - criação).
+    // Mesma fórmula de fallback usada em frontend/src/hooks/useAzureDevOpsData.ts, com first_activation_date
+    // como início do cycle time (tempo realmente em andamento) em vez de created_date (tempo total, isso é lead time).
+    sql`
+      SELECT created_date, first_activation_date, closed_date FROM work_items
+      WHERE state IN ('Done','Concluído','Closed','Fechado','Finished','Resolved','Pronto')
+        AND closed_date IS NOT NULL AND created_date IS NOT NULL
+        AND changed_date >= ${sevenDaysAgoStr}
+    `,
+    // PRs ativas ou fechadas nos últimos 7 dias, pra ranking de engajamento em code review.
+    sql`
+      SELECT reviewers FROM pull_requests
+      WHERE created_date >= ${sevenDaysAgoStr} OR closed_date >= ${sevenDaysAgoStr}
+    `,
+    // Nomes já usados no campo "Desenvolvedor" (Custom.DEV) de alguma tarefa — mesma fonte usada no resto do
+    // app pra identificar quem é dev, pra filtrar QAs/outros revisores fora do ranking de engajamento.
+    sql`SELECT DISTINCT dev FROM work_items WHERE dev IS NOT NULL AND dev != ''`,
+  ]);
+
+  const teamMap = new Map();
+  const ensureTeam = (team) => {
+    if (!teamMap.has(team)) teamMap.set(team, { team, in_progress: 0, delivered_7d: 0, open_bugs: 0 });
+    return teamMap.get(team);
+  };
+  for (const r of inProgressRows) ensureTeam(r.team).in_progress = Number(r.count);
+  for (const r of deliveredRows) ensureTeam(r.team).delivered_7d = Number(r.count);
+  for (const r of bugRows) ensureTeam(r.team).open_bugs = Number(r.count);
+  // Só mostra times com pelo menos 1 entrega nos últimos 7 dias — times zerados não aparecem na tabela.
+  const teamSummaries = [...teamMap.values()]
+    .filter(t => t.delivered_7d > 0)
+    .sort((a, b) => b.delivered_7d - a.delivered_7d);
+
+  const impediments = impedimentRows.map(r => ({ ...r, days_stopped: Number(r.days_stopped) }));
+  const totalImpediments = impedimentRows[0]?.total_count ? Number(impedimentRows[0].total_count) : 0;
+  const newImpediments = newImpedimentRows.map(r => ({ ...r, days_stopped: Number(r.days_stopped) }));
+  const externalBlocks = externalBlockRows;
+
+  const { leadTimes, cycleTimes } = computeFlowTimes(closedItemRows);
+
+  const flowMetrics = {
+    deliveredCount: closedItemRows.length,
+    cycleTimeAvg: average(cycleTimes),
+    cycleTimeP85: percentile85(cycleTimes),
+    leadTimeAvg: average(leadTimes),
+    // Soma de todos os times (não só os com entrega, que é o que teamSummaries virou) — WIP total real da operação.
+    totalWip: [...teamMap.values()].reduce((sum, t) => sum + t.in_progress, 0),
+  };
+
+  if (!teamSummaries.length && !impediments.length) return;
+
+  const engagementLeaderboard = getReviewEngagementLeaderboard(reviewedPrRows, devNameRows.map(r => r.dev));
+
+  const insight = await generateWeeklyInsight({
+    impedimentos_total: totalImpediments,
+    impedimentos_mais_antigos: impediments.slice(0, 5).map(i => ({ titulo: i.title, time: i.team, dias_parado: i.days_stopped })),
+    impedimentos_novos_semana: newImpediments.map(i => ({ titulo: i.title, time: i.team, dias_parado: i.days_stopped })),
+    tarefas_bloqueio_externo: externalBlocks.map(i => ({ titulo: i.title, time: i.team })),
+    times: teamSummaries,
+    fluxo_semanal: flowMetrics,
+    ranking_engajamento_code_review: engagementLeaderboard,
+  }).catch(err => { console.error('❌ generateWeeklyInsight error:', err.message); return null; });
+
+  const { subject, html } = emailService.adminOverviewDigestEmail({ impediments, totalImpediments, newImpediments, externalBlocks, teamSummaries, flowMetrics, insight, engagementLeaderboard });
+  for (const to of admins) {
+    await emailService.sendEmail({ to, subject, html, log: { sql, type: 'admin_overview_digest' } });
+  }
+}
+
+// Resumo diário às 8h, dias úteis
+schedule.scheduleJob('0 8 * * 1-5', () => {
+  console.log('📧 Running daily digest...');
+  runDailyDigest().catch(e => console.error('❌ Daily digest error (non-fatal):', e.message));
+});
+console.log('⏰ Scheduled daily digest at 08:00 (weekdays)');
+
+// Informativo semanal por time: ranking de entregas, composição por tipo, cycle/lead time da semana fechada,
+// ritmo da semana atual com projeção até sexta, WIP, impedimentos, retrabalho e gargalo.
+// Tipos considerados "entrega": User Story, Issue, Bug, Eventuality — Task/Feature/Epic/etc. ficam de fora.
+// Gargalo aqui é um proxy simples (idade média no estado atual dos itens em aberto), não o algoritmo sintético
+// do dashboard (que distribui o cycle time por status sem histórico real — ver azureDevOpsService.ts).
+// Times cobertos pelo informativo semanal (nome no banco -> nome de exibição). Só esses entram no relatório —
+// outras tags de time na base (squads internos, times legados, etc.) ficam de fora.
+const REPORT_TEAMS = {
+  'Sustentacao': 'Sustentação',
+  'Franquia': 'Franquia/CTC',
+  'Boltz': 'Boltz',
+  'Inovacao_novo': 'Inovação',
+  'Tatico': 'Tático',
+  'Diretoria': 'Diretoria',
+  'Wakanda': 'Wakanda',
+  'Estrategico': 'Estratégico',
+};
+
+// Estados que realmente são coluna de algum board (Stories/Epics/Features) do time no Azure DevOps agora —
+// usado pra filtrar o cálculo de gargalo. Investigado: sem isso, "state NOT IN (fechados)" pega qualquer
+// state, inclusive de tipos que nunca aparecem num board Kanban (Test Case/Test Suite/Test Plan têm ciclo
+// próprio — "Design"/"Ready"/"In Progress" — e um item assim pode ficar anos parado sem ser um gargalo real)
+// e states legados sem coluna mapeada em User Story/Issue/Bug (ex. "Disapproved" — item rejeitado e
+// esquecido). Busca ao vivo (não é sincronizado): o relatório roda só 1x/semana, não precisa de cache.
+async function fetchBoardStatesByTeam(reportTeamNames) {
+  const result = new Map(); // nome interno do time -> Set de states válidos (undefined = não achou o board, sem whitelist pra esse time)
+  if (!isConfigured()) return result;
+  try {
+    const teamsRes = await axios.get(
+      `https://dev.azure.com/${AZURE_CONFIG.organization}/_apis/teams?api-version=7.0-preview.3&$top=200`,
+      { headers: getAuthHeader() }
+    );
+    const azureTeams = teamsRes.data.value || [];
+    // Nome interno (extraído do Area Path) nem sempre bate exatamente com o nome do Team no Azure DevOps
+    // (ex.: "Estrategico" -> "Estrategico(GOTHAM)", "Tatico" -> "Tatico (Condado)") — tenta exato, senão prefixo.
+    const resolveAzureTeamName = (internalName) => {
+      const normalized = internalName.toLowerCase();
+      const exact = azureTeams.find(t => t.name.toLowerCase() === normalized);
+      if (exact) return exact.name;
+      const prefixed = azureTeams.find(t => t.name.toLowerCase().startsWith(normalized));
+      return prefixed ? prefixed.name : null;
+    };
+
+    await Promise.all(reportTeamNames.map(async (teamName) => {
+      const azureTeamName = resolveAzureTeamName(teamName);
+      if (!azureTeamName) return;
+      try {
+        const boardsUrl = `https://dev.azure.com/${AZURE_CONFIG.organization}/${encodeURIComponent(AZURE_CONFIG.project)}/${encodeURIComponent(azureTeamName)}/_apis/work/boards`;
+        const boardsRes = await axios.get(`${boardsUrl}?api-version=7.0-preview.1`, { headers: getAuthHeader() });
+        const states = new Set();
+        await Promise.all((boardsRes.data.value || []).map(async (board) => {
+          const colsRes = await axios.get(`${boardsUrl}/${board.id}/columns?api-version=7.0-preview.1`, { headers: getAuthHeader() });
+          for (const col of colsRes.data.value || []) {
+            Object.values(col.stateMappings || {}).forEach(state => states.add(state));
+          }
+        }));
+        result.set(teamName, states);
+      } catch (e) {
+        console.error(`⚠️ Não foi possível buscar colunas do board do time "${teamName}" (Azure: "${azureTeamName}"):`, e.message);
+      }
+    }));
+  } catch (e) {
+    console.error('⚠️ Não foi possível buscar lista de times do Azure DevOps pro gargalo do informativo semanal:', e.message);
+  }
+  return result;
+}
+
+// overrideRecipients: se informado (reenvio manual pra pessoas específicas), ignora o mapeamento por cargo.
+async function runWeeklyTeamReport(overrideRecipients) {
+  const admins = overrideRecipients?.length ? overrideRecipients : await getReportRecipients(sql, 'weekly_team_report');
+  if (!admins.length) return;
+
+  const now = new Date();
+  const day = now.getDay();
+  const daysSinceMonday = day === 0 ? 6 : day - 1;
+  const thisMonday = new Date(now);
+  thisMonday.setHours(0, 0, 0, 0);
+  thisMonday.setDate(thisMonday.getDate() - daysSinceMonday);
+  const lastMonday = new Date(thisMonday);
+  lastMonday.setDate(lastMonday.getDate() - 7);
+  const lastSunday = new Date(thisMonday.getTime() - 1);
+
+  const threeWeeksAgo = new Date(thisMonday);
+  threeWeeksAgo.setDate(threeWeeksAgo.getDate() - 21);
+
+  const closedStartStr = lastMonday.toISOString();
+  const closedEndStr = lastSunday.toISOString();
+  const currentStartStr = thisMonday.toISOString();
+  const nowStr = now.toISOString();
+  const threeWeeksAgoStr = threeWeeksAgo.toISOString();
+
+  const fmt = (d) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+  const closedWeekLabel = `Semana fechada: ${fmt(lastMonday)} a ${fmt(lastSunday)}`;
+  const currentWeekLabel = `Semana atual: ${fmt(thisMonday)} em andamento`;
+
+  const [closedRows, currentRows, last3WeeksRows, openRows, impedimentRows, awaitingVersionRows] = await Promise.all([
+    sql`
+      SELECT team, type, closed_date, created_date, first_activation_date, reincidencia
+      FROM work_items
+      WHERE team IS NOT NULL AND team != ''
+        AND type IN ('User Story','Issue','Bug','Eventuality')
+        AND state IN ('Done','Concluído','Closed','Fechado','Finished','Resolved','Pronto')
+        AND closed_date >= ${closedStartStr} AND closed_date <= ${closedEndStr}
+    `,
+    sql`
+      SELECT team, type
+      FROM work_items
+      WHERE team IS NOT NULL AND team != ''
+        AND type IN ('User Story','Issue','Bug','Eventuality')
+        AND state IN ('Done','Concluído','Closed','Fechado','Finished','Resolved','Pronto')
+        AND closed_date >= ${currentStartStr} AND closed_date <= ${nowStr}
+    `,
+    // Últimas 3 semanas cheias antes da atual — usado como base da projeção quando a semana atual
+    // ainda não tem nenhuma entrega (ver `projected` abaixo).
+    sql`
+      SELECT team, COUNT(*) AS count FROM work_items
+      WHERE team IS NOT NULL AND team != ''
+        AND type IN ('User Story','Issue','Bug','Eventuality')
+        AND state IN ('Done','Concluído','Closed','Fechado','Finished','Resolved','Pronto')
+        AND closed_date >= ${threeWeeksAgoStr} AND closed_date < ${currentStartStr}
+      GROUP BY team
+    `,
+    sql`
+      SELECT team, state, changed_date
+      FROM work_items
+      WHERE team IS NOT NULL AND team != ''
+        AND state NOT IN ('Done','Concluído','Closed','Fechado','Finished','Resolved','Pronto','Removed')
+    `,
+    sql`
+      SELECT team, COUNT(*) AS count FROM work_items
+      WHERE team IS NOT NULL AND team != ''
+        AND tags IS NOT NULL AND UPPER(tags) LIKE '%IMPEDIMENTO%'
+        AND state NOT IN ('Done','Concluído','Closed','Fechado','Finished','Resolved','Pronto','Removed')
+      GROUP BY team
+    `,
+    // Tarefas fechadas (Finished/Resolved/Closed) na semana do relatório (fechada + atual) ainda sem
+    // Delivered Version — restrito à mesma janela do resto do relatório, não é o acumulado histórico
+    // (testado sem esse filtro antes: números ficavam enormes, ex. 8525 num time só, sem sentido prático).
+    sql`
+      SELECT team, COUNT(*) AS count FROM work_items
+      WHERE team IS NOT NULL AND team != ''
+        AND state IN ('Finished','Resolved','Closed')
+        AND (delivered_version IS NULL OR delivered_version = '')
+        AND closed_date >= ${closedStartStr} AND closed_date <= ${nowStr}
+      GROUP BY team
+    `,
+  ]);
+
+  const teamNames = Object.keys(REPORT_TEAMS);
+  const boardStatesByTeam = await fetchBoardStatesByTeam(teamNames);
+
+  const impedimentsByTeam = new Map(impedimentRows.map(r => [r.team, Number(r.count)]));
+  const awaitingVersionByTeam = new Map(awaitingVersionRows.map(r => [r.team, Number(r.count)]));
+  const last3WeeksAvgByTeam = new Map(last3WeeksRows.map(r => [r.team, Math.round((Number(r.count) / 3) * 10) / 10]));
+
+  // WIP + gargalo (idade média no estado atual, só itens em aberto)
+  // ponytail: item sem toque há >6 meses é órfão/esquecido, mesmo estando num estado que é coluna válida
+  // do board (ex. um card real esquecido em "Aguardando QA") — continua sendo ruído, não um gargalo ativo.
+  const STALE_ITEM_THRESHOLD_DAYS = 180;
+  const wipByTeam = new Map();
+  const stateAgeByTeam = new Map(); // team -> Map(state -> {totalDays, count})
+  for (const r of openRows) {
+    wipByTeam.set(r.team, (wipByTeam.get(r.team) || 0) + 1);
+    const ageDays = r.changed_date ? Math.floor((now.getTime() - new Date(r.changed_date).getTime()) / 86400000) : 0;
+    if (ageDays > STALE_ITEM_THRESHOLD_DAYS) continue;
+    // Só considera pro gargalo states que são coluna de algum board do time agora (fetchBoardStatesByTeam).
+    // Sem whitelist resolvida pro time (Azure DevOps não encontrado), cai no comportamento anterior.
+    const validStates = boardStatesByTeam.get(r.team);
+    if (validStates && !validStates.has(r.state)) continue;
+    if (!stateAgeByTeam.has(r.team)) stateAgeByTeam.set(r.team, new Map());
+    const byState = stateAgeByTeam.get(r.team);
+    const acc = byState.get(r.state) || { totalDays: 0, count: 0 };
+    acc.totalDays += ageDays;
+    acc.count += 1;
+    byState.set(r.state, acc);
+  }
+
+  const buildComposition = (rows) => {
+    const comp = { 'User Story': 0, Issue: 0, Bug: 0, Eventuality: 0 };
+    for (const r of rows) comp[r.type] = (comp[r.type] || 0) + 1;
+    return comp;
+  };
+
+  let workingDaysElapsed = 0;
+  for (const d = new Date(thisMonday); d <= now; d.setDate(d.getDate() + 1)) {
+    const wd = d.getDay();
+    if (wd !== 0 && wd !== 6) workingDaysElapsed++;
+  }
+  workingDaysElapsed = Math.max(1, workingDaysElapsed);
+
+  const teams = [];
+  for (const team of teamNames) {
+    const closedTeamRows = closedRows.filter(r => r.team === team);
+    const currentTeamRows = currentRows.filter(r => r.team === team);
+
+    const { leadTimes, cycleTimes } = computeFlowTimes(closedTeamRows);
+
+    const reworkCount = closedTeamRows.filter(r => {
+      const n = Number(r.reincidencia);
+      return !isNaN(n) && n > 0;
+    }).length;
+    const reworkPct = closedTeamRows.length ? Math.round((reworkCount / closedTeamRows.length) * 100) : 0;
+
+    const currentCount = currentTeamRows.length;
+    // Sem nada fechado ainda essa semana, extrapolar do ritmo atual (0) sempre daria 0 — usa a média
+    // das últimas 3 semanas como estimativa em vez de um "~0" que não ajuda ninguém.
+    const projected = currentCount > 0
+      ? Math.round((currentCount / workingDaysElapsed) * 5)
+      : Math.round(last3WeeksAvgByTeam.get(team) || 0);
+
+    let bottleneck = null;
+    const byState = stateAgeByTeam.get(team);
+    if (byState) {
+      for (const [state, acc] of byState) {
+        const avgDays = Math.round((acc.totalDays / acc.count) * 10) / 10;
+        if (!bottleneck || avgDays > bottleneck.avgDays) bottleneck = { state, avgDays };
+      }
+    }
+
+    teams.push({
+      team: REPORT_TEAMS[team],
+      closedWeek: {
+        count: closedTeamRows.length,
+        composition: buildComposition(closedTeamRows),
+        cycleTimeAvg: average(cycleTimes),
+        cycleTimeP85: percentile85(cycleTimes),
+        leadTimeAvg: average(leadTimes),
+      },
+      currentWeek: {
+        count: currentCount,
+        composition: buildComposition(currentTeamRows),
+        projected,
+      },
+      wip: wipByTeam.get(team) || 0,
+      impediments: impedimentsByTeam.get(team) || 0,
+      awaitingVersion: awaitingVersionByTeam.get(team) || 0,
+      reworkPct,
+      bottleneck,
+    });
+  }
+
+  teams.sort((a, b) => b.closedWeek.count - a.closedWeek.count);
+
+  // Narrativa por time via IA — sequencial, com espaçamento pra respeitar o limite da camada gratuita do
+  // Gemini (5 requisições/minuto pro gemini-2.5-flash) — 1.5s era curto demais e gerava erro 429.
+  for (const t of teams) {
+    const { recommendation, suggestedMessage } = await generateTeamNarrative({
+      time: t.team,
+      semana_fechada: t.closedWeek,
+      semana_atual: t.currentWeek,
+      wip: t.wip,
+      impedimentos_ativos: t.impediments,
+      aguardando_versao: t.awaitingVersion,
+      retrabalho_pct: t.reworkPct,
+      gargalo: t.bottleneck,
+    });
+    t.recommendation = recommendation;
+    t.suggestedMessage = suggestedMessage;
+    await new Promise(resolve => setTimeout(resolve, 13000));
+  }
+
+  const ranking = teams
+    .filter(t => t.closedWeek.count > 0)
+    .map(t => ({ team: t.team, closedWeekCount: t.closedWeek.count }));
+
+  const generalReading = await generateWeeklyInsight({
+    tipo: 'informativo_semanal_times',
+    semana_fechada: closedWeekLabel,
+    times: teams.map(t => ({
+      time: t.team, entregas_semana_fechada: t.closedWeek.count, entregas_semana_atual: t.currentWeek.count,
+      wip: t.wip, impedimentos: t.impediments, aguardando_versao: t.awaitingVersion, retrabalho_pct: t.reworkPct, gargalo: t.bottleneck,
+    })),
+  });
+
+  const { subject, html } = emailService.weeklyTeamReportEmail({
+    closedWeekLabel, currentWeekLabel, ranking, teams, generalReading,
+  });
+  for (const to of admins) {
+    await emailService.sendEmail({ to, subject, html, log: { sql, type: 'weekly_team_report' } });
+  }
+}
+
+// Informativo semanal dos times às 8h de segunda-feira
+schedule.scheduleJob('0 8 * * 1', () => {
+  console.log('📰 Running weekly team report...');
+  runWeeklyTeamReport().catch(e => console.error('❌ Weekly team report error (non-fatal):', e.message));
+});
+console.log('⏰ Scheduled weekly team report at 08:00 (Mondays)');
+
+// ===========================================
+// ALERTA DE PRs SEM REVIEW (MICROSOFT TEAMS)
+// ===========================================
+
+const DEFAULT_HEADER_LEVEL1 = '🔴 **PULL REQUESTS SEM REVIEW NÍVEL 1:**';
+const DEFAULT_HEADER_LEVEL2 = '🟡 **PULL REQUESTS SEM REVIEW NÍVEL 2:**';
+const IMMEDIATE_HEADER_LEVEL1 = '🆕 **NOVA TAREFA AGUARDANDO CODE REVIEW NÍVEL 1:**';
+const IMMEDIATE_HEADER_LEVEL2 = '🆕 **NOVA TAREFA AGUARDANDO CODE REVIEW NÍVEL 2:**';
+const DEFAULT_ITEM_LINE = `📌 #{id} — {title}
+🔗 [Abrir Item]({url})
+👤 Autor: {author}
+🗳️ {votes}
+💬 {comments} · 🔄 {pushes}
+🛡️ {requiredReview} · {hasApproval}
+{conflictWarning}`;
+const TEAMS_FOOTER = 'Notificação Automática de https://dsmetrics.online';
+
+const PR_VOTE_LABELS = {
+  10: '✅ Aprovado',
+  5: '✅ Aprovado c/ sugestões',
+  0: '⏳ Sem voto',
+  '-5': '🔁 Aguardando autor',
+  '-10': '❌ Rejeitado',
+};
+
+function formatVoteSummary(votes) {
+  // A essa altura o item já passou pelo filtro linked_pr_votes IS NOT NULL — chegar aqui com array vazio
+  // significa PR ativa encontrada mas sem nenhum revisor atribuído ainda, não "sem PR".
+  if (!votes || !votes.length) return 'PR ativa, nenhum revisor atribuído ainda';
+  const withVote = votes.filter(v => v.vote);
+  if (!withVote.length) return `${votes.length} revisor(es), nenhum voto ainda`;
+  const parts = withVote.map(v => `${v.name || 'Revisor'}: ${PR_VOTE_LABELS[v.vote] || 'Sem voto'}`);
+  return `${withVote.length}/${votes.length} voto(s) — ${parts.join(', ')}`;
+}
+
+function formatCommentSummary(commentCount) {
+  if (commentCount === null || commentCount === undefined) return 'sem dado';
+  if (!commentCount) return 'sem comentários';
+  return `${commentCount} comentário${commentCount > 1 ? 's' : ''}`;
+}
+
+// pushCount = quantidade de iterations (pushes) da PR. Azure DevOps não expõe um campo direto de "voto ficou
+// desatualizado" — o jeito prático de sinalizar isso é: mais de 1 push feito na PR pode ter invalidado votos
+// já dados (dependendo da política de branch "Reset code reviewer votes when there are new changes").
+function formatPushSummary(pushCount) {
+  if (pushCount === null || pushCount === undefined) return 'sem dado';
+  if (pushCount <= 1) return 'sem novos commits após abertura';
+  return `${pushCount} envios — pode ter revotação`;
+}
+
+// Grupo obrigatório de política de branch no Azure DevOps (ex: "[org]\Code Review") — distinto de outros
+// grupos obrigatórios como "QA Review". Não há ID estável exposto pela API de reviewers pra esse grupo,
+// então o casamento é por nome (aceita variação de caixa e o prefixo "[org]\").
+const REQUIRED_CODE_REVIEW_NAME_RE = /code review/i;
+
+function getRequiredCodeReviewVote(rawVotes) {
+  const entry = (rawVotes || []).find(v => v.isRequired === true && REQUIRED_CODE_REVIEW_NAME_RE.test(v.name || ''));
+  return entry ? entry.vote : undefined;
+}
+
+function formatRequiredReviewSummary(rawVotes) {
+  const vote = getRequiredCodeReviewVote(rawVotes);
+  if (vote === undefined) return 'sem grupo obrigatório configurado';
+  if (vote === -10) return '❌ Rejeitado pelo grupo obrigatório "Code Review"';
+  if (vote === -5) return '🔁 Aguardando autor (grupo obrigatório "Code Review")';
+  if (vote > 0) return '✅ Aprovado pelo grupo obrigatório "Code Review"';
+  return '⏳ Grupo obrigatório "Code Review" ainda sem voto';
+}
+
+function formatApprovalFlag(rawVotes) {
+  return (rawVotes || []).some(v => v.vote > 0) ? '✅ ao menos 1 aprovação' : '⏳ nenhuma aprovação ainda';
+}
+
+function formatConflictWarning(mergeStatus) {
+  return mergeStatus === 'conflicts' ? '🚫 **CONFLITO DE MERGE — resolver antes da revisão**' : '';
+}
+
+// Classifica cada tarefa num único grupo dentro da mensagem, por prioridade: conflito de merge é o mais
+// urgente (bloqueia o merge, independente de revisão), depois quem já teve correção pedida, depois quem
+// tem discussão em aberto, depois quem já avançou com algum voto positivo, e por fim quem ainda não teve
+// nenhuma movimentação de review.
+const PR_SECTION_LABELS = {
+  conflito_merge: '🚫 **Conflito de merge (resolver antes da revisão):**',
+  aguardando_correcoes: '🟡 **Aguardando correções:**',
+  comentarios: '🟠 **Com comentários não resolvidos:**',
+  com_voto: '🟢 **Já com voto:**',
+  sem_voto: '🔴 **Sem nenhum voto ainda:**',
+};
+const PR_SECTION_ORDER = ['conflito_merge', 'aguardando_correcoes', 'comentarios', 'com_voto', 'sem_voto'];
+
+function classifyPrItem(item) {
+  if (item.rawMergeStatus === 'conflicts') return 'conflito_merge';
+  const votes = item.rawVotes || [];
+  if (votes.some(v => v.vote === -5 || v.vote === -10)) return 'aguardando_correcoes';
+  if (item.rawCommentCount) return 'comentarios';
+  if (votes.some(v => v.vote > 0)) return 'com_voto';
+  return 'sem_voto';
+}
+
+function formatPrReviewLine(template, item, title) {
+  return (template || DEFAULT_ITEM_LINE)
+    .replaceAll('{id}', item.work_item_id)
+    .replaceAll('{title}', title || item.title || 'sem título')
+    .replaceAll('{url}', item.url || '')
+    .replaceAll('{author}', item.assigned_to || item.dev || 'sem responsável definido')
+    .replaceAll('{votes}', item.voteSummary || 'sem PR vinculada')
+    .replaceAll('{comments}', item.commentSummary || 'sem dado')
+    .replaceAll('{pushes}', item.pushSummary || 'sem dado')
+    .replaceAll('{requiredReview}', item.requiredReviewSummary || 'sem dado')
+    .replaceAll('{hasApproval}', item.approvalFlag || 'sem dado')
+    .replaceAll('{conflictWarning}', item.conflictWarning || '');
+}
+
+// Alerta itens parados esperando revisão de código, separados por Nível 1 (sem revisor nível 1) e
+// Nível 2 (nível 1 ok, falta nível 2), cada grupo indo pro webhook do Teams correspondente.
+// Configuração (webhooks, template, IA) fica em app_settings (key='teams_pr_review_config'), editável
+// pela tela "Integração com Teams" — nada disso é fixo no código.
+async function runPrReviewAlert() {
+  const configRows = await sql`SELECT value FROM app_settings WHERE key = 'teams_pr_review_config'`;
+  if (!configRows.length) return;
+
+  let config;
+  try {
+    config = JSON.parse(configRows[0].value);
+  } catch (err) {
+    console.error('❌ runPrReviewAlert: teams_pr_review_config inválido:', err.message);
+    return;
+  }
+
+  const { webhookLevel1, webhookLevel2, header1, header2, itemLineTemplate, aiEnabled } = config;
+  if (!webhookLevel1 && !webhookLevel2) return;
+
+  const rows = await sql`
+    SELECT work_item_id, title, url, dev, assigned_to, code_review_level1, code_review_level2, linked_pr_votes
+    FROM work_items
+    WHERE LOWER(state) = ANY(${PR_REVIEW_ELIGIBLE_STATES})
+      AND linked_pr_votes IS NOT NULL
+      AND type NOT IN ('Feature', 'Epic')
+  `;
+
+  // linked_pr_votes já vem pronto da sync (buscado ao vivo direto da PR pelo repositoryId — algumas PRs
+  // vinculadas vivem em outro projeto do Azure DevOps, então não dá pra confiar só na tabela local pull_requests,
+  // que é escopada a um único projeto). Formato: { votes: [{name, vote, isRequired}], commentCount, pushCount, mergeStatus }.
+  // Linhas sincronizadas antes dessa versão podem não ter isRequired/mergeStatus — os defaults abaixo cobrem
+  // isso com segurança (se autocorrige no próximo ciclo de sync).
+  function attachVoteSummary(item) {
+    let meta = { votes: [], commentCount: null, pushCount: null, mergeStatus: null };
+    try { meta = { ...meta, ...(JSON.parse(item.linked_pr_votes || 'null') || {}) }; } catch { /* ignora PR com dado inválido */ }
+    return {
+      ...item,
+      rawVotes: meta.votes || [],
+      rawCommentCount: meta.commentCount,
+      rawMergeStatus: meta.mergeStatus || null,
+      voteSummary: formatVoteSummary(meta.votes),
+      commentSummary: formatCommentSummary(meta.commentCount),
+      pushSummary: formatPushSummary(meta.pushCount),
+      requiredReviewSummary: formatRequiredReviewSummary(meta.votes),
+      approvalFlag: formatApprovalFlag(meta.votes),
+      conflictWarning: formatConflictWarning(meta.mergeStatus),
+    };
+  }
+
+  // Base de Nível 1/2 continua vindo dos campos manuais "CR Nível 1/2" (quem foi designado revisor) —
+  // isso não muda. Três regras redirecionam (nunca duplicam) tarefas pra Nível 2, restritas às que já
+  // cairiam no alerta hoje — não trazem de volta tarefas que já têm os dois campos preenchidos:
+  // 1) PR com conflito de merge (de qualquer nível) — já bloqueia o merge, precisa de atenção já.
+  // 2) Só a partir do Nível 1: já tem voto de aprovação e nenhum comentário pendente, OU já tem voto de
+  //    correção solicitada ("aguardando autor"/"rejeitado") — nos dois casos alguém já revisou de verdade,
+  //    mesmo que ninguém tenha preenchido o campo manual "CR Nível 1" ainda. Deixar essas tarefas paradas
+  //    no Nível 1 só polui o chat com algo que já não é mais "falta o primeiro revisor" — o objetivo agora
+  //    é o grupo obrigatório "Code Review" também aprovar, que é papel do Nível 2.
+  let missingLevel1 = rows.filter(r => !r.code_review_level1).map(attachVoteSummary);
+  let missingLevel2 = rows.filter(r => r.code_review_level1 && !r.code_review_level2).map(attachVoteSummary);
+
+  const isConflicted = r => r.rawMergeStatus === 'conflicts';
+  const isApprovedNoComments = r => r.rawVotes.some(v => v.vote > 0) && !r.rawCommentCount;
+  const isAwaitingCorrections = r => r.rawVotes.some(v => v.vote === -5 || v.vote === -10);
+
+  const promoted = [
+    ...missingLevel1.filter(r => isConflicted(r) || isApprovedNoComments(r) || isAwaitingCorrections(r)),
+    ...missingLevel2.filter(isConflicted),
+  ];
+  if (promoted.length) {
+    const promotedIds = new Set(promoted.map(r => r.work_item_id));
+    missingLevel1 = missingLevel1.filter(r => !promotedIds.has(r.work_item_id));
+    missingLevel2 = [...missingLevel2.filter(r => !promotedIds.has(r.work_item_id)), ...promoted];
+  }
+
+  // Quem o grupo obrigatório "Code Review" já aprovou não precisa mais aparecer no Nível 2 — o objetivo
+  // dessa mensagem é justamente cobrar essa aprovação; uma vez que ela existe, manter a tarefa na lista só
+  // polui o chat com algo que já foi resolvido.
+  missingLevel2 = missingLevel2.filter(r => (getRequiredCodeReviewVote(r.rawVotes) ?? 0) <= 0);
+
+  async function sendGroup(items, webhookUrl, header, logType) {
+    if (!webhookUrl || !items.length) return;
+
+    let titles = items.map(i => i.title || 'sem título');
+    if (aiEnabled) {
+      titles = await shortenTitles(titles).catch(err => {
+        console.error('❌ shortenTitles error (non-fatal):', err.message);
+        return titles;
+      });
+    }
+
+    // Agrupa dentro da mesma mensagem: correções pedidas primeiro (mais urgente), depois comentários em
+    // aberto, depois quem já tem voto positivo, e por último quem ainda não teve nenhum voto — cada item
+    // cai só num grupo (o de maior prioridade que ele bater), pra não repetir a mesma tarefa duas vezes.
+    // Cada tarefa formatada vira seu próprio bloco (pode ter várias linhas internas) — divisória só entre
+    // blocos, não entre as linhas de uma mesma tarefa (ver buildAdaptiveCard em services/teams.js).
+    // Cada bloco carrega o rótulo da seção atual — usado pra repetir contexto se a mensagem for dividida.
+    const sectionBuckets = new Map(PR_SECTION_ORDER.map(key => [key, []]));
+    items.forEach((item, idx) => {
+      const itemBlock = formatPrReviewLine(itemLineTemplate, item, titles[idx]);
+      sectionBuckets.get(classifyPrItem(item)).push(itemBlock);
+    });
+
+    const blockEntries = [];
+    PR_SECTION_ORDER
+      .filter(key => sectionBuckets.get(key).length > 0)
+      .forEach(key => {
+        blockEntries.push({ text: PR_SECTION_LABELS[key], label: PR_SECTION_LABELS[key] });
+        sectionBuckets.get(key).forEach(itemText => blockEntries.push({ text: itemText, label: PR_SECTION_LABELS[key] }));
+      });
+
+    // O Teams (via Power Automate) tem limite prático de tamanho de card — passar disso derruba a ação
+    // "Post card in a chat or channel" com RequestEntityTooLarge, silenciosamente pro nosso lado (o gatilho
+    // aceita a chamada normalmente). Divide em várias mensagens quando o acumulado se aproxima do limite,
+    // repetindo o cabeçalho + rótulo da seção atual no início de cada continuação.
+    // O que importa pro limite é o JSON final do Adaptive Card (Container + TextBlock por linha), não o
+    // texto puro — a estrutura em si já quase dobra o tamanho. blockJsonSize simula isso pra medir certo.
+    const MAX_MESSAGE_BYTES = 15000;
+    const blockJsonSize = text => {
+      const lines = (text || '').split('\n').filter(l => l.length > 0);
+      if (!lines.length) return 0;
+      const container = { type: 'Container', separator: true, items: lines.map(line => ({ type: 'TextBlock', text: line, wrap: true })) };
+      return Buffer.byteLength(JSON.stringify(container), 'utf8');
+    };
+    const sectionLabels = new Set(Object.values(PR_SECTION_LABELS));
+    const headerSize = blockJsonSize(header);
+    const messageChunks = [];
+    let current = [header];
+    let currentSize = headerSize;
+    let lastLabel = null;
+    for (const entry of blockEntries) {
+      const entrySize = blockJsonSize(entry.text);
+      if (current.length > 1 && currentSize + entrySize > MAX_MESSAGE_BYTES) {
+        messageChunks.push(current);
+        current = [header];
+        currentSize = headerSize;
+        if (lastLabel && !sectionLabels.has(entry.text)) {
+          const contLabel = `${lastLabel} (continuação)`;
+          current.push(contLabel);
+          currentSize += blockJsonSize(contLabel);
+        }
+      }
+      current.push(entry.text);
+      currentSize += entrySize;
+      lastLabel = entry.label;
+    }
+    messageChunks.push(current);
+
+    if (messageChunks.length > 1) {
+      messageChunks.forEach((chunk, idx) => {
+        chunk[0] = `${header} (parte ${idx + 1}/${messageChunks.length})`;
+      });
+    }
+
+    const results = [];
+    for (const chunk of messageChunks) {
+      results.push(await sendTeamsMessage(webhookUrl, chunk, TEAMS_FOOTER));
+    }
+
+    if (results.every(r => r?.success)) {
+      await sql`
+        INSERT INTO notification_log (type, recipient_email, related_key)
+        VALUES (${logType}, ${logType === 'teams_pr_review_level1' ? 'Teams - Nível 1' : 'Teams - Nível 2'}, ${String(items.length)})
+      `.catch(err => console.error('❌ notification_log insert failed:', err.message));
+    } else {
+      console.error(`❌ sendGroup (${logType}): nem todas as partes da mensagem foram enviadas com sucesso`, results);
+    }
+  }
+
+  await sendGroup(missingLevel1, webhookLevel1, header1 || DEFAULT_HEADER_LEVEL1, 'teams_pr_review_level1');
+  await sendGroup(missingLevel2, webhookLevel2, header2 || DEFAULT_HEADER_LEVEL2, 'teams_pr_review_level2');
+  
+  // Atualizar last_alerted_state de todos os itens alertados (para coordenar com alertas imediatos)
+  for (const item of missingLevel1) {
+    await sql`UPDATE work_items SET last_alerted_state = 'level1' WHERE work_item_id = ${item.work_item_id}`.catch(() => {});
+  }
+  for (const item of missingLevel2) {
+    await sql`UPDATE work_items SET last_alerted_state = 'level2' WHERE work_item_id = ${item.work_item_id}`.catch(() => {});
+  }
+}
+
+// Agendador leve: a cada 5 minutos, confere se o horário atual bate com algum horário configurado
+// em teams_pr_review_config.schedule (ex: ["09:00","13:00","17:00"]). Controle em memória evita disparo
+// duplicado no mesmo slot — reseta ao reiniciar o processo, o que não é crítico aqui.
+let lastPrReviewAlertSlot = null;
+async function checkTeamsPrReviewSchedule() {
+  const configRows = await sql`SELECT value FROM app_settings WHERE key = 'teams_pr_review_config'`;
+  if (!configRows.length) return;
+
+  let config;
+  try {
+    config = JSON.parse(configRows[0].value);
+  } catch {
+    return;
+  }
+  const times = Array.isArray(config.schedule) ? config.schedule : [];
+  if (!times.length) return;
+
+  const now = new Date();
+  // Só dispara em dia útil (segunda a sexta) — sábado (6) e domingo (0) ficam de fora.
+  const dayOfWeek = now.getDay();
+  if (dayOfWeek === 0 || dayOfWeek === 6) return;
+
+  const currentSlot = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  if (!times.includes(currentSlot)) return;
+
+  const slotId = `${now.toISOString().slice(0, 10)}T${currentSlot}`;
+  if (lastPrReviewAlertSlot === slotId) return;
+  lastPrReviewAlertSlot = slotId;
+
+  console.log(`📣 Running Teams PR review alert (slot ${currentSlot})...`);
+  await runPrReviewAlert();
+}
+
+schedule.scheduleJob('*/5 * * * *', () => {
+  checkTeamsPrReviewSchedule().catch(e => console.error('❌ Teams PR review schedule error (non-fatal):', e.message));
+});
+console.log('⏰ Scheduled Teams PR review alert check every 5 minutes (horários configuráveis)');
+
+// ===========================================
+// ALERTAS IMEDIATOS (TAREFAS NOVAS)
+// ===========================================
+
+// Detecta tarefas que acabaram de entrar em estado de code review e dispara alerta imediato (se habilitado)
+async function checkAndSendImmediateAlerts(workItemIds) {
+  if (!sql || !workItemIds.length) return;
+
+  // Buscar config e verificar se alertas imediatos estão habilitados
+  const configRows = await sql`SELECT value FROM app_settings WHERE key = 'teams_pr_review_config'`;
+  if (!configRows.length) return;
+
+  let config;
+  try {
+    config = JSON.parse(configRows[0].value);
+  } catch (err) {
+    return;
+  }
+
+  if (!config.instantAlertsEnabled) return; // Toggle desligado
+
+  // Buscar itens que precisam de alerta (estados elegíveis + PR ativa + não é Feature/Epic)
+  const rows = await sql`
+    SELECT work_item_id, title, url, dev, assigned_to, code_review_level1, code_review_level2, 
+           linked_pr_votes, last_alerted_state, state, type
+    FROM work_items
+    WHERE work_item_id = ANY(${workItemIds})
+      AND LOWER(state) = ANY(${PR_REVIEW_ELIGIBLE_STATES})
+      AND linked_pr_votes IS NOT NULL
+      AND type NOT IN ('Feature', 'Epic')
+  `;
+
+  for (const item of rows) {
+    // Determinar nível atual (mesma lógica de runPrReviewAlert)
+    let currentLevel = null;
+    
+    // Parse do linked_pr_votes para classificação
+    let meta = { votes: [], commentCount: null, mergeStatus: null };
+    try { meta = { ...meta, ...(JSON.parse(item.linked_pr_votes || 'null') || {}) }; } catch { /* ignora */ }
+    
+    const rawVotes = meta.votes || [];
+    const rawCommentCount = meta.commentCount;
+    const rawMergeStatus = meta.mergeStatus || null;
+    
+    const isConflicted = rawMergeStatus === 'conflicts';
+    const isApprovedNoComments = rawVotes.some(v => v.vote > 0) && !rawCommentCount;
+    const isAwaitingCorrections = rawVotes.some(v => v.vote === -5 || v.vote === -10);
+    
+    // Determinar se é Nível 1 ou Nível 2
+    const baseIsLevel1 = !item.code_review_level1;
+    const baseIsLevel2 = item.code_review_level1 && !item.code_review_level2;
+    
+    // Regras de promoção para Nível 2
+    if (baseIsLevel1 && (isConflicted || isApprovedNoComments || isAwaitingCorrections)) {
+      currentLevel = 'level2';
+    } else if (baseIsLevel2 && isConflicted) {
+      currentLevel = 'level2';
+    } else if (baseIsLevel1) {
+      currentLevel = 'level1';
+    } else if (baseIsLevel2) {
+      // Verificar se grupo obrigatório "Code Review" já aprovou
+      const codeReviewVote = rawVotes.find(v => v.isRequired && v.name && v.name.includes('Code Review'));
+      const hasCodeReviewApproval = codeReviewVote && codeReviewVote.vote > 0;
+      if (!hasCodeReviewApproval) {
+        currentLevel = 'level2';
+      }
+    }
+    
+    // Se não há nível atual (item não elegível após regras), skip
+    if (!currentLevel) continue;
+    
+    // Verificar se é tarefa NOVA (last_alerted_state é NULL ou diferente do nível atual)
+    if (item.last_alerted_state === currentLevel) {
+      continue; // Já foi alertada nesse nível, skip
+    }
+    
+    // Tarefa nova ou mudou de nível → enviar alerta imediato
+    await sendImmediateAlert(item, currentLevel, config);
+    
+    // Atualizar last_alerted_state
+    await sql`
+      UPDATE work_items 
+      SET last_alerted_state = ${currentLevel}
+      WHERE work_item_id = ${item.work_item_id}
+    `;
+  }
+}
+
+// Envia alerta imediato individual para 1 tarefa
+async function sendImmediateAlert(item, level, config) {
+  const webhookUrl = level === 'level1' ? config.webhookLevel1 : config.webhookLevel2;
+  if (!webhookUrl) return;
+
+  const header = level === 'level1' ? IMMEDIATE_HEADER_LEVEL1 : IMMEDIATE_HEADER_LEVEL2;
+  const itemLineTemplate = config.itemLineTemplate || DEFAULT_ITEM_LINE;
+  
+  // Parse linked_pr_votes para formatar o item
+  let meta = { votes: [], commentCount: null, pushCount: null, mergeStatus: null };
+  try { meta = { ...meta, ...(JSON.parse(item.linked_pr_votes || 'null') || {}) }; } catch { /* ignora */ }
+  
+  const enrichedItem = {
+    ...item,
+    rawVotes: meta.votes || [],
+    rawCommentCount: meta.commentCount,
+    rawMergeStatus: meta.mergeStatus || null,
+    voteSummary: formatVoteSummary(meta.votes),
+    commentSummary: formatCommentSummary(meta.commentCount),
+    pushSummary: formatPushSummary(meta.pushCount),
+    requiredReviewSummary: formatRequiredReviewSummary(meta.votes),
+    approvalFlag: formatApprovalFlag(meta.votes),
+    conflictWarning: formatConflictWarning(meta.mergeStatus),
+  };
+  
+  // Encurtar título se IA habilitada
+  let title = item.title || 'sem título';
+  if (config.aiEnabled) {
+    const shortened = await shortenTitles([title]).catch(() => [title]);
+    title = shortened[0];
+  }
+  
+  const formattedItem = formatPrReviewLine(itemLineTemplate, enrichedItem, title);
+  const messageBlocks = [header, formattedItem];
+  
+  const result = await sendTeamsMessage(webhookUrl, messageBlocks, TEAMS_FOOTER);
+  
+  if (result?.success) {
+    const logType = level === 'level1' ? 'teams_pr_review_immediate_level1' : 'teams_pr_review_immediate_level2';
+    await sql`
+      INSERT INTO notification_log (type, recipient_email, related_key)
+      VALUES (${logType}, ${'Teams - Imediato ' + (level === 'level1' ? 'Nível 1' : 'Nível 2')}, ${String(item.work_item_id)})
+    `.catch(err => console.error('❌ notification_log insert failed:', err.message));
+  }
+}
+
 
 // Previne crash do processo por erros não capturados (ex: timeout VPS)
 process.on('unhandledRejection', (reason) => {
