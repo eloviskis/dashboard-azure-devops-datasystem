@@ -13,7 +13,13 @@ require('dotenv').config();
 const emailService = require('./services/email');
 const { findUserByName, getAdminEmails, isNotifiable, getReportRecipients } = require('./services/userMatch');
 const { generateWeeklyInsight, generateTeamNarrative, shortenTitles } = require('./services/ai');
+const { syncStateHistoryForBatch } = require('./services/stateHistory');
+const { syncPrFiles } = require('./services/prFiles');
+const { syncPrVoteEvents } = require('./services/prVoteEvents');
+const { syncCodeReviewLevelDates } = require('./services/codeReviewLevelDates');
+const { calcularDiasUteis, diaBRT } = require('./services/businessDays');
 const { sendTeamsMessage } = require('./services/teams');
+const { getDailyReviewRanking } = require('./services/reviewRanking');
 
 // Database driver: PostgreSQL (pg) with connection pooling
 const { Pool, types } = require('pg');
@@ -157,7 +163,7 @@ function calculateDaysBetween(startDate, endDate) {
   if (!startDate || !endDate) return null;
   const start = new Date(startDate);
   const end = new Date(endDate);
-  return Math.round((end - start) / (1000 * 60 * 60 * 24));
+  return Math.ceil((end - start) / (1000 * 60 * 60 * 24));
 }
 
 function calculateCycleTime(firstActivationDate, closedDate) {
@@ -295,6 +301,46 @@ const initDatabase = async () => {
     `;
     console.log('✅ pull_requests table ready');
 
+    // Arquivos alterados por PR. changed_files_count fica desnormalizado em pull_requests porque a
+    // listagem devolve milhares de PRs e não pode depender de agregar a tabela filha a cada request.
+    // NULL = nunca sincronizado, 0 = sincronizado e sem arquivo (é o que guia o sync incremental).
+    await sql`
+      CREATE TABLE IF NOT EXISTS pull_request_files (
+        pull_request_id INTEGER NOT NULL,
+        path TEXT NOT NULL,
+        change_type TEXT,
+        PRIMARY KEY (pull_request_id, path)
+      )
+    `;
+    await sql`CREATE INDEX IF NOT EXISTS idx_pr_files_pr ON pull_request_files(pull_request_id)`;
+    await sql`ALTER TABLE pull_requests ADD COLUMN IF NOT EXISTS changed_files_count INTEGER`;
+    console.log('✅ pull_request_files table ready');
+
+    // Histórico real de voto por PR, via comentário de sistema "{pessoa} voted {voto}" na API de threads —
+    // tem timestamp por voto, diferente do campo reviewers (só guarda o voto ATUAL, sem dizer quando foi).
+    // Usado pro ranking de code review contar quem revisou no dia certo, mesmo em PR que demora a fechar.
+    // NULL em vote_events_synced_at = nunca sincronizado (mesmo guia do pull_request_files acima).
+    await sql`
+      CREATE TABLE IF NOT EXISTS pr_vote_events (
+        id SERIAL PRIMARY KEY,
+        pull_request_id INTEGER NOT NULL,
+        reviewer_name TEXT NOT NULL,
+        vote INTEGER NOT NULL,
+        voted_at TIMESTAMPTZ NOT NULL
+      )
+    `;
+    await sql`CREATE INDEX IF NOT EXISTS idx_pr_vote_events_pr ON pr_vote_events(pull_request_id)`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_pr_vote_events_voted_at ON pr_vote_events(voted_at)`;
+    await sql`ALTER TABLE pull_requests ADD COLUMN IF NOT EXISTS vote_events_synced_at TIMESTAMPTZ`;
+    console.log('✅ pr_vote_events table ready');
+
+    // Data real em que code_review_level1/level2 passaram a valer o que valem hoje — via histórico de
+    // revisões da tarefa (ver services/codeReviewLevelDates.js), não a changed_date da tarefa inteira, que
+    // mistura edição em lote de outro campo. NULL = ainda não sincronizado (mesmo guia de sempre).
+    await sql`ALTER TABLE work_items ADD COLUMN IF NOT EXISTS code_review_level1_set_at TIMESTAMPTZ`;
+    await sql`ALTER TABLE work_items ADD COLUMN IF NOT EXISTS code_review_level2_set_at TIMESTAMPTZ`;
+    console.log('✅ code_review_level*_set_at columns ready');
+
     // Create commits if not exists
     await sql`
       CREATE TABLE IF NOT EXISTS commits (
@@ -376,6 +422,21 @@ const initDatabase = async () => {
       )
     `;
     console.log('✅ notification_log table ready');
+
+    // Registro de impedimentos/bloqueios resolvidos — a sync só guarda o estado atual de `impedimento`/
+    // `bloqueio`, sobrescrevendo a cada ciclo; essa tabela é o único jeito de saber quando um item deixou
+    // de estar impedido/bloqueado (comparação feita na própria sync, ver syncData()).
+    await sql`
+      CREATE TABLE IF NOT EXISTS impediment_resolutions (
+        id SERIAL PRIMARY KEY,
+        work_item_id INTEGER NOT NULL,
+        team TEXT,
+        title TEXT,
+        kind TEXT NOT NULL,
+        resolved_at TIMESTAMP DEFAULT NOW()
+      )
+    `;
+    console.log('✅ impediment_resolutions table ready');
 
     // Tabela de configurações globais (chave-valor)
     await sql`
@@ -663,6 +724,11 @@ async function syncData() {
       }
       console.log(`   Saved ${memberAvatars.size} member avatars`);
 
+      // Estado anterior de impedimento/bloqueio de todo mundo, buscado em bloco uma vez só — usado abaixo
+      // pra detectar quando um item deixa de estar impedido/bloqueado (ver impediment_resolutions).
+      const prevFlagsRows = await sql`SELECT work_item_id, impedimento, bloqueio FROM work_items`;
+      const prevFlags = new Map(prevFlagsRows.map(r => [r.work_item_id, { impedimento: r.impedimento, bloqueio: r.bloqueio }]));
+
       for (const item of allWorkItems) {
         const fields = item.fields || {};
         const workItemId = item.id;
@@ -722,6 +788,16 @@ async function syncData() {
         const impedimento = fields['Custom.Impedimento'] === true;
         const bloqueio    = fields['Custom.Block']       === true; // campo renomeado no Azure DevOps (era Custom.Bloqueio)
         const categoria = fields['Custom.Category'] || fields['Custom.Categoria'] || null;
+
+        // Item deixou de estar impedido/bloqueado nesse ciclo — registra pro informativo semanal poder
+        // mostrar o que foi resolvido na semana (a sync só guarda o estado atual, não histórico).
+        const prevItemFlags = prevFlags.get(workItemId);
+        if (prevItemFlags?.impedimento === true && impedimento === false) {
+          await sql`INSERT INTO impediment_resolutions (work_item_id, team, title, kind) VALUES (${workItemId}, ${team}, ${title}, 'impedimento')`.catch(() => {});
+        }
+        if (prevItemFlags?.bloqueio === true && bloqueio === false) {
+          await sql`INSERT INTO impediment_resolutions (work_item_id, team, title, kind) VALUES (${workItemId}, ${team}, ${title}, 'bloqueio')`.catch(() => {});
+        }
         // Campos de estimativa (Tasks) — existiam na tabela e na API, mas nunca eram lidos da sync, por
         // isso "Horas Total" no burndown do Scrum Dashboard sempre dava 0h.
         const originalEstimate = fields['Microsoft.VSTS.Scheduling.OriginalEstimate'] ?? null;
@@ -760,7 +836,6 @@ async function syncData() {
           let chosenMergeStatus = null;
           let chosenRepoId = null;
           let chosenPrId = null;
-          let hasInactivePrs = false;
           for (const { repoId, prId } of prRelations) {
             try {
               const prDetailUrl = `https://dev.azure.com/${AZURE_CONFIG.organization}/_apis/git/repositories/${repoId}/pullrequests/${prId}?api-version=7.0`;
@@ -769,7 +844,6 @@ async function syncData() {
               // esteja como ativo"). Se nenhuma das PRs vinculadas estiver ativa, linkedPrVotes fica null,
               // igual ao caso de não ter PR nenhuma — o item some do alerta.
               if (prDetailRes.data.status !== 'active') {
-                hasInactivePrs = true;
                 continue;
               }
               if (!chosenReviewers) {
@@ -879,6 +953,36 @@ async function syncData() {
 
       console.log(`   ✅ Saved ${allWorkItems.length} work items to database`);
 
+      // Histórico real de transição de estado (pra Flow Efficiency medido, não estimado). Não trava
+      // a sync se o feed de Analytics falhar/estiver indisponível — fica pra tentar de novo no próximo ciclo.
+      try {
+        const workItemStates = new Map(allWorkItems.map(item => [item.id, (item.fields || {})['System.State'] || '']));
+        await syncStateHistoryForBatch(pool, AZURE_CONFIG, workItemStates);
+        console.log(`   ✅ Synced state history for ${workItemStates.size} work items`);
+      } catch (error) {
+        console.error('⚠️ Não foi possível sincronizar o histórico de status:', error.message);
+      }
+
+      // Data real de quando Nível 1/2 de code review foram preenchidos (ver services/codeReviewLevelDates.js)
+      // — só pra tarefa com o campo preenchido e ainda sem data conhecida (não re-sincroniza quem já tem).
+      try {
+        const pendentesNivel = await sql`
+          SELECT work_item_id FROM work_items
+          WHERE (code_review_level1 IS NOT NULL AND code_review_level1 != '' AND code_review_level1_set_at IS NULL)
+             OR (code_review_level2 IS NOT NULL AND code_review_level2 != '' AND code_review_level2_set_at IS NULL)
+        `;
+        for (const { work_item_id } of pendentesNivel) {
+          try {
+            await syncCodeReviewLevelDates(pool, AZURE_CONFIG, work_item_id);
+          } catch (levelErr) {
+            console.log(`   ⚠️ Data de Nível 1/2 da tarefa ${work_item_id}: ${levelErr.response?.status || ''} ${levelErr.message}`);
+          }
+        }
+        if (pendentesNivel.length > 0) console.log(`   ✅ Datas de Nível 1/2 sincronizadas: ${pendentesNivel.length} tarefas`);
+      } catch (error) {
+        console.error('⚠️ Não foi possível sincronizar as datas de Nível 1/2:', error.message);
+      }
+
       // Alertas imediatos: detecta tarefas que acabaram de entrar em estado de code review
       await checkAndSendImmediateAlerts(workItemIds);
     }
@@ -937,6 +1041,8 @@ async function syncPullRequests() {
     console.log(`   Found ${repositories.length} repositories`);
 
     let totalPRs = 0;
+    let totalPRFiles = 0;
+    let totalVoteEvents = 0;
 
     for (const repo of repositories) {
       // Fetch PRs for each repo (all statuses: active, completed, abandoned)
@@ -1009,6 +1115,24 @@ async function syncPullRequests() {
                 has_valida_cr_label = EXCLUDED.has_valida_cr_label, synced_at = EXCLUDED.synced_at
             `;
             totalPRs++;
+
+            // Arquivos alterados e histórico de voto: só pra PR ativa (pode ter recebido commit/voto novo)
+            // ou que nunca foi sincronizada. PR fechada não muda mais — rebuscar seria trabalho jogado fora.
+            try {
+              const [existing] = await sql`SELECT changed_files_count, vote_events_synced_at FROM pull_requests WHERE pull_request_id = ${pr.pullRequestId}`;
+              if (status === 'active' || existing?.changed_files_count == null) {
+                await syncPrFiles(pool, AZURE_CONFIG, { pullRequestId: pr.pullRequestId, repositoryId: repo.id });
+                totalPRFiles++;
+              }
+              if (status === 'active' || existing?.vote_events_synced_at == null) {
+                await syncPrVoteEvents(pool, AZURE_CONFIG, { pullRequestId: pr.pullRequestId, repositoryId: repo.id });
+                totalVoteEvents++;
+              }
+            } catch (fileErr) {
+              // Falha aqui não pode derrubar o sync de PRs — a PR fica com contagem/data NULL e o
+              // backfill pega depois.
+              console.log(`   ⚠️ Arquivos/votos da PR ${pr.pullRequestId}: ${fileErr.response?.status || ''} ${fileErr.message}`);
+            }
           }
 
           skip += top;
@@ -1017,7 +1141,7 @@ async function syncPullRequests() {
       }
     }
 
-    console.log(`   ✅ Synced ${totalPRs} pull requests`);
+    console.log(`   ✅ Synced ${totalPRs} pull requests (arquivos atualizados em ${totalPRFiles}, votos em ${totalVoteEvents})`);
 
     const endTime = new Date();
     console.log(`✅ PR sync completed in ${(endTime - startTime) / 1000}s`);
@@ -1537,6 +1661,21 @@ app.post('/api/notifications/resend/pr-review-alert', authenticateToken, require
   }
 });
 
+// "Testar ranking agora" — dispara o ranking diário de code review na hora, com a config atual. Ignora o
+// toggle rankingEnabled e a trava de "já enviado hoje" (é um teste manual, não o disparo automático).
+// runPrReviewRankingAlert é definida mais abaixo no arquivo (hoisting cobre isso).
+app.post('/api/notifications/resend/pr-review-ranking', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const configRows = await sql`SELECT value FROM app_settings WHERE key = 'teams_pr_review_config'`;
+    if (!configRows.length) return res.status(400).json({ error: 'teams_pr_review_config não configurado' });
+    await runPrReviewRankingAlert(JSON.parse(configRows[0].value));
+    res.json({ message: 'Ranking de code review disparado com sucesso' });
+  } catch (error) {
+    console.error('❌ Error resending PR review ranking:', error);
+    res.status(500).json({ error: 'Erro ao disparar ranking de code review' });
+  }
+});
+
 // Testa um webhook do Teams isoladamente, com a URL que está no campo (não precisa ter salvo a config ainda).
 // sendTeamsMessage é definida em services/teams.js (import já existe no topo do arquivo).
 app.post('/api/notifications/teams/test-webhook', authenticateToken, requireAdmin, async (req, res) => {
@@ -1718,10 +1857,17 @@ app.get('/api/items', authenticateToken, async (req, res) => {
     console.log(`   Found ${rows.length} items in database`);
 
     const items = rows.map(row => {
+      // Data de fechamento: effective_closed_date é a primeira entrada em Finished/Resolved/Closed
+      // (calculada do histórico real de transição de status). closed_date sozinho só conta o Closed — e o
+      // Closed costuma vir bem depois do Pronto real nesta base (fechamento em lote: metade dos itens
+      // concluídos tem mais de 2 dias de atraso). closed_date só entra quando não há histórico.
+      const effectiveClosedDate = row.effective_closed_date || row.closed_date || null;
       // Fallback: se first_activation_date não existe, usa created_date para cycleTime
-      const cycleTime = calculateCycleTime(row.first_activation_date, row.closed_date)
-                        ?? calculateCycleTime(row.created_date, row.closed_date);
-      const leadTime = calculateLeadTime(row.created_date, row.closed_date);
+      const cycleTime = calculateCycleTime(row.first_activation_date, effectiveClosedDate)
+                        ?? calculateCycleTime(row.created_date, effectiveClosedDate);
+      // Campo aditivo para o Painel Mensal (dias úteis, igual à planilha). Não altera cycleTime.
+      const cycleTimeBusinessDays = calcularDiasUteis(row.first_activation_date || row.created_date, effectiveClosedDate);
+      const leadTime = calculateLeadTime(row.created_date, effectiveClosedDate);
       const age = calculateAge(row.created_date);
 
       return {
@@ -1735,10 +1881,11 @@ app.get('/api/items', authenticateToken, async (req, res) => {
         iterationPath: row.iteration_path,
         createdDate: row.created_date,
         changedDate: row.changed_date,
-        closedDate: row.closed_date,
+        closedDate: effectiveClosedDate,
         storyPoints: row.story_points,
         tags: row.tags,
         cycleTime,
+        cycleTimeBusinessDays,
         leadTime,
         age,
         url: row.url,
@@ -1781,7 +1928,8 @@ app.get('/api/items', authenticateToken, async (req, res) => {
         identificacao: row.identificacao,
         falhaDoProcesso: row.falha_do_processo,
         impedimento: row.impedimento || false,
-        bloqueio: row.bloqueio || false
+        bloqueio: row.bloqueio || false,
+        timeInStatusDays: row.time_in_status_days || undefined
       };
     });
 
@@ -1789,6 +1937,32 @@ app.get('/api/items', authenticateToken, async (req, res) => {
   } catch (err) {
     console.error('❌ Error in /api/items:', err.message);
     res.status(500).json({ error: 'Failed to fetch work items' });
+  }
+});
+
+// Painel por Time: fim e Cycle Time no critério da planilha. Fim = primeira entrada em Finished, Resolved ou
+// Closed, a que vier primeiro. Início = criação; dias úteis pelo dia de Brasília. Aditivo: só o Painel usa.
+// Confirmado item a item com o CSV real da GetNaves de 5 times: o Closed costuma vir bem depois (fechamento em
+// lote), então usar só ele (ou priorizá-lo) atrasa o fim e infla o Cycle Time.
+// ponytail: agrega as transições a cada chamada; upgrade = cache em memória de alguns minutos.
+app.get('/api/painel-time/ciclo', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT w.work_item_id AS id, w.created_date::text AS created, MIN(t.entered_at) AS fim
+      FROM work_items w
+      JOIN work_item_state_transitions t ON t.work_item_id = w.work_item_id
+        AND t.state IN ('Finished', 'Resolved', 'Closed')
+      WHERE w.created_date IS NOT NULL
+      GROUP BY w.work_item_id, w.created_date
+    `);
+    res.json(result.rows.map(r => ({
+      id: r.id,
+      fim: r.fim,
+      cicloDiasUteis: calcularDiasUteis(`${r.created.slice(0, 10)}T12:00:00`, `${diaBRT(r.fim)}T12:00:00`)
+    })));
+  } catch (err) {
+    console.error('❌ Error in /api/painel-time/ciclo:', err.message);
+    res.status(500).json({ error: 'Failed to fetch painel ciclo' });
   }
 });
 
@@ -1805,7 +1979,10 @@ app.get('/api/items/period/:days', authenticateToken, async (req, res) => {
       ORDER BY changed_date DESC
     `;
 
-    const items = rows.map(row => ({
+    const items = rows.map(row => {
+      // Mesma regra do /api/items — ver comentário lá.
+      const effectiveClosedDate = row.effective_closed_date || row.closed_date || null;
+      return {
       workItemId: row.work_item_id,
       title: row.title,
       state: row.state,
@@ -1816,11 +1993,13 @@ app.get('/api/items/period/:days', authenticateToken, async (req, res) => {
       iterationPath: row.iteration_path,
       createdDate: row.created_date,
       changedDate: row.changed_date,
-      closedDate: row.closed_date,
+      closedDate: effectiveClosedDate,
       storyPoints: row.story_points,
       tags: row.tags,
-      cycleTime: calculateCycleTime(row.first_activation_date, row.closed_date),
-      leadTime: calculateLeadTime(row.created_date, row.closed_date),
+      cycleTime: calculateCycleTime(row.first_activation_date, effectiveClosedDate),
+      // Campo aditivo para o Painel Mensal (dias úteis, igual à planilha). Não altera cycleTime.
+      cycleTimeBusinessDays: calcularDiasUteis(row.first_activation_date || row.created_date, effectiveClosedDate),
+      leadTime: calculateLeadTime(row.created_date, effectiveClosedDate),
       age: calculateAge(row.created_date),
       url: row.url,
       tipoCliente: row.tipo_cliente,
@@ -1856,8 +2035,10 @@ app.get('/api/items/period/:days', authenticateToken, async (req, res) => {
       identificacao: row.identificacao,
       falhaDoProcesso: row.falha_do_processo,
       impedimento: row.impedimento || false,
-      bloqueio: row.bloqueio || false
-    }));
+      bloqueio: row.bloqueio || false,
+      timeInStatusDays: row.time_in_status_days || undefined
+      };
+    });
 
     res.json(items);
   } catch (err) {
@@ -2200,7 +2381,10 @@ app.get('/api/stats', authenticateToken, async (req, res) => {
 app.get('/api/pull-requests', authenticateToken, async (req, res) => {
   try {
     console.log('📊 GET /api/pull-requests - Fetching pull requests...');
-    const rows = await sql`SELECT * FROM pull_requests ORDER BY created_date DESC`;
+    const [rows, devTeamMap] = await Promise.all([
+      sql`SELECT * FROM pull_requests ORDER BY created_date DESC`,
+      buildDevTeamMap()
+    ]);
     console.log(`   Found ${rows.length} pull requests`);
 
     const items = rows.map(row => {
@@ -2208,9 +2392,16 @@ app.get('/api/pull-requests', authenticateToken, async (req, res) => {
       let votes = [];
       try { reviewers = JSON.parse(row.reviewers || '[]'); } catch(e) {}
       try { votes = JSON.parse(row.votes || '[]'); } catch(e) {}
+      // PRs sincronizadas por uma versão antiga do código guardaram o reviewer bruto da API do Azure DevOps
+      // (campo "displayName"), não o formato atual { name, vote, isRequired, isContainer }. Sem esse fallback,
+      // essas linhas antigas (fora da janela de 180 dias, nunca mais ressincronizadas) aparecem como "Desconhecido".
+      reviewers = reviewers.map(r => {
+        const name = r.name || r.displayName || '';
+        return r.isContainer ? { ...r, name } : { ...r, name, team: devTeamMap.get(name.toLowerCase().trim()) || null };
+      });
 
       const lifetimeDays = row.closed_date && row.created_date
-        ? Math.round((new Date(row.closed_date) - new Date(row.created_date)) / (1000 * 60 * 60 * 24))
+        ? Math.ceil((new Date(row.closed_date) - new Date(row.created_date)) / (1000 * 60 * 60 * 24))
         : null;
 
       return {
@@ -2230,6 +2421,7 @@ app.get('/api/pull-requests', authenticateToken, async (req, res) => {
         votes,
         hasValidaCRLabel: row.has_valida_cr_label,
         lifetimeDays,
+        changedFilesCount: row.changed_files_count,
         url: row.url
       };
     });
@@ -2238,6 +2430,25 @@ app.get('/api/pull-requests', authenticateToken, async (req, res) => {
   } catch (err) {
     console.error('❌ Error in /api/pull-requests:', err.message);
     res.status(500).json({ error: 'Failed to fetch pull requests' });
+  }
+});
+
+// Lista de arquivos de uma PR — sob demanda, pro modal. São ~52 mil linhas no total, então não
+// viajam junto com a listagem de PRs.
+app.get('/api/pull-requests/:id/files', authenticateToken, async (req, res) => {
+  try {
+    const prId = Number.parseInt(req.params.id, 10);
+    if (!Number.isInteger(prId)) return res.status(400).json({ error: 'Invalid pull request id' });
+
+    const rows = await sql`
+      SELECT path, change_type FROM pull_request_files
+      WHERE pull_request_id = ${prId}
+      ORDER BY path
+    `;
+    res.json(rows.map(r => ({ path: r.path, changeType: r.change_type })));
+  } catch (err) {
+    console.error('❌ Error in /api/pull-requests/:id/files:', err.message);
+    res.status(500).json({ error: 'Failed to fetch pull request files' });
   }
 });
 
@@ -3826,7 +4037,9 @@ function computeFlowTimes(rows) {
   const leadTimes = [];
   const cycleTimes = [];
   for (const r of rows) {
-    const closed = new Date(r.closed_date).getTime();
+    // effective_closed_date = primeira entrada em Finished/Resolved/Closed (ver comentário em /api/items);
+    // closed_date sozinho só entra quando não há esse histórico.
+    const closed = new Date(r.effective_closed_date || r.closed_date).getTime();
     const created = new Date(r.created_date).getTime();
     const activated = r.first_activation_date ? new Date(r.first_activation_date).getTime() : created;
     const lt = Math.ceil((closed - created) / 86400000);
@@ -3837,6 +4050,47 @@ function computeFlowTimes(rows) {
   leadTimes.sort((a, b) => a - b);
   cycleTimes.sort((a, b) => a - b);
   return { leadTimes, cycleTimes };
+}
+
+// "PRs abertos" = criadas no período; "tempo médio de atendimento" = média do tempo (fechamento - abertura)
+// das PRs concluídas (status completed) que fecharam no período. Mesma definição do gráfico "PRs Abertos vs
+// Tempo Médio de Atendimento" no frontend (PullRequestsDashboard.tsx, throughputTrend).
+function computeThroughputWeek(prRows, startStr, endStr) {
+  const start = new Date(startStr).getTime();
+  const end = new Date(endStr).getTime();
+  const opened = prRows.filter(pr => pr.created_date && new Date(pr.created_date).getTime() >= start && new Date(pr.created_date).getTime() < end).length;
+  const closedLifetimes = prRows
+    .filter(pr => pr.status === 'completed' && pr.created_date && pr.closed_date
+      && new Date(pr.closed_date).getTime() >= start && new Date(pr.closed_date).getTime() < end)
+    .map(pr => Math.round((new Date(pr.closed_date).getTime() - new Date(pr.created_date).getTime()) / 86400000));
+  const avgTimeToClose = closedLifetimes.length
+    ? Math.round((closedLifetimes.reduce((a, b) => a + b, 0) / closedLifetimes.length) * 10) / 10
+    : null;
+  return { opened, closedCount: closedLifetimes.length, avgTimeToClose };
+}
+
+// Texto calculado direto dos números (sem IA) — sempre aparece no e-mail, não depende de cota de IA.
+function buildThroughputAnalysisText(current, last) {
+  const openedDiff = current.opened - last.opened;
+  const openedTrend = openedDiff === 0
+    ? 'igual à semana passada'
+    : openedDiff > 0
+      ? `${openedDiff} a mais que a semana passada (${last.opened})`
+      : `${Math.abs(openedDiff)} a menos que a semana passada (${last.opened})`;
+
+  let timeSentence;
+  if (current.avgTimeToClose == null) {
+    timeSentence = 'Ainda não há PR concluída essa semana pra medir o tempo médio de atendimento.';
+  } else if (last.avgTimeToClose == null) {
+    timeSentence = `Tempo médio de atendimento (abertura até conclusão): ${current.avgTimeToClose} dias — sem PRs concluídas na semana passada pra comparar.`;
+  } else {
+    const diff = current.avgTimeToClose - last.avgTimeToClose;
+    const pct = last.avgTimeToClose > 0 ? Math.round(Math.abs(diff / last.avgTimeToClose) * 100) : 0;
+    const trendWord = diff < 0 ? `caiu ${pct}% ✅` : diff > 0 ? `subiu ${pct}% ⚠️` : 'ficou estável';
+    timeSentence = `Tempo médio de atendimento (abertura até conclusão): ${current.avgTimeToClose} dias, ${trendWord} em relação à semana passada (${last.avgTimeToClose} dias).`;
+  }
+
+  return `Essa semana (até agora) foram abertos ${current.opened} PRs — ${openedTrend} — e concluídos ${current.closedCount}. ${timeSentence}`;
 }
 
 // Agrega quem mais aprovou/votou em Pull Requests no período (linhas já filtradas por data pelo chamador).
@@ -3851,10 +4105,13 @@ function getReviewEngagementLeaderboard(prRows, knownDevNames) {
     let reviewers = [];
     try { reviewers = JSON.parse(row.reviewers || '[]'); } catch { /* ignora PR com reviewers inválido */ }
     for (const r of reviewers) {
-      if (r.isContainer || !r.name || !r.vote) continue;
-      if (!devSet.has(r.name.toLowerCase().trim())) continue;
-      if (!byName.has(r.name)) byName.set(r.name, { name: r.name, approvals: 0, totalVotes: 0 });
-      const entry = byName.get(r.name);
+      // PRs sincronizadas por uma versão antiga do código guardaram o reviewer bruto (campo "displayName"),
+      // não "name" — sem esse fallback, revisores reais de PRs antigas somem do ranking.
+      const name = r.name || r.displayName;
+      if (r.isContainer || !name || !r.vote) continue;
+      if (!devSet.has(name.toLowerCase().trim())) continue;
+      if (!byName.has(name)) byName.set(name, { name, approvals: 0, totalVotes: 0 });
+      const entry = byName.get(name);
       entry.totalVotes += 1;
       if (r.vote === 10 || r.vote === 5) entry.approvals += 1;
     }
@@ -3862,6 +4119,57 @@ function getReviewEngagementLeaderboard(prRows, knownDevNames) {
   return [...byName.values()]
     .sort((a, b) => b.approvals - a.approvals || b.totalVotes - a.totalVotes)
     .slice(0, 5);
+}
+
+// getDailyReviewRanking: ver backend/services/reviewRanking.js (comentário e check ficam lá).
+
+// Mesma agregação de getReviewEngagementLeaderboard, mas por time em vez de por pessoa — usa o mapeamento
+// dev→time (buildDevTeamMap) já existente pro gráfico de engajamento por time do frontend.
+function getReviewEngagementByTeam(prRows, knownDevNames, devTeamMap) {
+  const devSet = new Set((knownDevNames || []).map(n => n.toLowerCase().trim()));
+  const byTeam = new Map();
+  for (const row of prRows) {
+    let reviewers = [];
+    try { reviewers = JSON.parse(row.reviewers || '[]'); } catch { /* ignora PR com reviewers inválido */ }
+    for (const r of reviewers) {
+      const name = r.name || r.displayName;
+      if (r.isContainer || !name || !r.vote) continue;
+      const nameKey = name.toLowerCase().trim();
+      if (!devSet.has(nameKey)) continue;
+      const team = devTeamMap.get(nameKey);
+      if (!team) continue;
+      if (!byTeam.has(team)) byTeam.set(team, { team, approvals: 0, totalVotes: 0, reviewers: new Set() });
+      const entry = byTeam.get(team);
+      entry.totalVotes += 1;
+      entry.reviewers.add(name);
+      if (r.vote === 10 || r.vote === 5) entry.approvals += 1;
+    }
+  }
+  return [...byTeam.values()]
+    .map(e => ({ team: e.team, approvals: e.approvals, totalVotes: e.totalVotes, activeReviewers: e.reviewers.size }))
+    .sort((a, b) => b.approvals - a.approvals || b.totalVotes - a.totalVotes);
+}
+
+// Mapeia cada "Desenvolvedor" (work_items.dev) para o time em que mais aparece (work_items.team) — usado
+// pra atribuir um time a um revisor de PR que também é dev conhecido. Reviewer que nunca aparece como dev
+// em nenhum work item (ex: QA que só revisa) fica sem time.
+async function buildDevTeamMap() {
+  const rows = await sql`
+    SELECT dev, team, COUNT(*) as cnt
+    FROM work_items
+    WHERE dev IS NOT NULL AND dev != '' AND team IS NOT NULL AND team != ''
+    GROUP BY dev, team
+  `;
+  const best = new Map();
+  for (const r of rows) {
+    const key = r.dev.toLowerCase().trim();
+    const cnt = Number(r.cnt);
+    const existing = best.get(key);
+    if (!existing || cnt > existing.cnt) best.set(key, { team: r.team, cnt });
+  }
+  const map = new Map();
+  for (const [key, v] of best) map.set(key, v.team);
+  return map;
 }
 
 // Visão geral da operação para admins: impedimentos mais antigos (mesma regra da tela "Impedimentos" —
@@ -3874,7 +4182,28 @@ async function runAdminOverviewDigest(overrideRecipients) {
 
   const sevenDaysAgoStr = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
-  const [impedimentRows, newImpedimentRows, externalBlockRows, inProgressRows, deliveredRows, bugRows, closedItemRows, reviewedPrRows, devNameRows] = await Promise.all([
+  // Seção de impedimentos/bloqueios resolvidos: dia anterior nos dias normais, semana toda quando o resumo
+  // diário cai numa sexta-feira (TZ já configurado como America/Sao_Paulo no .env, getDay() reflete isso).
+  const now = new Date();
+  const isFriday = now.getDay() === 5;
+  const startOfDay = d => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+  const todayStart = startOfDay(now);
+  const yesterdayStart = new Date(todayStart.getTime() - 24 * 60 * 60 * 1000);
+  const resolvedWindowStartStr = isFriday ? sevenDaysAgoStr : yesterdayStart.toISOString();
+  const resolvedWindowEndStr = now.toISOString();
+  const resolvedImpedimentsPeriodLabel = isFriday ? 'últimos 7 dias' : 'dia anterior';
+
+  // "PRs Abertos vs Tempo Médio de Atendimento" (semanal) — mesma definição de semana (segunda a segunda)
+  // usada no relatório semanal por time (runWeeklyTeamReport).
+  const dayOfWeek = now.getDay();
+  const daysSinceMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+  const thisMonday = new Date(todayStart.getTime() - daysSinceMonday * 24 * 60 * 60 * 1000);
+  const lastMonday = new Date(thisMonday.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const thisMondayStr = thisMonday.toISOString();
+  const lastMondayStr = lastMonday.toISOString();
+  const nowStr = now.toISOString();
+
+  const [impedimentRows, newImpedimentRows, externalBlockRows, inProgressRows, deliveredRows, bugRows, closedItemRows, reviewedPrRows, devNameRows, resolvedImpedimentRows, devTeamMap, prThroughputRows] = await Promise.all([
     sql`
       SELECT work_item_id, title, team, assigned_to,
         GREATEST(0, EXTRACT(DAY FROM NOW() - COALESCE(changed_date, created_date)::timestamp))::int AS days_stopped,
@@ -3925,9 +4254,9 @@ async function runAdminOverviewDigest(overrideRecipients) {
     // Mesma fórmula de fallback usada em frontend/src/hooks/useAzureDevOpsData.ts, com first_activation_date
     // como início do cycle time (tempo realmente em andamento) em vez de created_date (tempo total, isso é lead time).
     sql`
-      SELECT created_date, first_activation_date, closed_date FROM work_items
+      SELECT created_date, first_activation_date, closed_date, effective_closed_date FROM work_items
       WHERE state IN ('Done','Concluído','Closed','Fechado','Finished','Resolved','Pronto')
-        AND closed_date IS NOT NULL AND created_date IS NOT NULL
+        AND (closed_date IS NOT NULL OR effective_closed_date IS NOT NULL) AND created_date IS NOT NULL
         AND changed_date >= ${sevenDaysAgoStr}
     `,
     // PRs ativas ou fechadas nos últimos 7 dias, pra ranking de engajamento em code review.
@@ -3938,6 +4267,22 @@ async function runAdminOverviewDigest(overrideRecipients) {
     // Nomes já usados no campo "Desenvolvedor" (Custom.DEV) de alguma tarefa — mesma fonte usada no resto do
     // app pra identificar quem é dev, pra filtrar QAs/outros revisores fora do ranking de engajamento.
     sql`SELECT DISTINCT dev FROM work_items WHERE dev IS NOT NULL AND dev != ''`,
+    // Impedimentos/bloqueios resolvidos: dia anterior (ou semana toda na sexta) — ver impediment_resolutions,
+    // populada na sync.
+    sql`
+      SELECT work_item_id, team, title, kind, resolved_at
+      FROM impediment_resolutions
+      WHERE resolved_at >= ${resolvedWindowStartStr} AND resolved_at < ${resolvedWindowEndStr}
+      ORDER BY resolved_at DESC
+    `,
+    buildDevTeamMap(),
+    // PRs relevantes pra semana atual e a semana passada completa, pra análise "PRs Abertos vs Tempo Médio
+    // de Atendimento" — mesma métrica do gráfico homônimo no frontend (PullRequestsDashboard.tsx).
+    sql`
+      SELECT status, created_date, closed_date
+      FROM pull_requests
+      WHERE created_date >= ${lastMondayStr} OR closed_date >= ${lastMondayStr}
+    `,
   ]);
 
   const teamMap = new Map();
@@ -3957,6 +4302,11 @@ async function runAdminOverviewDigest(overrideRecipients) {
   const totalImpediments = impedimentRows[0]?.total_count ? Number(impedimentRows[0].total_count) : 0;
   const newImpediments = newImpedimentRows.map(r => ({ ...r, days_stopped: Number(r.days_stopped) }));
   const externalBlocks = externalBlockRows;
+  const resolvedImpediments = resolvedImpedimentRows;
+
+  const currentWeekThroughput = computeThroughputWeek(prThroughputRows, thisMondayStr, nowStr);
+  const lastWeekThroughput = computeThroughputWeek(prThroughputRows, lastMondayStr, thisMondayStr);
+  const throughputAnalysisText = buildThroughputAnalysisText(currentWeekThroughput, lastWeekThroughput);
 
   const { leadTimes, cycleTimes } = computeFlowTimes(closedItemRows);
 
@@ -3972,18 +4322,20 @@ async function runAdminOverviewDigest(overrideRecipients) {
   if (!teamSummaries.length && !impediments.length) return;
 
   const engagementLeaderboard = getReviewEngagementLeaderboard(reviewedPrRows, devNameRows.map(r => r.dev));
+  const teamEngagement = getReviewEngagementByTeam(reviewedPrRows, devNameRows.map(r => r.dev), devTeamMap);
 
   const insight = await generateWeeklyInsight({
     impedimentos_total: totalImpediments,
     impedimentos_mais_antigos: impediments.slice(0, 5).map(i => ({ titulo: i.title, time: i.team, dias_parado: i.days_stopped })),
     impedimentos_novos_semana: newImpediments.map(i => ({ titulo: i.title, time: i.team, dias_parado: i.days_stopped })),
     tarefas_bloqueio_externo: externalBlocks.map(i => ({ titulo: i.title, time: i.team })),
+    impedimentos_bloqueios_resolvidos_semana: resolvedImpediments.map(i => ({ titulo: i.title, time: i.team, tipo: i.kind })),
     times: teamSummaries,
     fluxo_semanal: flowMetrics,
     ranking_engajamento_code_review: engagementLeaderboard,
   }).catch(err => { console.error('❌ generateWeeklyInsight error:', err.message); return null; });
 
-  const { subject, html } = emailService.adminOverviewDigestEmail({ impediments, totalImpediments, newImpediments, externalBlocks, teamSummaries, flowMetrics, insight, engagementLeaderboard });
+  const { subject, html } = emailService.adminOverviewDigestEmail({ impediments, totalImpediments, newImpediments, externalBlocks, resolvedImpediments, resolvedImpedimentsPeriodLabel, teamSummaries, flowMetrics, insight, engagementLeaderboard, teamEngagement, throughputAnalysisText });
   for (const to of admins) {
     await emailService.sendEmail({ to, subject, html, log: { sql, type: 'admin_overview_digest' } });
   }
@@ -4091,14 +4443,14 @@ async function runWeeklyTeamReport(overrideRecipients) {
   const closedWeekLabel = `Semana fechada: ${fmt(lastMonday)} a ${fmt(lastSunday)}`;
   const currentWeekLabel = `Semana atual: ${fmt(thisMonday)} em andamento`;
 
-  const [closedRows, currentRows, last3WeeksRows, openRows, impedimentRows, awaitingVersionRows] = await Promise.all([
+  const [closedRows, currentRows, last3WeeksRows, openRows, impedimentRows, awaitingVersionRows, resolvedImpedimentRows] = await Promise.all([
     sql`
-      SELECT team, type, closed_date, created_date, first_activation_date, reincidencia
+      SELECT team, type, closed_date, effective_closed_date, created_date, first_activation_date, reincidencia
       FROM work_items
       WHERE team IS NOT NULL AND team != ''
         AND type IN ('User Story','Issue','Bug','Eventuality')
         AND state IN ('Done','Concluído','Closed','Fechado','Finished','Resolved','Pronto')
-        AND closed_date >= ${closedStartStr} AND closed_date <= ${closedEndStr}
+        AND COALESCE(effective_closed_date, closed_date) >= ${closedStartStr} AND COALESCE(effective_closed_date, closed_date) <= ${closedEndStr}
     `,
     sql`
       SELECT team, type
@@ -4106,7 +4458,7 @@ async function runWeeklyTeamReport(overrideRecipients) {
       WHERE team IS NOT NULL AND team != ''
         AND type IN ('User Story','Issue','Bug','Eventuality')
         AND state IN ('Done','Concluído','Closed','Fechado','Finished','Resolved','Pronto')
-        AND closed_date >= ${currentStartStr} AND closed_date <= ${nowStr}
+        AND COALESCE(effective_closed_date, closed_date) >= ${currentStartStr} AND COALESCE(effective_closed_date, closed_date) <= ${nowStr}
     `,
     // Últimas 3 semanas cheias antes da atual — usado como base da projeção quando a semana atual
     // ainda não tem nenhuma entrega (ver `projected` abaixo).
@@ -4115,7 +4467,7 @@ async function runWeeklyTeamReport(overrideRecipients) {
       WHERE team IS NOT NULL AND team != ''
         AND type IN ('User Story','Issue','Bug','Eventuality')
         AND state IN ('Done','Concluído','Closed','Fechado','Finished','Resolved','Pronto')
-        AND closed_date >= ${threeWeeksAgoStr} AND closed_date < ${currentStartStr}
+        AND COALESCE(effective_closed_date, closed_date) >= ${threeWeeksAgoStr} AND COALESCE(effective_closed_date, closed_date) < ${currentStartStr}
       GROUP BY team
     `,
     sql`
@@ -4142,6 +4494,12 @@ async function runWeeklyTeamReport(overrideRecipients) {
         AND closed_date >= ${closedStartStr} AND closed_date <= ${nowStr}
       GROUP BY team
     `,
+    // Impedimentos/bloqueios resolvidos na semana do relatório (ver impediment_resolutions, populada na sync).
+    sql`
+      SELECT team, kind, COUNT(*) AS count FROM impediment_resolutions
+      WHERE resolved_at >= ${closedStartStr} AND resolved_at <= ${nowStr}
+      GROUP BY team, kind
+    `,
   ]);
 
   const teamNames = Object.keys(REPORT_TEAMS);
@@ -4150,6 +4508,8 @@ async function runWeeklyTeamReport(overrideRecipients) {
   const impedimentsByTeam = new Map(impedimentRows.map(r => [r.team, Number(r.count)]));
   const awaitingVersionByTeam = new Map(awaitingVersionRows.map(r => [r.team, Number(r.count)]));
   const last3WeeksAvgByTeam = new Map(last3WeeksRows.map(r => [r.team, Math.round((Number(r.count) / 3) * 10) / 10]));
+  const resolvedImpedimentsByTeam = new Map(resolvedImpedimentRows.filter(r => r.kind === 'impedimento').map(r => [r.team, Number(r.count)]));
+  const resolvedBlocksByTeam = new Map(resolvedImpedimentRows.filter(r => r.kind === 'bloqueio').map(r => [r.team, Number(r.count)]));
 
   // WIP + gargalo (idade média no estado atual, só itens em aberto)
   // ponytail: item sem toque há >6 meses é órfão/esquecido, mesmo estando num estado que é coluna válida
@@ -4232,6 +4592,8 @@ async function runWeeklyTeamReport(overrideRecipients) {
       wip: wipByTeam.get(team) || 0,
       impediments: impedimentsByTeam.get(team) || 0,
       awaitingVersion: awaitingVersionByTeam.get(team) || 0,
+      resolvedImpediments: resolvedImpedimentsByTeam.get(team) || 0,
+      resolvedBlocks: resolvedBlocksByTeam.get(team) || 0,
       reworkPct,
       bottleneck,
     });
@@ -4248,6 +4610,8 @@ async function runWeeklyTeamReport(overrideRecipients) {
       semana_atual: t.currentWeek,
       wip: t.wip,
       impedimentos_ativos: t.impediments,
+      impedimentos_resolvidos_semana: t.resolvedImpediments,
+      bloqueios_resolvidos_semana: t.resolvedBlocks,
       aguardando_versao: t.awaitingVersion,
       retrabalho_pct: t.reworkPct,
       gargalo: t.bottleneck,
@@ -4266,7 +4630,8 @@ async function runWeeklyTeamReport(overrideRecipients) {
     semana_fechada: closedWeekLabel,
     times: teams.map(t => ({
       time: t.team, entregas_semana_fechada: t.closedWeek.count, entregas_semana_atual: t.currentWeek.count,
-      wip: t.wip, impedimentos: t.impediments, aguardando_versao: t.awaitingVersion, retrabalho_pct: t.reworkPct, gargalo: t.bottleneck,
+      wip: t.wip, impedimentos: t.impediments, impedimentos_resolvidos_semana: t.resolvedImpediments,
+      bloqueios_resolvidos_semana: t.resolvedBlocks, aguardando_versao: t.awaitingVersion, retrabalho_pct: t.reworkPct, gargalo: t.bottleneck,
     })),
   });
 
@@ -4418,7 +4783,7 @@ async function runPrReviewAlert() {
   if (!webhookLevel1 && !webhookLevel2) return;
 
   const rows = await sql`
-    SELECT work_item_id, title, url, dev, assigned_to, code_review_level1, code_review_level2, linked_pr_votes
+    SELECT work_item_id, title, url, dev, assigned_to, code_review_level1, code_review_level2, linked_pr_votes, changed_date
     FROM work_items
     WHERE LOWER(state) = ANY(${PR_REVIEW_ELIGIBLE_STATES})
       AND linked_pr_votes IS NOT NULL
@@ -4473,12 +4838,18 @@ async function runPrReviewAlert() {
     missingLevel2 = [...missingLevel2.filter(r => !promotedIds.has(r.work_item_id)), ...promoted];
   }
 
-  // Quem o grupo obrigatório "Code Review" já aprovou não precisa mais aparecer no Nível 2 — o objetivo
-  // dessa mensagem é justamente cobrar essa aprovação; uma vez que ela existe, manter a tarefa na lista só
-  // polui o chat com algo que já foi resolvido.
-  missingLevel2 = missingLevel2.filter(r => (getRequiredCodeReviewVote(r.rawVotes) ?? 0) <= 0);
+  // Quem o grupo obrigatório "Code Review" já aprovou não precisa mais aparecer em NENHUM nível — o objetivo
+  // desse alerta é cobrar essa aprovação; uma vez que ela existe (voto real da PR, visto direto no sync),
+  // manter a tarefa na lista só polui o chat com algo já resolvido. Isso vale mesmo pra quem ficou preso no
+  // Nível 1 por ninguém ter preenchido o campo manual "CR Nível 1" e por ter comentários (o que bloqueia a
+  // regra de promoção automática acima, que só promove aprovação SEM nenhum comentário) — caso real: PR já
+  // aprovada pelo grupo obrigatório + por um revisor opcional, com 6 comentários de discussão normal, ficava
+  // presa no Nível 1 pra sempre.
+  const alreadyApprovedByRequiredGroup = r => (getRequiredCodeReviewVote(r.rawVotes) ?? 0) > 0;
+  missingLevel1 = missingLevel1.filter(r => !alreadyApprovedByRequiredGroup(r));
+  missingLevel2 = missingLevel2.filter(r => !alreadyApprovedByRequiredGroup(r));
 
-  async function sendGroup(items, webhookUrl, header, logType) {
+  async function sendGroup(items, webhookUrl, header, logType, showStuckWarning) {
     if (!webhookUrl || !items.length) return;
 
     let titles = items.map(i => i.title || 'sem título');
@@ -4497,7 +4868,13 @@ async function runPrReviewAlert() {
     // Cada bloco carrega o rótulo da seção atual — usado pra repetir contexto se a mensagem for dividida.
     const sectionBuckets = new Map(PR_SECTION_ORDER.map(key => [key, []]));
     items.forEach((item, idx) => {
-      const itemBlock = formatPrReviewLine(itemLineTemplate, item, titles[idx]);
+      let itemBlock = formatPrReviewLine(itemLineTemplate, item, titles[idx]);
+      // Só no Nível 1: reforça que ninguém pegou pra revisar ainda (Nível 2 já teve o primeiro revisor,
+      // então "parada sem code review" não se aplica mais do mesmo jeito).
+      if (showStuckWarning && item.changed_date) {
+        const daysStuck = Math.floor((Date.now() - new Date(item.changed_date).getTime()) / 86400000);
+        itemBlock += `\n⚠️ Essa tarefa está há ${daysStuck} dia(s) parada sem code review!`;
+      }
       sectionBuckets.get(classifyPrItem(item)).push(itemBlock);
     });
 
@@ -4567,7 +4944,7 @@ async function runPrReviewAlert() {
     }
   }
 
-  await sendGroup(missingLevel1, webhookLevel1, header1 || DEFAULT_HEADER_LEVEL1, 'teams_pr_review_level1');
+  await sendGroup(missingLevel1, webhookLevel1, header1 || DEFAULT_HEADER_LEVEL1, 'teams_pr_review_level1', true);
   await sendGroup(missingLevel2, webhookLevel2, header2 || DEFAULT_HEADER_LEVEL2, 'teams_pr_review_level2');
   
   // Atualizar last_alerted_state de todos os itens alertados (para coordenar com alertas imediatos)
@@ -4579,10 +4956,129 @@ async function runPrReviewAlert() {
   }
 }
 
+// Ranking diário de code review — extra, não mexe no alerta de Nível 1/2 acima. Manda 1x/dia, pros webhooks
+// Nível 1 e Nível 2 (os que estiverem configurados), quem mais revisou PR no "dia anterior útil" (sexta
+// quando hoje é segunda, senão ontem — domingo normalmente não tem revisão nenhuma, mandar ranking vazio
+// toda segunda pareceria feature quebrada).
+// Ranking diário de quem fez um nível específico de code review, usando work_items.code_review_level1/
+// code_review_level2 direto — texto com o nome de quem fez aquele nível (mesmo campo que runPrReviewAlert
+// já usa pra separar Nível 1 de Nível 2, ver baseIsLevel1/baseIsLevel2 mais acima). Diferente do ranking
+// geral por PR (getDailyReviewRanking): aquele conta qualquer presença como revisor da PR, sem distinguir
+// nível — esse aqui só conta quem está de fato registrado como tendo feito ESSE nível na tarefa.
+function getDailyLevelReviewRanking(workItemRows, levelField) {
+  const byName = new Map();
+  for (const row of workItemRows) {
+    const name = (row[levelField] || '').trim();
+    if (!name) continue;
+    byName.set(name, (byName.get(name) || 0) + 1);
+  }
+  return [...byName.entries()]
+    .map(([name, total]) => ({ name, total }))
+    .sort((a, b) => b.total - a.total);
+}
+
+async function runPrReviewRankingAlert(config) {
+  if (!config.webhookLevel1 && !config.webhookLevel2) return;
+
+  const now = new Date();
+  const startOfDay = d => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+  const todayStart = startOfDay(now);
+  // Segunda-feira (getDay()===1) olha pra sexta (3 dias atrás); qualquer outro dia, olha pro dia anterior.
+  const daysBack = now.getDay() === 1 ? 3 : 1;
+  const windowStart = new Date(todayStart.getTime() - daysBack * 24 * 60 * 60 * 1000);
+  const windowStartStr = windowStart.toISOString();
+  const windowEndStr = todayStart.toISOString();
+  const windowLabel = `${String(windowStart.getDate()).padStart(2, '0')}/${String(windowStart.getMonth() + 1).padStart(2, '0')}`;
+
+  // Mostra todo mundo que revisou, não só o topo (a ideia é transparência, incluindo quem revisou pouco —
+  // sem virar quadro de constrangimento). Por isso: medalha só pro top 3, e do 4º em diante um marcador
+  // neutro sem número de posição — deixa claro que dali pra baixo é lista informativa, não colocação.
+  const MEDALS = ['🥇', '🥈', '🥉'];
+  const buildBlocks = (title, ranking, describeCount) => {
+    const lines = ranking.map((r, idx) => `${MEDALS[idx] || '▫️'} ${r.name} — ${describeCount(r)}`);
+    const top3Names = ranking.slice(0, 3).map(r => r.name);
+    const congrats = top3Names.length === 1
+      ? `🎉 Parabéns, ${top3Names[0]}, pelo destaque em code review em ${windowLabel}!`
+      : `🎉 Parabéns a ${top3Names.slice(0, -1).join(', ')} e ${top3Names[top3Names.length - 1]} pelo destaque em code review em ${windowLabel}!`;
+    const thanks = `👏 Valeu a todos que revisaram código em ${windowLabel}!`;
+    return [`🏆 **${title} — ${windowLabel}:**`, lines.join('\n'), congrats, thanks];
+  };
+
+  // explicacao: texto opcional sobre como aquele ranking é calculado, mostrado depois da assinatura
+  // "Notificação Automática de ..." — resolve de cara quem desconfiar de um nome na lista.
+  const sendRanking = async (webhookUrl, blocks, count, explicacao) => {
+    const footer = explicacao ? `${TEAMS_FOOTER}\n\n${explicacao}` : TEAMS_FOOTER;
+    const result = await sendTeamsMessage(webhookUrl, blocks, footer);
+    if (result?.success) {
+      await sql`
+        INSERT INTO notification_log (type, recipient_email, related_key)
+        VALUES ('teams_pr_review_ranking', 'Teams - Ranking', ${String(count)})
+      `.catch(err => console.error('❌ notification_log insert failed:', err.message));
+    } else {
+      console.error('❌ runPrReviewRankingAlert: falha ao enviar pro Teams', result);
+    }
+  };
+
+  // Nível 1: ranking geral de quem mais revisou PR (qualquer voto, qualquer nível), pela data real do voto
+  // (pr_vote_events — ver services/reviewRanking.js e services/prVoteEvents.js). Antes usava a data de
+  // criação/fechamento da PR inteira: revisor adicionado automaticamente sem votar contava como se tivesse
+  // revisado, e quem votava numa PR que demorava a fechar nunca aparecia em ranking nenhum.
+  if (config.webhookLevel1) {
+    const [voteEventRows, devNameRows] = await Promise.all([
+      sql`
+        SELECT pull_request_id, reviewer_name, vote, voted_at FROM pr_vote_events
+        WHERE voted_at >= ${windowStartStr} AND voted_at < ${windowEndStr}
+      `,
+      sql`SELECT DISTINCT dev FROM work_items WHERE dev IS NOT NULL AND dev != ''`,
+    ]);
+    const ranking = getDailyReviewRanking(voteEventRows, devNameRows.map(r => r.dev));
+    if (ranking.length === 0) {
+      console.log(`🏆 Ranking de code review (Nível 1): sem revisões em ${windowLabel}, nada a enviar.`);
+    } else {
+      const blocks = buildBlocks('RANKING DE CODE REVIEW', ranking, r => {
+        const revisaoWord = r.total === 1 ? 'revisão' : 'revisões';
+        const aprovadaWord = r.approved === 1 ? 'aprovada' : 'aprovadas';
+        return `${r.total} ${revisaoWord}${r.approved > 0 ? ` (${r.approved} ${aprovadaWord})` : ''}`;
+      });
+      const explicacao = 'ℹ️ Como é calculado: conta cada PR em que a pessoa registrou um voto dentro do período '
+        + '(aprovado, com ressalva, aguardando autor, rejeitado ou revogado), pela data real do voto — não pela '
+        + 'data de criação/fechamento da PR. Por isso revisão numa PR que demora a fechar também entra, no dia '
+        + 'certo. Quem nunca votou (só foi adicionado como revisor) não entra.';
+      await sendRanking(config.webhookLevel1, blocks, ranking.length, explicacao);
+    }
+  }
+
+  // Nível 2: só tarefas que passaram pelo Nível 2 de verdade (work_items.code_review_level2 preenchido),
+  // pela data real em que o campo foi preenchido (code_review_level2_set_at — ver
+  // services/codeReviewLevelDates.js). Antes usava changed_date da tarefa inteira: uma edição em lote
+  // (confirmada em 121 tarefas com a mesma changed_date, até o milissegundo) inflava/deslocava o dia do
+  // ranking sem relação com quando a revisão realmente aconteceu.
+  if (config.webhookLevel2) {
+    const level2Rows = await sql`
+      SELECT code_review_level2 FROM work_items
+      WHERE code_review_level2 IS NOT NULL AND code_review_level2 != ''
+        AND code_review_level2_set_at >= ${windowStartStr} AND code_review_level2_set_at < ${windowEndStr}
+    `;
+    const ranking = getDailyLevelReviewRanking(level2Rows, 'code_review_level2');
+    if (ranking.length === 0) {
+      console.log(`🏆 Ranking de code review (Nível 2): sem tarefas com Nível 2 concluído em ${windowLabel}, nada a enviar.`);
+    } else {
+      const blocks = buildBlocks('RANKING DE CODE REVIEW — NÍVEL 2', ranking, r => `${r.total} ${r.total === 1 ? 'revisão' : 'revisões'} de Nível 2`);
+      const explicacao = 'ℹ️ Como é calculado: conta tarefas em que o campo de Code Review Nível 2 foi '
+        + 'preenchido no período, por pessoa — pela data real em que o campo mudou, não pela última edição '
+        + 'da tarefa (uma edição em lote de outro campo não conta como revisão).';
+      await sendRanking(config.webhookLevel2, blocks, ranking.length, explicacao);
+    }
+  }
+}
+
 // Agendador leve: a cada 5 minutos, confere se o horário atual bate com algum horário configurado
 // em teams_pr_review_config.schedule (ex: ["09:00","13:00","17:00"]). Controle em memória evita disparo
 // duplicado no mesmo slot — reseta ao reiniciar o processo, o que não é crítico aqui.
 let lastPrReviewAlertSlot = null;
+// Trava por DIA (não por slot) do ranking — schedule pode ter vários horários (ex: 08:30 e 16:30) e o
+// ranking só deve sair uma vez, no primeiro que disparar no dia.
+let lastRankingSentDate = null;
 async function checkTeamsPrReviewSchedule() {
   const configRows = await sql`SELECT value FROM app_settings WHERE key = 'teams_pr_review_config'`;
   if (!configRows.length) return;
@@ -4610,6 +5106,17 @@ async function checkTeamsPrReviewSchedule() {
 
   console.log(`📣 Running Teams PR review alert (slot ${currentSlot})...`);
   await runPrReviewAlert();
+
+  // Ranking diário de code review: extra, roda só 1x/dia, junto do primeiro horário configurado que
+  // disparar no dia (hoje é o slot das 08:30) — não depende de qual slot é, só de já não ter rodado hoje.
+  // "!== false" (não "=== true") é proposital: config antiga salva sem esse campo ainda fica ativa por
+  // padrão, sem precisar abrir a tela de Configurações e salvar de novo.
+  const todayStr = now.toISOString().slice(0, 10);
+  if (config.rankingEnabled !== false && lastRankingSentDate !== todayStr) {
+    lastRankingSentDate = todayStr;
+    console.log(`🏆 Running Teams PR review ranking (slot ${currentSlot})...`);
+    await runPrReviewRankingAlert(config).catch(e => console.error('❌ PR review ranking error (non-fatal):', e.message));
+  }
 }
 
 schedule.scheduleJob('*/5 * * * *', () => {
@@ -4677,10 +5184,10 @@ async function checkAndSendImmediateAlerts(workItemIds) {
     } else if (baseIsLevel1) {
       currentLevel = 'level1';
     } else if (baseIsLevel2) {
-      // Verificar se grupo obrigatório "Code Review" já aprovou
-      const codeReviewVote = rawVotes.find(v => v.isRequired && v.name && v.name.includes('Code Review'));
-      const hasCodeReviewApproval = codeReviewVote && codeReviewVote.vote > 0;
-      if (!hasCodeReviewApproval) {
+      // Mesmo helper usado no alerta agendado (getRequiredCodeReviewVote, definida mais abaixo no arquivo
+      // mas hoisted) — evita divergir do critério real: nome do grupo bate por regex case-insensitive,
+      // não substring exata (uma comparação exata aqui já deixou passar aprovação por causa da caixa).
+      if ((getRequiredCodeReviewVote(rawVotes) ?? 0) <= 0) {
         currentLevel = 'level2';
       }
     }
