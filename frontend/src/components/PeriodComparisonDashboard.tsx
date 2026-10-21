@@ -1,8 +1,85 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { WorkItem } from '../types';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, Cell } from 'recharts';
 import { startOfMonth, endOfMonth, subMonths, isWithinInterval, parseISO, format, subDays, startOfWeek, endOfWeek } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { exportItemsXlsx, getWorkItemColumns } from '../utils/exportXlsx';
+
+const AZURE_DEVOPS_BASE_URL = 'https://dev.azure.com/datasystemsoftwares/USE/_workitems/edit';
+
+interface ModalData {
+  title: string;
+  items: WorkItem[];
+  color: string;
+}
+
+// Mesmo padrão de modal de lista de tarefas já usado em outras abas (ex: TeamComparisonDashboard).
+const ItemListModal: React.FC<{ data: ModalData | null; onClose: () => void }> = ({ data, onClose }) => {
+  if (!data) return null;
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50" onClick={onClose}>
+      <div
+        className="bg-ds-navy border border-ds-border rounded-xl shadow-2xl max-w-4xl w-full mx-4 max-h-[85vh] flex flex-col"
+        onClick={e => e.stopPropagation()}
+      >
+        <div
+          className="p-4 rounded-t-xl flex justify-between items-center"
+          style={{ backgroundColor: data.color + '33', borderBottom: `1px solid ${data.color}40` }}
+        >
+          <h2 className="text-white font-bold text-base">{data.title}</h2>
+          <button onClick={onClose} className="text-white hover:text-gray-200 text-2xl font-bold leading-none">×</button>
+        </div>
+
+        <div className="p-4 overflow-y-auto flex-1">
+          <p className="text-ds-text text-sm mb-3">
+            Total: <span className="font-bold text-white">{data.items.length}</span> {data.items.length === 1 ? 'item' : 'itens'}
+          </p>
+          {data.items.length === 0 ? (
+            <div className="text-ds-text text-center py-8">Nenhum item encontrado</div>
+          ) : (
+            <ul className="space-y-2">
+              {data.items.map((item, idx) => (
+                <li
+                  key={item.workItemId || idx}
+                  className="bg-ds-dark-blue border border-ds-border rounded-lg p-3 hover:border-ds-green transition-colors"
+                >
+                  <div className="flex items-start gap-3">
+                    <span className="text-xs font-mono px-2 py-1 rounded shrink-0 text-white" style={{ backgroundColor: data.color + '44' }}>
+                      #{item.workItemId}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <a
+                        href={`${AZURE_DEVOPS_BASE_URL}/${item.workItemId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-white hover:text-ds-green font-medium block truncate mb-1"
+                        title={item.title}
+                      >
+                        {item.title}
+                      </a>
+                      <div className="grid grid-cols-2 gap-1 text-xs text-ds-text">
+                        <div>🏷️ {item.type}</div>
+                        <div>📊 {item.state}</div>
+                        {item.team ? <div>👥 {item.team}</div> : null}
+                        {item.storyPoints ? <div>⚡ {item.storyPoints} SP</div> : null}
+                      </div>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div className="p-4 border-t border-ds-border">
+          <button onClick={onClose} className="w-full bg-ds-border hover:bg-ds-green text-white py-2 px-4 rounded-lg transition-colors text-sm">
+            Fechar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 interface Props {
   data: WorkItem[];
@@ -29,6 +106,8 @@ interface PeriodMetrics {
 }
 
 const COMPLETED_STATES = ['Closed', 'Resolved', 'Done', 'Removed'];
+const COLOR_A = '#FF9800'; // Laranja para período A
+const COLOR_B = '#00B8A9'; // Verde para período B
 
 // Helper para normalizar prioridade
 const normalizePriority = (priority: any): number => {
@@ -74,110 +153,82 @@ const calculatePeriodDates = (config: PeriodConfig): { start: Date; end: Date } 
   }
 };
 
+const inRange = (dateValue: string | Date | null | undefined, start: Date, end: Date): boolean => {
+  if (!dateValue) return false;
+  try {
+    const d = typeof dateValue === 'string' ? parseISO(dateValue) : new Date(dateValue);
+    return isWithinInterval(d, { start, end });
+  } catch {
+    return false;
+  }
+};
+
+// Um filtro nomeado por métrica — única fonte de verdade, usada tanto para contar (calculateMetrics)
+// quanto para listar as tarefas quando o usuário clica num card/barra (evita duas lógicas divergindo).
+const filterIssuesCriadas = (data: WorkItem[], start: Date, end: Date) =>
+  data.filter(w => w.type === 'Issue' && inRange(w.createdDate, start, end));
+
+const filterIssuesFechadas = (data: WorkItem[], start: Date, end: Date) =>
+  data.filter(w => w.type === 'Issue' && COMPLETED_STATES.includes(w.state) && inRange(w.closedDate, start, end));
+
+const filterBugsCriados = (data: WorkItem[], start: Date, end: Date) =>
+  data.filter(w => w.type === 'Bug' && inRange(w.createdDate, start, end));
+
+const filterBugsFechados = (data: WorkItem[], start: Date, end: Date) =>
+  data.filter(w => w.type === 'Bug' && COMPLETED_STATES.includes(w.state) && inRange(w.closedDate, start, end));
+
+const filterIssuesCorrecaoCriadas = (data: WorkItem[], start: Date, end: Date) =>
+  data.filter(w => w.type === 'Issue' && w.customType === 'Correção' && inRange(w.createdDate, start, end));
+
+const filterIssuesCorrecaoFechadas = (data: WorkItem[], start: Date, end: Date) =>
+  data.filter(w => w.type === 'Issue' && COMPLETED_STATES.includes(w.state) && w.customType === 'Correção' && inRange(w.closedDate, start, end));
+
+const filterIssuesP0 = (data: WorkItem[], start: Date, end: Date) =>
+  filterIssuesCorrecaoFechadas(data, start, end).filter(w => normalizePriority(w.priority) === 0);
+
+const filterIssuesSemCausaRaiz = (data: WorkItem[], start: Date, end: Date) =>
+  filterIssuesCorrecaoFechadas(data, start, end).filter(w => !w.causaRaiz || w.causaRaiz.trim() === '');
+
+const filterThroughput = (data: WorkItem[], start: Date, end: Date) =>
+  data.filter(w => COMPLETED_STATES.includes(w.state) && inRange(w.closedDate, start, end));
+
+type MetricKey = 'issuesCriadas' | 'issuesFechadas' | 'bugsCriados' | 'bugsFechados' | 'issuesCorrecaoCriadas' | 'issuesCorrecaoFechadas' | 'issuesP0' | 'issuesSemCausaRaiz' | 'throughput';
+
+const METRIC_FILTER_FNS: Record<MetricKey, (data: WorkItem[], start: Date, end: Date) => WorkItem[]> = {
+  issuesCriadas: filterIssuesCriadas,
+  issuesFechadas: filterIssuesFechadas,
+  bugsCriados: filterBugsCriados,
+  bugsFechados: filterBugsFechados,
+  issuesCorrecaoCriadas: filterIssuesCorrecaoCriadas,
+  issuesCorrecaoFechadas: filterIssuesCorrecaoFechadas,
+  issuesP0: filterIssuesP0,
+  issuesSemCausaRaiz: filterIssuesSemCausaRaiz,
+  throughput: filterThroughput,
+};
+
+const METRIC_LABELS: Record<MetricKey, string> = {
+  issuesCriadas: 'Issues Criadas (pós-prod)',
+  issuesFechadas: 'Issues Fechadas',
+  bugsCriados: 'Bugs Criados (pré-prod)',
+  bugsFechados: 'Bugs Fechados',
+  issuesCorrecaoCriadas: 'Issues de Correção Criadas',
+  issuesCorrecaoFechadas: 'Issues de Correção Fechadas',
+  issuesP0: 'P0s (Críticos)',
+  issuesSemCausaRaiz: 'Sem Causa Raiz',
+  throughput: 'Throughput Total',
+};
+
 const calculateMetrics = (data: WorkItem[], startDate: Date, endDate: Date): PeriodMetrics => {
-  // Issues criadas no período
-  const issuesCriadas = data.filter(w => {
-    if (w.type !== 'Issue') return false;
-    if (!w.createdDate) return false;
-    try {
-      const created = typeof w.createdDate === 'string' ? parseISO(w.createdDate) : new Date(w.createdDate);
-      return isWithinInterval(created, { start: startDate, end: endDate });
-    } catch {
-      return false;
-    }
-  }).length;
-
-  // Issues fechadas no período
-  const issuesFechadas = data.filter(w => {
-    if (w.type !== 'Issue') return false;
-    if (!COMPLETED_STATES.includes(w.state)) return false;
-    if (!w.closedDate) return false;
-    try {
-      const closed = typeof w.closedDate === 'string' ? parseISO(w.closedDate) : new Date(w.closedDate);
-      return isWithinInterval(closed, { start: startDate, end: endDate });
-    } catch {
-      return false;
-    }
-  }).length;
-
-  // Bugs criados no período
-  const bugsCriados = data.filter(w => {
-    if (w.type !== 'Bug') return false;
-    if (!w.createdDate) return false;
-    try {
-      const created = typeof w.createdDate === 'string' ? parseISO(w.createdDate) : new Date(w.createdDate);
-      return isWithinInterval(created, { start: startDate, end: endDate });
-    } catch {
-      return false;
-    }
-  }).length;
-
-  // Bugs fechados no período
-  const bugsFechados = data.filter(w => {
-    if (w.type !== 'Bug') return false;
-    if (!COMPLETED_STATES.includes(w.state)) return false;
-    if (!w.closedDate) return false;
-    try {
-      const closed = typeof w.closedDate === 'string' ? parseISO(w.closedDate) : new Date(w.closedDate);
-      return isWithinInterval(closed, { start: startDate, end: endDate });
-    } catch {
-      return false;
-    }
-  }).length;
-
-  // Issues de Correção CRIADAS no período
-  const issuesCorrecaoCriadas = data.filter(w => {
-    if (w.type !== 'Issue') return false;
-    if (w.customType !== 'Correção') return false;
-    if (!w.createdDate) return false;
-    try {
-      const created = typeof w.createdDate === 'string' ? parseISO(w.createdDate) : new Date(w.createdDate);
-      return isWithinInterval(created, { start: startDate, end: endDate });
-    } catch {
-      return false;
-    }
-  }).length;
-
-  // Issues de Correção FECHADAS no período
-  const issuesCorrecaoFechadas = data.filter(w => {
-    if (w.type !== 'Issue') return false;
-    if (!COMPLETED_STATES.includes(w.state)) return false;
-    if (w.customType !== 'Correção') return false;
-    if (!w.closedDate) return false;
-    try {
-      const closed = typeof w.closedDate === 'string' ? parseISO(w.closedDate) : new Date(w.closedDate);
-      return isWithinInterval(closed, { start: startDate, end: endDate });
-    } catch {
-      return false;
-    }
-  });
-
-  const issuesCorrecaoFechadasCount = issuesCorrecaoFechadas.length;
-  const issuesP0 = issuesCorrecaoFechadas.filter(w => normalizePriority(w.priority) === 0).length;
-  const issuesSemCausaRaiz = issuesCorrecaoFechadas.filter(w => !w.causaRaiz || w.causaRaiz.trim() === '').length;
-
-  // Throughput (todos os itens fechados no período)
-  const throughput = data.filter(w => {
-    if (!COMPLETED_STATES.includes(w.state)) return false;
-    if (!w.closedDate) return false;
-    try {
-      const closed = typeof w.closedDate === 'string' ? parseISO(w.closedDate) : new Date(w.closedDate);
-      return isWithinInterval(closed, { start: startDate, end: endDate });
-    } catch {
-      return false;
-    }
-  }).length;
-
   return {
-    issuesCriadas,
-    issuesFechadas,
-    bugsCriados,
-    bugsFechados,
-    issuesCorrecaoCriadas,
-    issuesCorrecaoFechadas: issuesCorrecaoFechadasCount,
-    issuesP0,
-    issuesSemCausaRaiz,
-    throughput,
+    issuesCriadas: filterIssuesCriadas(data, startDate, endDate).length,
+    issuesFechadas: filterIssuesFechadas(data, startDate, endDate).length,
+    bugsCriados: filterBugsCriados(data, startDate, endDate).length,
+    bugsFechados: filterBugsFechados(data, startDate, endDate).length,
+    issuesCorrecaoCriadas: filterIssuesCorrecaoCriadas(data, startDate, endDate).length,
+    issuesCorrecaoFechadas: filterIssuesCorrecaoFechadas(data, startDate, endDate).length,
+    issuesP0: filterIssuesP0(data, startDate, endDate).length,
+    issuesSemCausaRaiz: filterIssuesSemCausaRaiz(data, startDate, endDate).length,
+    throughput: filterThroughput(data, startDate, endDate).length,
   };
 };
 
@@ -192,27 +243,37 @@ const calculateVariation = (current: number, previous: number): { value: number;
 
 interface MetricCardProps {
   title: string;
+  metricKey: MetricKey;
   periodA: number;
   periodB: number;
   periodALabel: string;
   periodBLabel: string;
   invertColors?: boolean; // Para métricas onde menos é melhor (bugs, P0s, etc.)
+  onPeriodClick: (key: MetricKey, period: 'A' | 'B') => void;
 }
 
-const MetricCard: React.FC<MetricCardProps> = ({ title, periodA, periodB, periodALabel, periodBLabel, invertColors = false }) => {
+const MetricCard: React.FC<MetricCardProps> = ({ title, metricKey, periodA, periodB, periodALabel, periodBLabel, invertColors = false, onPeriodClick }) => {
   const variation = calculateVariation(periodB, periodA);
   const isGood = invertColors ? !variation.isPositive : variation.isPositive;
-  
+
   return (
     <div className="bg-ds-navy border border-ds-border rounded-lg p-4">
       <h4 className="text-ds-text text-sm font-medium mb-3">{title}</h4>
       <div className="flex justify-between items-end mb-2">
-        <div className="text-center flex-1">
+        <div
+          className="text-center flex-1 cursor-pointer hover:opacity-70 transition-opacity rounded"
+          onClick={() => onPeriodClick(metricKey, 'A')}
+          title="Clique para ver as tarefas"
+        >
           <div className="text-xs text-ds-text mb-1">{periodALabel}</div>
           <div className="text-2xl font-bold text-white">{periodA}</div>
         </div>
         <div className="text-ds-text text-xl px-2">→</div>
-        <div className="text-center flex-1">
+        <div
+          className="text-center flex-1 cursor-pointer hover:opacity-70 transition-opacity rounded"
+          onClick={() => onPeriodClick(metricKey, 'B')}
+          title="Clique para ver as tarefas"
+        >
           <div className="text-xs text-ds-text mb-1">{periodBLabel}</div>
           <div className="text-2xl font-bold text-white">{periodB}</div>
         </div>
@@ -279,6 +340,8 @@ export const PeriodComparisonDashboard: React.FC<Props> = ({ data }) => {
   const [periodAConfig, setPeriodAConfig] = useState<PeriodConfig>({ preset: 'last-month' });
   const [periodBConfig, setPeriodBConfig] = useState<PeriodConfig>({ preset: 'current-month' });
   const [selectedTeam, setSelectedTeam] = useState<string>('all');
+  const [modalData, setModalData] = useState<ModalData | null>(null);
+  const [exportingXlsx, setExportingXlsx] = useState(false);
 
   // Extrair times disponíveis
   const availableTeams = useMemo(() => {
@@ -304,39 +367,63 @@ export const PeriodComparisonDashboard: React.FC<Props> = ({ data }) => {
   const periodALabel = format(periodADates.start, "dd/MM", { locale: ptBR }) + ' - ' + format(periodADates.end, "dd/MM/yy", { locale: ptBR });
   const periodBLabel = format(periodBDates.start, "dd/MM", { locale: ptBR }) + ' - ' + format(periodBDates.end, "dd/MM/yy", { locale: ptBR });
 
-  const chartData = [
-    { name: 'Issues Criadas (pós-prod)', 'Período A': metricsA.issuesCriadas, 'Período B': metricsB.issuesCriadas },
-    { name: 'Issues Fechadas', 'Período A': metricsA.issuesFechadas, 'Período B': metricsB.issuesFechadas },
-    { name: 'Correção Criadas', 'Período A': metricsA.issuesCorrecaoCriadas, 'Período B': metricsB.issuesCorrecaoCriadas },
-    { name: 'Correção Fechadas', 'Período A': metricsA.issuesCorrecaoFechadas, 'Período B': metricsB.issuesCorrecaoFechadas },
-    { name: 'Bugs (pré-prod)', 'Período A': metricsA.bugsCriados, 'Período B': metricsB.bugsCriados },
-    { name: 'P0s', 'Período A': metricsA.issuesP0, 'Período B': metricsB.issuesP0 },
-    { name: 'Sem Causa Raiz', 'Período A': metricsA.issuesSemCausaRaiz, 'Período B': metricsB.issuesSemCausaRaiz },
-    { name: 'Throughput', 'Período A': metricsA.throughput, 'Período B': metricsB.throughput },
+  const chartData: { key: MetricKey; name: string; 'Período A': number; 'Período B': number }[] = [
+    { key: 'issuesCriadas', name: 'Issues Criadas (pós-prod)', 'Período A': metricsA.issuesCriadas, 'Período B': metricsB.issuesCriadas },
+    { key: 'issuesFechadas', name: 'Issues Fechadas', 'Período A': metricsA.issuesFechadas, 'Período B': metricsB.issuesFechadas },
+    { key: 'issuesCorrecaoCriadas', name: 'Correção Criadas', 'Período A': metricsA.issuesCorrecaoCriadas, 'Período B': metricsB.issuesCorrecaoCriadas },
+    { key: 'issuesCorrecaoFechadas', name: 'Correção Fechadas', 'Período A': metricsA.issuesCorrecaoFechadas, 'Período B': metricsB.issuesCorrecaoFechadas },
+    { key: 'bugsCriados', name: 'Bugs (pré-prod)', 'Período A': metricsA.bugsCriados, 'Período B': metricsB.bugsCriados },
+    { key: 'issuesP0', name: 'P0s', 'Período A': metricsA.issuesP0, 'Período B': metricsB.issuesP0 },
+    { key: 'issuesSemCausaRaiz', name: 'Sem Causa Raiz', 'Período A': metricsA.issuesSemCausaRaiz, 'Período B': metricsB.issuesSemCausaRaiz },
+    { key: 'throughput', name: 'Throughput', 'Período A': metricsA.throughput, 'Período B': metricsB.throughput },
   ];
 
-  const colorA = '#FF9800'; // Laranja para período A
-  const colorB = '#00B8A9'; // Verde para período B
+  const openMetricModal = useCallback((key: MetricKey, period: 'A' | 'B') => {
+    const dates = period === 'A' ? periodADates : periodBDates;
+    const label = period === 'A' ? periodALabel : periodBLabel;
+    const color = period === 'A' ? COLOR_A : COLOR_B;
+    const items = METRIC_FILTER_FNS[key](filteredData, dates.start, dates.end);
+    setModalData({ title: `${METRIC_LABELS[key]} — ${label}`, items, color });
+  }, [filteredData, periodADates, periodBDates, periodALabel, periodBLabel]);
 
   return (
     <div className="space-y-6">
+      <ItemListModal data={modalData} onClose={() => setModalData(null)} />
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h2 className="text-xl font-bold text-white">📊 Comparação de Períodos</h2>
-        
-        {/* Filtro de Time */}
-        <div className="flex items-center gap-2">
-          <label className="text-ds-text text-sm">Time:</label>
-          <select
-            value={selectedTeam}
-            onChange={e => setSelectedTeam(e.target.value)}
-            className="bg-ds-navy border border-ds-border text-ds-light-text text-sm rounded-md p-2"
+
+        <div className="flex items-center gap-3">
+          {/* Filtro de Time */}
+          <div className="flex items-center gap-2">
+            <label className="text-ds-text text-sm">Time:</label>
+            <select
+              value={selectedTeam}
+              onChange={e => setSelectedTeam(e.target.value)}
+              className="bg-ds-navy border border-ds-border text-ds-light-text text-sm rounded-md p-2"
+            >
+              <option value="all">Todos os Times</option>
+              {availableTeams.map(team => (
+                <option key={team} value={team}>{team}</option>
+              ))}
+            </select>
+          </div>
+          <button
+            onClick={async () => {
+              if (filteredData.length === 0) return;
+              setExportingXlsx(true);
+              try {
+                await exportItemsXlsx(filteredData, getWorkItemColumns(), `PeriodComparison_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
+              } finally {
+                setExportingXlsx(false);
+              }
+            }}
+            disabled={exportingXlsx || filteredData.length === 0}
+            className="px-3 py-2 text-xs rounded-md font-medium bg-ds-green text-ds-dark-blue hover:bg-ds-green/80 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            title="Exporta os itens filtrados por time para .xlsx"
           >
-            <option value="all">Todos os Times</option>
-            {availableTeams.map(team => (
-              <option key={team} value={team}>{team}</option>
-            ))}
-          </select>
+            {exportingXlsx ? 'Exportando…' : `📥 .xlsx (${filteredData.length})`}
+          </button>
         </div>
       </div>
 
@@ -369,13 +456,13 @@ export const PeriodComparisonDashboard: React.FC<Props> = ({ data }) => {
           label="Período A (Referência)"
           config={periodAConfig}
           onChange={setPeriodAConfig}
-          color={colorA}
+          color={COLOR_A}
         />
         <PeriodSelector
           label="Período B (Comparação)"
           config={periodBConfig}
           onChange={setPeriodBConfig}
-          color={colorB}
+          color={COLOR_B}
         />
       </div>
 
@@ -383,64 +470,80 @@ export const PeriodComparisonDashboard: React.FC<Props> = ({ data }) => {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <MetricCard
           title="Issues Criadas (pós-prod)"
+          metricKey="issuesCriadas"
           periodA={metricsA.issuesCriadas}
           periodB={metricsB.issuesCriadas}
           periodALabel={periodALabel}
           periodBLabel={periodBLabel}
           invertColors={true}
+          onPeriodClick={openMetricModal}
         />
         <MetricCard
           title="Issues Fechadas"
+          metricKey="issuesFechadas"
           periodA={metricsA.issuesFechadas}
           periodB={metricsB.issuesFechadas}
           periodALabel={periodALabel}
           periodBLabel={periodBLabel}
+          onPeriodClick={openMetricModal}
         />
         <MetricCard
           title="Correção Criadas"
+          metricKey="issuesCorrecaoCriadas"
           periodA={metricsA.issuesCorrecaoCriadas}
           periodB={metricsB.issuesCorrecaoCriadas}
           periodALabel={periodALabel}
           periodBLabel={periodBLabel}
           invertColors={true}
+          onPeriodClick={openMetricModal}
         />
         <MetricCard
           title="Correção Fechadas"
+          metricKey="issuesCorrecaoFechadas"
           periodA={metricsA.issuesCorrecaoFechadas}
           periodB={metricsB.issuesCorrecaoFechadas}
           periodALabel={periodALabel}
           periodBLabel={periodBLabel}
+          onPeriodClick={openMetricModal}
         />
         <MetricCard
           title="Bugs (pré-prod)"
+          metricKey="bugsCriados"
           periodA={metricsA.bugsCriados}
           periodB={metricsB.bugsCriados}
           periodALabel={periodALabel}
           periodBLabel={periodBLabel}
           invertColors={true}
+          onPeriodClick={openMetricModal}
         />
         <MetricCard
           title="P0s (Críticos)"
+          metricKey="issuesP0"
           periodA={metricsA.issuesP0}
           periodB={metricsB.issuesP0}
           periodALabel={periodALabel}
           periodBLabel={periodBLabel}
           invertColors={true}
+          onPeriodClick={openMetricModal}
         />
         <MetricCard
           title="Sem Causa Raiz"
+          metricKey="issuesSemCausaRaiz"
           periodA={metricsA.issuesSemCausaRaiz}
           periodB={metricsB.issuesSemCausaRaiz}
           periodALabel={periodALabel}
           periodBLabel={periodBLabel}
           invertColors={true}
+          onPeriodClick={openMetricModal}
         />
         <MetricCard
           title="Throughput Total"
+          metricKey="throughput"
           periodA={metricsA.throughput}
           periodB={metricsB.throughput}
           periodALabel={periodALabel}
           periodBLabel={periodBLabel}
+          onPeriodClick={openMetricModal}
         />
       </div>
 
@@ -457,8 +560,22 @@ export const PeriodComparisonDashboard: React.FC<Props> = ({ data }) => {
                 labelStyle={{ color: '#fff' }}
               />
               <Legend />
-              <Bar dataKey="Período A" fill={colorA} name={periodALabel} radius={[0, 4, 4, 0]} />
-              <Bar dataKey="Período B" fill={colorB} name={periodBLabel} radius={[0, 4, 4, 0]} />
+              <Bar
+                dataKey="Período A"
+                fill={COLOR_A}
+                name={periodALabel}
+                radius={[0, 4, 4, 0]}
+                cursor="pointer"
+                onClick={(d: any) => openMetricModal(d.key, 'A')}
+              />
+              <Bar
+                dataKey="Período B"
+                fill={COLOR_B}
+                name={periodBLabel}
+                radius={[0, 4, 4, 0]}
+                cursor="pointer"
+                onClick={(d: any) => openMetricModal(d.key, 'B')}
+              />
             </BarChart>
           </ResponsiveContainer>
         </div>

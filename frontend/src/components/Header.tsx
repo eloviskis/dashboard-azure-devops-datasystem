@@ -5,24 +5,64 @@ import { WorkItem } from '../types';
 import { formatDistanceToNow } from 'date-fns'; // Updated to named imports
 // Fix: Import locale data with a default import from its specific path to resolve type errors.
 import { ptBR } from 'date-fns/locale/pt-BR'; // Updated to named imports
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth, ROLE_LABELS } from '../contexts/AuthContext';
 import ChangePasswordModal from './ChangePasswordModal';
+import { exportElementAsPng } from '../utils/exportPng';
 
 interface HeaderProps {
     lastSyncStatus: SyncStatus | null;
     onOpenUserManagement?: () => void;
+    onOpenNotificationHistory?: () => void;
+    onOpenTeamsIntegration?: () => void;
     onSync?: () => void;
     syncing?: boolean;
     workItems?: WorkItem[];
 }
 
-const Header: React.FC<HeaderProps> = ({ lastSyncStatus, onOpenUserManagement, onSync, syncing, workItems = [] }) => {
-    const { user, logout, isAdmin } = useAuth();
+const HeaderComponent: React.FC<HeaderProps> = ({ lastSyncStatus, onOpenUserManagement, onOpenNotificationHistory, onOpenTeamsIntegration, onSync, syncing, workItems = [] }) => {
+    const { user, logout, isAdmin, setNotificationsEnabled } = useAuth();
     const [showAlerts, setShowAlerts] = useState(false);
     const [dismissedAlertIds, setDismissedAlertIds] = useState<Set<number>>(new Set());
     const [showUserMenu, setShowUserMenu] = useState(false);
     const [showChangePassword, setShowChangePassword] = useState(false);
+    const [savingNotifPref, setSavingNotifPref] = useState(false);
+    const [collapsed, setCollapsed] = useState(() => localStorage.getItem('header-collapsed') === 'true');
     const userMenuRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        localStorage.setItem('header-collapsed', String(collapsed));
+    }, [collapsed]);
+
+    const toggleCollapsed = () => {
+        setCollapsed(v => {
+            const next = !v;
+            if (next) { setShowUserMenu(false); setShowAlerts(false); }
+            return next;
+        });
+    };
+
+    const [exportingPng, setExportingPng] = useState(false);
+
+    const handleExportPng = async () => {
+        const mainEl = document.querySelector('main');
+        if (!mainEl) return;
+        setExportingPng(true);
+        try {
+            await exportElementAsPng(mainEl as HTMLElement, 'dashboard');
+        } catch (e) {
+            console.error('Erro ao exportar PNG:', e);
+            alert('Não foi possível exportar a tela como PNG. Tente novamente.');
+        } finally {
+            setExportingPng(false);
+        }
+    };
+
+    const handleToggleNotifications = async () => {
+        if (!user || savingNotifPref) return;
+        setSavingNotifPref(true);
+        await setNotificationsEnabled(!user.notificationsEnabled);
+        setSavingNotifPref(false);
+    };
 
     // Fecha o menu ao clicar fora
     useEffect(() => {
@@ -44,7 +84,7 @@ const Header: React.FC<HeaderProps> = ({ lastSyncStatus, onOpenUserManagement, o
             if (!IN_PROGRESS.includes(item.state)) return;
             const ref = new Date(item.changedDate || item.createdDate || '');
             if (isNaN(ref.getTime())) return;
-            const age = Math.round((now - ref.getTime()) / (1000 * 60 * 60 * 24));
+            const age = Math.ceil((now - ref.getTime()) / (1000 * 60 * 60 * 24));
             const priority = Number(item.priority) || 4;
             const threshold = priority === 1 ? 3 : priority === 2 ? 7 : 14;
             if (age > threshold) {
@@ -121,13 +161,17 @@ const Header: React.FC<HeaderProps> = ({ lastSyncStatus, onOpenUserManagement, o
     }, [lastSyncStatus]);
 
     return (
-        <header className="bg-ds-dark-blue text-ds-light-text p-5 px-10 border-b border-ds-border flex items-center justify-between">
+        <div className="relative">
+        <header className={`bg-ds-dark-blue text-ds-light-text px-10 border-b border-ds-border flex items-center justify-between transition-all duration-200 ${collapsed ? 'py-2' : 'p-5'}`}>
             <div className="flex items-center gap-4">
-                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <svg width={collapsed ? 24 : 40} height={collapsed ? 24 : 40} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M12 2L2 7V17L12 22L22 17V7L12 2Z" stroke="#7FD320" strokeWidth="2" strokeLinejoin="round"/>
                     <path d="M2 7L12 12M22 7L12 12M12 22V12" stroke="#7FD320" strokeWidth="2" strokeLinejoin="round"/>
                     <path d="M17 4.5L7 9.5" stroke="#7FD320" strokeOpacity="0.7" strokeWidth="1.5" strokeLinejoin="round"/>
                 </svg>
+                {collapsed ? (
+                    <span className={`h-2.5 w-2.5 rounded-full ${syncInfo.colorClass}`} title={syncInfo.dateText ? `Última Sincronização: ${syncInfo.dateText}` : syncInfo.text}></span>
+                ) : (
                 <div className="font-sans">
                     <div className="flex items-center gap-3">
                         <h1 className="text-2xl font-bold tracking-wider">
@@ -145,10 +189,24 @@ const Header: React.FC<HeaderProps> = ({ lastSyncStatus, onOpenUserManagement, o
                     </div>
                     <p className="text-sm text-ds-text tracking-widest">DevOps Performance Dashboard</p>
                 </div>
+                )}
             </div>
-            
+
             {/* User Info & Logout */}
+            {!collapsed && (
             <div className="flex items-center gap-4">
+                {/* Export PNG Button */}
+                <button
+                    onClick={handleExportPng}
+                    disabled={exportingPng}
+                    className="flex items-center gap-2 px-3 py-2 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 rounded-lg transition-colors text-sm font-semibold disabled:opacity-50"
+                    title="Exportar a tela atual como imagem PNG"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14M4 4h16v16H4V4z" />
+                    </svg>
+                    <span className="hidden sm:inline">{exportingPng ? 'Exportando…' : 'PNG'}</span>
+                </button>
                 {/* Sync Button */}
                 {onSync && (
                     <button
@@ -222,6 +280,30 @@ const Header: React.FC<HeaderProps> = ({ lastSyncStatus, onOpenUserManagement, o
                         <span className="hidden sm:inline">Usuários</span>
                     </button>
                 )}
+                {isAdmin && onOpenNotificationHistory && (
+                    <button
+                        onClick={onOpenNotificationHistory}
+                        className="flex items-center gap-2 px-3 py-2 bg-ds-navy hover:bg-ds-border rounded-lg transition-colors text-sm"
+                        title="Histórico e Reenvio de Notificações"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                        </svg>
+                        <span className="hidden sm:inline">Notificações</span>
+                    </button>
+                )}
+                {isAdmin && onOpenTeamsIntegration && (
+                    <button
+                        onClick={onOpenTeamsIntegration}
+                        className="flex items-center gap-2 px-3 py-2 bg-ds-navy hover:bg-ds-border rounded-lg transition-colors text-sm"
+                        title="Integração com Microsoft Teams"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-3.13a4 4 0 10-4-4 4 4 0 004 4zm6-1a3 3 0 10-3-3 3 3 0 003 3z" />
+                        </svg>
+                        <span className="hidden sm:inline">Teams</span>
+                    </button>
+                )}
                 {/* User menu dropdown */}
                 <div className="relative" ref={userMenuRef}>
                     <button
@@ -231,7 +313,7 @@ const Header: React.FC<HeaderProps> = ({ lastSyncStatus, onOpenUserManagement, o
                     >
                         <div className="text-right">
                             <p className="text-sm text-ds-light-text leading-tight">{user?.username}</p>
-                            <p className="text-xs text-ds-text">{isAdmin ? 'Administrador' : 'Usuário'}</p>
+                            <p className="text-xs text-ds-text">{user?.role ? ROLE_LABELS[user.role] : 'Usuário'}</p>
                         </div>
                         <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 text-ds-text transition-transform ${showUserMenu ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -249,6 +331,26 @@ const Header: React.FC<HeaderProps> = ({ lastSyncStatus, onOpenUserManagement, o
                                 </svg>
                                 Alterar Senha
                             </button>
+                            <button
+                                onClick={handleToggleNotifications}
+                                disabled={savingNotifPref}
+                                className="w-full flex items-center justify-between gap-3 px-4 py-3 text-sm text-ds-light-text hover:bg-ds-border transition-colors disabled:opacity-50"
+                                title="Notificações por email do QA Tracker (bloqueios, atribuições, resumo diário)"
+                            >
+                                <span className="flex items-center gap-3">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-ds-green" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                                    </svg>
+                                    Notificações por Email
+                                </span>
+                                <span
+                                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${user?.notificationsEnabled ? 'bg-ds-green' : 'bg-ds-border'}`}
+                                >
+                                    <span
+                                        className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${user?.notificationsEnabled ? 'translate-x-5' : 'translate-x-0.5'}`}
+                                    />
+                                </span>
+                            </button>
                             <div className="border-t border-ds-border" />
                             <button
                                 onClick={() => { logout(); setShowUserMenu(false); }}
@@ -262,12 +364,13 @@ const Header: React.FC<HeaderProps> = ({ lastSyncStatus, onOpenUserManagement, o
                         </div>
                     )}
                 </div>
-
-                {showChangePassword && (
-                    <ChangePasswordModal onClose={() => setShowChangePassword(false)} />
-                )}
             </div>
-            
+            )}
+
+            {showChangePassword && (
+                <ChangePasswordModal onClose={() => setShowChangePassword(false)} />
+            )}
+
             {/* Fix: Replace unsupported `style jsx` with a standard `style` tag for compatibility. */}
             <style>{`
                 .has-tooltip:hover .tooltip {
@@ -284,7 +387,19 @@ const Header: React.FC<HeaderProps> = ({ lastSyncStatus, onOpenUserManagement, o
                 .bg-gray-500 { background-color: #a0aec0; }
             `}</style>
         </header>
+        <button
+            onClick={toggleCollapsed}
+            title={collapsed ? 'Expandir cabeçalho' : 'Recolher cabeçalho'}
+            className="absolute left-1/2 -translate-x-1/2 -bottom-3 z-20 w-6 h-6 flex items-center justify-center rounded-full bg-ds-navy border border-ds-border text-ds-text text-xs hover:text-ds-green hover:border-ds-green transition-colors shadow-md"
+        >
+            {collapsed ? '▾' : '▴'}
+        </button>
+        </div>
     );
 };
+
+// App.tsx re-renderiza com frequência (filtros, troca de aba) por motivos que não afetam o Header —
+// memo evita refazer alerts/sync-status nesses casos, desde que os callbacks recebidos sejam estáveis.
+const Header = React.memo(HeaderComponent);
 
 export default Header;

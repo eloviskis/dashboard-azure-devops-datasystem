@@ -6,7 +6,7 @@
 > A seção [REGRAS PERMANENTES](#-regras-permanentes--o-que-nunca-fazer) no final deste documento
 > tem tudo que você precisa saber para não repetir os mesmos erros.
 >
-> Veja também: [REGRAS_DE_DEPLOY.md](REGRAS_DE_DEPLOY.md) — guia rápido de deploy.
+> Veja também: [DEPLOY.md](DEPLOY.md) — guia rápido de deploy.
 
 ---
 

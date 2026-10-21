@@ -1,11 +1,23 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 
+export type UserRole = 'admin' | 'QA' | 'PO' | 'DEV' | 'GESTOR' | 'user';
+
+export const ROLE_LABELS: Record<UserRole, string> = {
+  admin: 'Administrador',
+  QA: 'QA',
+  PO: 'PO',
+  DEV: 'Desenvolvedor(a)',
+  GESTOR: 'Gestor(a)',
+  user: 'Usuário',
+};
+
 interface User {
   id: number;
   username: string;
   email: string;
-  role: 'admin' | 'user';
+  role: UserRole;
   tabPermissions?: string[] | null;
+  notificationsEnabled: boolean;
 }
 
 interface AuthContextType {
@@ -16,6 +28,7 @@ interface AuthContextType {
   login: (username: string, password: string) => Promise<boolean>;
   logout: () => void;
   isLoading: boolean;
+  setNotificationsEnabled: (enabled: boolean) => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -77,6 +90,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               email: data.user.email,
               role: data.user.role,
               tabPermissions: data.user.tab_permissions ?? null,
+              notificationsEnabled: data.user.notifications_enabled !== false,
             };
             setUser(freshUser);
             localStorage.setItem('auth_user', JSON.stringify(freshUser));
@@ -116,6 +130,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           email: data.user.email,
           role: data.user.role,
           tabPermissions: data.user.tab_permissions ?? null,
+          notificationsEnabled: data.user.notifications_enabled !== false,
         };
         setToken(data.token);
         setUser(userObj);
@@ -134,6 +149,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     clearAuth();
   }, [clearAuth]);
 
+  const setNotificationsEnabled = useCallback(async (enabled: boolean): Promise<boolean> => {
+    if (!token || !user) return false;
+    try {
+      const response = await fetch(`${API_URL}/api/auth/notification-preferences`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ enabled }),
+      });
+      if (!response.ok) return false;
+      const updatedUser: User = { ...user, notificationsEnabled: enabled };
+      setUser(updatedUser);
+      localStorage.setItem('auth_user', JSON.stringify(updatedUser));
+      return true;
+    } catch (error) {
+      console.error('Error updating notification preferences:', error);
+      return false;
+    }
+  }, [API_URL, token, user]);
+
   const value: AuthContextType = {
     user,
     token,
@@ -141,6 +178,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     isAdmin: user?.role === 'admin',
     login,
     logout,
+    setNotificationsEnabled,
     isLoading
   };
 

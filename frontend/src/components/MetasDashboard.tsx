@@ -8,11 +8,72 @@ import {
 } from 'recharts';
 import { format, subDays, eachWeekOfInterval, startOfWeek, endOfWeek, differenceInDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { getLastNPeriods, PeriodGroupMode, PERIOD_GROUP_MODE_OPTIONS } from '../utils/periodGrouping';
+
+const PERIOD_MODE_NOUN: Record<PeriodGroupMode, string> = {
+  weekly: 'Semanal', biweekly: 'Quinzenal', monthly: 'Mensal', yearly: 'Anual',
+};
 
 interface MetasDashboardProps {
   data: WorkItem[];
   periodDays: number;
 }
+
+interface ModalData {
+  title: string;
+  items: WorkItem[];
+  color: string;
+}
+
+const AZURE_DEVOPS_BASE_URL = 'https://dev.azure.com/datasystemsoftwares/USE/_workitems/edit';
+
+const ItemListModal: React.FC<{ data: ModalData | null; onClose: () => void }> = ({ data, onClose }) => {
+  if (!data) return null;
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50" onClick={onClose}>
+      <div className="bg-ds-navy border border-ds-border rounded-lg shadow-2xl max-w-4xl w-full mx-4 max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="p-4 rounded-t-lg flex justify-between items-center" style={{ backgroundColor: data.color }}>
+          <h2 className="text-white font-bold text-lg">{data.title}</h2>
+          <button onClick={onClose} className="text-white hover:text-gray-200 text-2xl font-bold leading-none">×</button>
+        </div>
+        <div className="p-4 overflow-y-auto flex-1">
+          <div className="text-ds-text mb-3 text-sm">
+            Total: <span className="font-bold text-white">{data.items.length}</span> itens
+          </div>
+          {data.items.length === 0 ? (
+            <div className="text-ds-text text-center py-8">Nenhum item encontrado</div>
+          ) : (
+            <ul className="space-y-2">
+              {data.items.map((item, idx) => (
+                <li key={item.workItemId || idx} className="bg-ds-dark-blue border border-ds-border rounded-lg p-3 hover:border-ds-green transition-colors">
+                  <div className="flex items-start gap-3">
+                    <span className="text-xs font-mono px-2 py-1 rounded shrink-0 text-white" style={{ backgroundColor: data.color }}>
+                      #{item.workItemId}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <a href={item.url || `${AZURE_DEVOPS_BASE_URL}/${item.workItemId}`} target="_blank" rel="noopener noreferrer" className="text-white hover:text-ds-green font-medium block truncate mb-1" title={item.title}>
+                        {item.title}
+                      </a>
+                      <div className="grid grid-cols-2 gap-1 text-xs text-ds-text">
+                        <div>👤 {item.assignedTo || 'Não atribuído'}</div>
+                        <div>👥 {item.team || 'Sem time'}</div>
+                        <div>🏷️ {item.type}</div>
+                        <div>📊 {item.state}</div>
+                      </div>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <div className="p-4 border-t border-ds-border">
+          <button onClick={onClose} className="w-full bg-ds-border hover:bg-ds-green text-white py-2 px-4 rounded-lg transition-colors">Fechar</button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 interface TeamTargets {
   throughput: number; // itens/semana - higher is better
@@ -50,6 +111,8 @@ const MetasDashboard: React.FC<MetasDashboardProps> = ({ data, periodDays }) => 
   const [targets, setTargets] = useState<TargetsStore>(loadTargets);
   const [editingTargets, setEditingTargets] = useState(false);
   const [tempTargets, setTempTargets] = useState<TeamTargets>(DEFAULT_TARGETS);
+  const [modalData, setModalData] = useState<ModalData | null>(null);
+  const [chartGroupMode, setChartGroupMode] = useState<PeriodGroupMode>('weekly');
 
   const teams = useMemo(() => {
     return ['__all__', ...[...new Set(data.map(i => i.team).filter(Boolean) as string[])].sort()];
@@ -93,13 +156,12 @@ const MetasDashboard: React.FC<MetasDashboardProps> = ({ data, periodDays }) => 
       });
 
       const throughput = completedInWeek.length;
-      const cycleTimes = completedInWeek
-        .filter(i => i.cycleTime != null && (i.cycleTime as number) > 0)
-        .map(i => i.cycleTime as number);
-      const leadTimes = completedInWeek
-        .filter(i => i.leadTime != null && (i.leadTime as number) > 0)
-        .map(i => i.leadTime as number);
-      const bugs = completedInWeek.filter(i => i.type === 'Bug').length;
+      const cycleTimeItems = completedInWeek.filter(i => i.cycleTime != null && (i.cycleTime as number) > 0);
+      const leadTimeItems = completedInWeek.filter(i => i.leadTime != null && (i.leadTime as number) > 0);
+      const bugItems = completedInWeek.filter(i => i.type === 'Bug');
+      const cycleTimes = cycleTimeItems.map(i => i.cycleTime as number);
+      const leadTimes = leadTimeItems.map(i => i.leadTime as number);
+      const bugs = bugItems.length;
 
       const avgCT = cycleTimes.length > 0 ? cycleTimes.reduce((a, b) => a + b, 0) / cycleTimes.length : 0;
       const avgLT = leadTimes.length > 0 ? leadTimes.reduce((a, b) => a + b, 0) / leadTimes.length : 0;
@@ -112,25 +174,66 @@ const MetasDashboard: React.FC<MetasDashboardProps> = ({ data, periodDays }) => 
         cycleTime: Math.round(avgCT * 10) / 10,
         leadTime: Math.round(avgLT * 10) / 10,
         bugRate: Math.round(bugRate * 10) / 10,
+        throughputItems: completedInWeek,
+        cycleTimeItems,
+        leadTimeItems,
+        bugRateItems: bugItems,
       };
     });
   }, [teamData]);
+
+  // Mesma métrica de weeklyMetrics acima, mas com granularidade escolhida pelo usuário — usada só
+  // pelos 4 gráficos de tendência. weeklyMetrics continua fixo semanal (usado por trend/projection,
+  // que comparam "últimas 4 semanas" e projetam ritmo semanal — não faz sentido variar com o seletor).
+  const chartMetrics = useMemo(() => {
+    const buckets = getLastNPeriods(chartGroupMode, 12);
+    return buckets.map(({ label, start, end }) => {
+      const completedInPeriod = teamData.filter(item => {
+        if (!COMPLETED_STATES.includes(item.state)) return false;
+        const closed = item.closedDate ? new Date(item.closedDate as string) : null;
+        return closed && closed >= start && closed <= end;
+      });
+
+      const throughput = completedInPeriod.length;
+      const cycleTimeItems = completedInPeriod.filter(i => i.cycleTime != null && (i.cycleTime as number) > 0);
+      const leadTimeItems = completedInPeriod.filter(i => i.leadTime != null && (i.leadTime as number) > 0);
+      const bugItems = completedInPeriod.filter(i => i.type === 'Bug');
+      const avgCT = cycleTimeItems.length > 0 ? cycleTimeItems.reduce((a, b) => a + (b.cycleTime as number), 0) / cycleTimeItems.length : 0;
+      const avgLT = leadTimeItems.length > 0 ? leadTimeItems.reduce((a, b) => a + (b.leadTime as number), 0) / leadTimeItems.length : 0;
+      const bugRate = throughput > 0 ? (bugItems.length / throughput) * 100 : 0;
+
+      return {
+        week: label,
+        throughput,
+        cycleTime: Math.round(avgCT * 10) / 10,
+        leadTime: Math.round(avgLT * 10) / 10,
+        bugRate: Math.round(bugRate * 10) / 10,
+        throughputItems: completedInPeriod,
+        cycleTimeItems,
+        leadTimeItems,
+        bugRateItems: bugItems,
+      };
+    });
+  }, [teamData, chartGroupMode]);
 
   // Current period metrics (whole filtered period)
   const currentMetrics = useMemo(() => {
     const completed = teamData.filter(i => COMPLETED_STATES.includes(i.state));
     const totalCompleted = completed.length;
-    const cycleTimes = completed.filter(i => i.cycleTime != null && (i.cycleTime as number) > 0).map(i => i.cycleTime as number);
-    const leadTimes = completed.filter(i => i.leadTime != null && (i.leadTime as number) > 0).map(i => i.leadTime as number);
-    const bugs = completed.filter(i => i.type === 'Bug').length;
+    const ctItems = completed.filter(i => i.cycleTime != null && (i.cycleTime as number) > 0);
+    const ltItems = completed.filter(i => i.leadTime != null && (i.leadTime as number) > 0);
+    const bugItems = completed.filter(i => i.type === 'Bug');
 
     const weeks = Math.max(periodDays / 7, 1);
     const throughputPerWeek = Math.round((totalCompleted / weeks) * 10) / 10;
-    const avgCT = cycleTimes.length > 0 ? Math.round((cycleTimes.reduce((a, b) => a + b, 0) / cycleTimes.length) * 10) / 10 : 0;
-    const avgLT = leadTimes.length > 0 ? Math.round((leadTimes.reduce((a, b) => a + b, 0) / leadTimes.length) * 10) / 10 : 0;
-    const bugRate = totalCompleted > 0 ? Math.round((bugs / totalCompleted) * 1000) / 10 : 0;
+    const avgCT = ctItems.length > 0 ? Math.round((ctItems.reduce((a, b) => a + (b.cycleTime as number), 0) / ctItems.length) * 10) / 10 : 0;
+    const avgLT = ltItems.length > 0 ? Math.round((ltItems.reduce((a, b) => a + (b.leadTime as number), 0) / ltItems.length) * 10) / 10 : 0;
+    const bugRate = totalCompleted > 0 ? Math.round((bugItems.length / totalCompleted) * 1000) / 10 : 0;
 
-    return { throughput: throughputPerWeek, cycleTime: avgCT, leadTime: avgLT, bugRate };
+    return {
+      throughput: throughputPerWeek, cycleTime: avgCT, leadTime: avgLT, bugRate,
+      throughputItems: completed, cycleTimeItems: ctItems, leadTimeItems: ltItems, bugRateItems: bugItems,
+    };
   }, [teamData, periodDays]);
 
   // Trend (last 4 weeks vs previous 4 weeks)
@@ -190,6 +293,7 @@ const MetasDashboard: React.FC<MetasDashboardProps> = ({ data, periodDays }) => 
       target: currentTargets.throughput,
       lowerIsBetter: false,
       description: 'Quantidade de itens entregues por semana',
+      items: currentMetrics.throughputItems,
     },
     {
       key: 'cycleTime' as const,
@@ -200,6 +304,7 @@ const MetasDashboard: React.FC<MetasDashboardProps> = ({ data, periodDays }) => 
       target: currentTargets.cycleTime,
       lowerIsBetter: true,
       description: 'Tempo médio entre início e conclusão',
+      items: currentMetrics.cycleTimeItems,
     },
     {
       key: 'leadTime' as const,
@@ -210,6 +315,7 @@ const MetasDashboard: React.FC<MetasDashboardProps> = ({ data, periodDays }) => 
       target: currentTargets.leadTime,
       lowerIsBetter: true,
       description: 'Tempo médio entre criação e conclusão',
+      items: currentMetrics.leadTimeItems,
     },
     {
       key: 'bugRate' as const,
@@ -220,6 +326,7 @@ const MetasDashboard: React.FC<MetasDashboardProps> = ({ data, periodDays }) => 
       target: currentTargets.bugRate,
       lowerIsBetter: true,
       description: '% de bugs sobre total de entregas',
+      items: currentMetrics.bugRateItems,
     },
   ];
 
@@ -234,11 +341,13 @@ const MetasDashboard: React.FC<MetasDashboardProps> = ({ data, periodDays }) => 
       weeklyRate: Math.round(avgThroughput * 10) / 10,
       projectedTotal,
       weeksLeft: Math.round(remainingWeeks),
+      last4WeeksItems: last4.flatMap(w => w.throughputItems),
     };
   }, [weeklyMetrics, periodDays]);
 
   return (
     <div className="space-y-6">
+      <ItemListModal data={modalData} onClose={() => setModalData(null)} />
       {/* Header: Team selector + Edit targets */}
       <div className="flex flex-wrap items-center gap-4">
         <div>
@@ -305,7 +414,11 @@ const MetasDashboard: React.FC<MetasDashboardProps> = ({ data, periodDays }) => 
             `${trendVal > 0 ? '▲' : '▼'} ${Math.abs(trendVal).toFixed(1)} ${m.unit}`;
 
           return (
-            <div key={m.key} className="bg-ds-navy p-5 rounded-lg border border-ds-border relative overflow-hidden">
+            <div
+              key={m.key}
+              className="bg-ds-navy p-5 rounded-lg border border-ds-border relative overflow-hidden cursor-pointer hover:border-ds-green transition-colors"
+              onClick={() => setModalData({ title: `${m.icon} ${m.label}`, items: m.items, color: '#64FFDA' })}
+            >
               {/* Background progress indicator */}
               <div
                 className={`absolute bottom-0 left-0 h-1 transition-all duration-500 ${progress.pct >= 100 ? 'bg-green-500' : progress.pct >= 70 ? 'bg-yellow-500' : 'bg-red-500'}`}
@@ -348,15 +461,29 @@ const MetasDashboard: React.FC<MetasDashboardProps> = ({ data, periodDays }) => 
         })}
       </div>
 
-      {/* Weekly Trends */}
+      {/* Trends */}
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-ds-light-text font-bold text-sm">Tendências</h3>
+        <div className="flex gap-1">
+          {PERIOD_GROUP_MODE_OPTIONS.map(opt => (
+            <button
+              key={opt.value}
+              onClick={() => setChartGroupMode(opt.value)}
+              className={`px-3 py-1.5 text-xs rounded-md font-medium transition-colors ${chartGroupMode === opt.value ? 'bg-ds-green text-ds-dark-blue' : 'bg-ds-muted/20 text-ds-text hover:bg-ds-muted/40'}`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {metrics.map(m => (
           <div key={m.key} className="bg-ds-navy p-4 rounded-lg border border-ds-border">
             <h3 className="text-ds-light-text font-bold text-sm mb-3">
-              {m.icon} {m.label} — Tendência Semanal
+              {m.icon} {m.label} — Tendência {PERIOD_MODE_NOUN[chartGroupMode]}
             </h3>
             <ResponsiveContainer width="100%" height={200}>
-              <LineChart data={weeklyMetrics}>
+              <LineChart data={chartMetrics}>
                 <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
                 <XAxis dataKey="week" stroke={CHART_COLORS.text} tick={{ fontSize: 10 }} />
                 <YAxis stroke={CHART_COLORS.text} tick={{ fontSize: 10 }} />
@@ -372,7 +499,12 @@ const MetasDashboard: React.FC<MetasDashboardProps> = ({ data, periodDays }) => 
                   dataKey={m.key}
                   stroke={m.lowerIsBetter ? '#47C5FB' : '#64FFDA'}
                   strokeWidth={2}
-                  dot={{ r: 3 }}
+                  dot={{ r: 3, cursor: 'pointer', onClick: (e: any) => {
+                    const point = e?.payload;
+                    if (!point) return;
+                    const items = point[`${m.key}Items`] || [];
+                    setModalData({ title: `${m.label} — ${point.week}`, items, color: m.lowerIsBetter ? '#47C5FB' : '#64FFDA' });
+                  } }}
                   activeDot={{ r: 5 }}
                 />
                 <ReferenceLine
@@ -393,7 +525,10 @@ const MetasDashboard: React.FC<MetasDashboardProps> = ({ data, periodDays }) => 
           <h3 className="text-ds-light-text font-bold text-lg mb-3">🔮 Projeção de Entregas</h3>
           <ChartInfoLamp info="Projeção baseada no ritmo das últimas 4 semanas: indica se o time atingirá a meta de throughput no período restante." />
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="text-center p-4 bg-ds-bg rounded-lg">
+            <div
+              className="text-center p-4 bg-ds-bg rounded-lg cursor-pointer hover:bg-ds-bg/70 transition-colors"
+              onClick={() => setModalData({ title: 'Itens — últimas 4 semanas', items: projection.last4WeeksItems, color: '#64FFDA' })}
+            >
               <p className="text-ds-text text-xs">Ritmo Atual</p>
               <p className="text-2xl font-bold text-ds-green">{projection.weeklyRate}</p>
               <p className="text-ds-text text-xs">itens/semana (últ. 4 sem)</p>
@@ -403,7 +538,10 @@ const MetasDashboard: React.FC<MetasDashboardProps> = ({ data, periodDays }) => 
               <p className="text-2xl font-bold text-ds-light-text">{currentTargets.throughput}</p>
               <p className="text-ds-text text-xs">itens/semana</p>
             </div>
-            <div className="text-center p-4 bg-ds-bg rounded-lg">
+            <div
+              className="text-center p-4 bg-ds-bg rounded-lg cursor-pointer hover:bg-ds-bg/70 transition-colors"
+              onClick={() => setModalData({ title: 'Itens — últimas 4 semanas', items: projection.last4WeeksItems, color: '#64FFDA' })}
+            >
               <p className="text-ds-text text-xs">Para atingir a meta</p>
               <p className={`text-2xl font-bold ${projection.weeklyRate >= currentTargets.throughput ? 'text-green-400' : 'text-red-400'}`}>
                 {projection.weeklyRate >= currentTargets.throughput
@@ -437,7 +575,7 @@ const MetasDashboard: React.FC<MetasDashboardProps> = ({ data, periodDays }) => 
           const lt = lts.length > 0 ? Math.round((lts.reduce((a, b) => a + b, 0) / lts.length) * 10) / 10 : 0;
           const br = completed.length > 0 ? Math.round((bugs / completed.length) * 1000) / 10 : 0;
           const teamTarget = targets[team] || DEFAULT_TARGETS;
-          return { team, throughput: tp, cycleTime: ct, leadTime: lt, bugRate: br, targets: teamTarget, total: completed.length };
+          return { team, throughput: tp, cycleTime: ct, leadTime: lt, bugRate: br, targets: teamTarget, total: completed.length, items: completed };
         });
 
         return (
@@ -477,7 +615,11 @@ const MetasDashboard: React.FC<MetasDashboardProps> = ({ data, periodDays }) => 
                     );
 
                     return (
-                      <tr key={tc.team} className="border-b border-ds-border/50 hover:bg-ds-muted/20">
+                      <tr
+                        key={tc.team}
+                        className="border-b border-ds-border/50 hover:bg-ds-muted/20 cursor-pointer"
+                        onClick={() => setModalData({ title: `Entregas — ${tc.team}`, items: tc.items, color: '#64FFDA' })}
+                      >
                         <td className="px-3 py-2 text-ds-light-text font-medium">{tc.team} <span className="text-ds-text text-xs">({tc.total})</span></td>
                         {renderCell(tc.throughput, tc.targets.throughput, pTP.pct, pTP.color, '/sem')}
                         {renderCell(tc.cycleTime, tc.targets.cycleTime, pCT.pct, pCT.color, 'd')}

@@ -6,12 +6,70 @@ import {
   ResponsiveContainer, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Cell, Legend, LineChart, Line
 } from 'recharts';
-import { subMonths, isWithinInterval, startOfMonth, endOfMonth, format, eachWeekOfInterval, endOfWeek, subDays } from 'date-fns';
+import { subMonths, isWithinInterval, startOfMonth, endOfMonth, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { getLastNPeriods, PeriodGroupMode, PERIOD_GROUP_MODE_OPTIONS } from '../utils/periodGrouping';
+import { exportItemsXlsx, getWorkItemColumns } from '../utils/exportXlsx';
 
 interface TeamInsightsDashboardProps {
   data: WorkItem[];
 }
+
+interface ModalData {
+  title: string;
+  items: WorkItem[];
+  color: string;
+}
+
+const AZURE_DEVOPS_BASE_URL = 'https://dev.azure.com/datasystemsoftwares/USE/_workitems/edit';
+
+const ItemListModal: React.FC<{ data: ModalData | null; onClose: () => void }> = ({ data, onClose }) => {
+  if (!data) return null;
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50" onClick={onClose}>
+      <div className="bg-ds-navy border border-ds-border rounded-lg shadow-2xl max-w-4xl w-full mx-4 max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="p-4 rounded-t-lg flex justify-between items-center" style={{ backgroundColor: data.color }}>
+          <h2 className="text-white font-bold text-lg">{data.title}</h2>
+          <button onClick={onClose} className="text-white hover:text-gray-200 text-2xl font-bold leading-none">×</button>
+        </div>
+        <div className="p-4 overflow-y-auto flex-1">
+          <div className="text-ds-text mb-3 text-sm">
+            Total: <span className="font-bold text-white">{data.items.length}</span> itens
+          </div>
+          {data.items.length === 0 ? (
+            <div className="text-ds-text text-center py-8">Nenhum item encontrado</div>
+          ) : (
+            <ul className="space-y-2">
+              {data.items.map((item, idx) => (
+                <li key={item.workItemId || idx} className="bg-ds-dark-blue border border-ds-border rounded-lg p-3 hover:border-ds-green transition-colors">
+                  <div className="flex items-start gap-3">
+                    <span className="text-xs font-mono px-2 py-1 rounded shrink-0 text-white" style={{ backgroundColor: data.color }}>
+                      #{item.workItemId}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <a href={item.url || `${AZURE_DEVOPS_BASE_URL}/${item.workItemId}`} target="_blank" rel="noopener noreferrer" className="text-white hover:text-ds-green font-medium block truncate mb-1" title={item.title}>
+                        {item.title}
+                      </a>
+                      <div className="grid grid-cols-2 gap-1 text-xs text-ds-text">
+                        <div>👤 {item.assignedTo || 'Não atribuído'}</div>
+                        <div>👥 {item.team || 'Sem time'}</div>
+                        <div>🏷️ {item.type}</div>
+                        <div>📊 {item.state}</div>
+                      </div>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <div className="p-4 border-t border-ds-border">
+          <button onClick={onClose} className="w-full bg-ds-border hover:bg-ds-green text-white py-2 px-4 rounded-lg transition-colors">Fechar</button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const COMPLETED_STATES = ['Done', 'Concluído', 'Closed', 'Fechado', 'Finished', 'Resolved', 'Pronto'];
 const BUG_TYPES = ['Bug'];
@@ -25,6 +83,9 @@ const TeamInsightsDashboard: React.FC<TeamInsightsDashboardProps> = ({ data }) =
   const [selectedMonth, setSelectedMonth] = useState<string>('');
   const [customStart, setCustomStart] = useState<string>('');
   const [customEnd, setCustomEnd] = useState<string>('');
+  const [modalData, setModalData] = useState<ModalData | null>(null);
+  const [scoreGroupMode, setScoreGroupMode] = useState<PeriodGroupMode>('weekly');
+  const [exportingXlsx, setExportingXlsx] = useState(false);
 
   const teams = useMemo(() => {
     return [...new Set(data.map(i => i.team).filter(Boolean) as string[])].sort();
@@ -54,6 +115,16 @@ const TeamInsightsDashboard: React.FC<TeamInsightsDashboardProps> = ({ data }) =
     const days = parseInt(periodType) || 90;
     return { start: new Date(now.getTime() - days * 24 * 60 * 60 * 1000), end: now };
   }, [periodType, selectedMonth, customStart, customEnd]);
+
+  // Itens do time selecionado dentro do período — fonte única "o que está visível na tela" (usada
+  // pela previsibilidade e pela exportação; antes cada uma recalculava isso separadamente).
+  const selectedTeamItems = useMemo(() => {
+    if (!selectedTeam) return [];
+    return data.filter(item => {
+      const d = new Date(item.createdDate || '');
+      return isWithinInterval(d, { start: dateRange.start, end: dateRange.end }) && item.team === selectedTeam;
+    });
+  }, [data, dateRange, selectedTeam]);
 
   // Compute team stats
   const teamStats = useMemo(() => {
@@ -182,11 +253,7 @@ const TeamInsightsDashboard: React.FC<TeamInsightsDashboardProps> = ({ data }) =
   // Predictability Score (#10): based on cycle time standard deviation
   const predictability = useMemo(() => {
     if (!selectedStats) return null;
-    const filteredByDate = data.filter(item => {
-      const d = new Date(item.createdDate || '');
-      return isWithinInterval(d, { start: dateRange.start, end: dateRange.end }) && item.team === selectedTeam;
-    });
-    const completed = filteredByDate.filter(i => COMPLETED_STATES.includes(i.state) && i.cycleTime != null);
+    const completed = selectedTeamItems.filter(i => COMPLETED_STATES.includes(i.state) && i.cycleTime != null);
     if (completed.length < 3) return null;
 
     const cts = completed.map(i => i.cycleTime as number);
@@ -197,17 +264,14 @@ const TeamInsightsDashboard: React.FC<TeamInsightsDashboardProps> = ({ data }) =
     const score = cv <= 30 ? 100 : cv <= 60 ? 80 : cv <= 100 ? 50 : 20;
     const label = score >= 80 ? 'Previsível' : score >= 50 ? 'Moderado' : 'Imprevisível';
     return { score, cv: Math.round(cv), stdDev: Math.round(stdDev * 10) / 10, avg: Math.round(avg * 10) / 10, label, count: completed.length };
-  }, [selectedStats, data, dateRange, selectedTeam]);
+  }, [selectedStats, selectedTeamItems]);
 
-  // Score trend over time - weekly (#13)
+  // Score trend over time - últimos 12 períodos, granularidade escolhida pelo usuário (#13)
   const scoreTrend = useMemo(() => {
     if (!selectedTeam) return [];
-    const now = new Date();
-    const start = subDays(now, 84); // 12 weeks
-    const weeks = eachWeekOfInterval({ start, end: now }, { weekStartsOn: 1 });
-    
-    return weeks.map(weekStart => {
-      const wEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
+    const buckets = getLastNPeriods(scoreGroupMode, 12);
+
+    return buckets.map(({ label, start: weekStart, end: wEnd }) => {
       const teamItems = data.filter(item => {
         const d = new Date(item.changedDate || item.createdDate || '');
         return item.team === selectedTeam && d >= weekStart && d <= wEnd;
@@ -227,13 +291,14 @@ const TeamInsightsDashboard: React.FC<TeamInsightsDashboardProps> = ({ data }) =
       const score = Math.round((tpScore * 0.3 + ctScore * 0.3 + qualityScore * 0.2 + completionRate * 0.2));
 
       return {
-        week: format(weekStart, 'dd/MM', { locale: ptBR }),
+        week: label,
         score: Math.min(score, 100),
         throughput,
         avgCT: Math.round(avgCT * 10) / 10,
+        items: completed,
       };
     });
-  }, [selectedTeam, data]);
+  }, [selectedTeam, data, scoreGroupMode]);
 
   // Generate insights
   const insights = useMemo(() => {
@@ -278,8 +343,19 @@ const TeamInsightsDashboard: React.FC<TeamInsightsDashboardProps> = ({ data }) =
     return result;
   }, [selectedStats, selectedTeam, teamStats, globalAvg]);
 
+  const handleExportXlsx = async () => {
+    if (selectedTeamItems.length === 0) return;
+    setExportingXlsx(true);
+    try {
+      await exportItemsXlsx(selectedTeamItems, getWorkItemColumns(), `TeamInsights_${selectedTeam}_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
+    } finally {
+      setExportingXlsx(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
+      <ItemListModal data={modalData} onClose={() => setModalData(null)} />
       {/* Filters */}
       <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
         <div className="flex flex-wrap items-center gap-4">
@@ -338,6 +414,15 @@ const TeamInsightsDashboard: React.FC<TeamInsightsDashboardProps> = ({ data }) =
               </div>
             </div>
           )}
+
+          <button
+            onClick={handleExportXlsx}
+            disabled={exportingXlsx || selectedTeamItems.length === 0}
+            className="ml-auto px-3 py-2 text-xs rounded-md font-medium bg-ds-green text-ds-dark-blue hover:bg-ds-green/80 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            title="Exporta os itens do time/período selecionado para .xlsx"
+          >
+            {exportingXlsx ? 'Exportando…' : `📥 Exportar .xlsx (${selectedTeamItems.length})`}
+          </button>
         </div>
       </div>
 
@@ -351,7 +436,10 @@ const TeamInsightsDashboard: React.FC<TeamInsightsDashboardProps> = ({ data }) =
           {/* Rankings */}
           {/* Team Score */}
           {teamScore && (
-            <div className="bg-ds-navy p-6 rounded-lg border border-ds-border">
+            <div
+              className="bg-ds-navy p-6 rounded-lg border border-ds-border cursor-pointer hover:border-ds-green transition-colors"
+              onClick={() => setModalData({ title: `Score Geral — ${selectedTeam}`, items: selectedTeamItems, color: '#64FFDA' })}
+            >
               <div className="flex flex-wrap items-center gap-8">
                 <div className="text-center">
                   <p className="text-ds-text text-sm mb-2">Score Geral do Time</p>
@@ -391,12 +479,16 @@ const TeamInsightsDashboard: React.FC<TeamInsightsDashboardProps> = ({ data }) =
           {/* Rankings */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[
-              { label: 'Ranking Throughput', value: `${teamStats.sort((a, b) => b.throughput - a.throughput).findIndex(t => t.team === selectedTeam) + 1}º`, sub: `${selectedStats.throughput} entregas` },
-              { label: 'Ranking Cycle Time', value: `${[...teamStats].sort((a, b) => a.avgCycleTime - b.avgCycleTime).findIndex(t => t.team === selectedTeam) + 1}º`, sub: `${selectedStats.avgCycleTime} dias` },
-              { label: 'Ranking Qualidade', value: `${[...teamStats].sort((a, b) => a.bugRate - b.bugRate).findIndex(t => t.team === selectedTeam) + 1}º`, sub: `${selectedStats.bugRate}% bugs/issues` },
-              { label: 'Membros Ativos', value: `${selectedStats.members}`, sub: `${(selectedStats.throughput / (selectedStats.members || 1)).toFixed(1)} entregas/pessoa` },
+              { label: 'Ranking Throughput', value: `${teamStats.sort((a, b) => b.throughput - a.throughput).findIndex(t => t.team === selectedTeam) + 1}º`, sub: `${selectedStats.throughput} entregas`, items: selectedTeamItems.filter(i => COMPLETED_STATES.includes(i.state)) },
+              { label: 'Ranking Cycle Time', value: `${[...teamStats].sort((a, b) => a.avgCycleTime - b.avgCycleTime).findIndex(t => t.team === selectedTeam) + 1}º`, sub: `${selectedStats.avgCycleTime} dias`, items: selectedTeamItems.filter(i => COMPLETED_STATES.includes(i.state) && i.cycleTime != null) },
+              { label: 'Ranking Qualidade', value: `${[...teamStats].sort((a, b) => a.bugRate - b.bugRate).findIndex(t => t.team === selectedTeam) + 1}º`, sub: `${selectedStats.bugRate}% bugs/issues`, items: selectedTeamItems.filter(i => BUG_TYPES.includes(i.type) || ISSUE_TYPES.includes(i.type)) },
+              { label: 'Membros Ativos', value: `${selectedStats.members}`, sub: `${(selectedStats.throughput / (selectedStats.members || 1)).toFixed(1)} entregas/pessoa`, items: selectedTeamItems },
             ].map((card, i) => (
-              <div key={i} className="bg-ds-navy p-4 rounded-lg border border-ds-border text-center">
+              <div
+                key={i}
+                className="bg-ds-navy p-4 rounded-lg border border-ds-border text-center cursor-pointer hover:border-ds-green transition-colors"
+                onClick={() => setModalData({ title: `${card.label} — ${selectedTeam}`, items: card.items, color: '#47C5FB' })}
+              >
                 <p className="text-ds-text text-xs">{card.label}</p>
                 <p className="text-2xl font-bold text-ds-green">{card.value}</p>
                 <p className="text-ds-text text-xs mt-1">{card.sub}</p>
@@ -407,16 +499,20 @@ const TeamInsightsDashboard: React.FC<TeamInsightsDashboardProps> = ({ data }) =
           {/* Metrics comparison */}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
             {[
-              { label: 'Throughput', team: selectedStats.throughput, global: globalAvg.throughput, unit: '' },
-              { label: 'Cycle Time', team: selectedStats.avgCycleTime, global: globalAvg.avgCT, unit: 'dias', inverse: true },
-              { label: 'Lead Time', team: selectedStats.avgLeadTime, global: 0, unit: 'dias' },
-              { label: 'Conclusão', team: selectedStats.completionRate, global: globalAvg.completionRate, unit: '%' },
-              { label: 'Bugs/Issues', team: selectedStats.bugRate, global: globalAvg.bugRate, unit: '%', inverse: true },
-              { label: 'Total Itens', team: selectedStats.total, global: 0, unit: '' },
+              { label: 'Throughput', team: selectedStats.throughput, global: globalAvg.throughput, unit: '', items: selectedTeamItems.filter(i => COMPLETED_STATES.includes(i.state)) },
+              { label: 'Cycle Time', team: selectedStats.avgCycleTime, global: globalAvg.avgCT, unit: 'dias', inverse: true, items: selectedTeamItems.filter(i => COMPLETED_STATES.includes(i.state) && i.cycleTime != null) },
+              { label: 'Lead Time', team: selectedStats.avgLeadTime, global: 0, unit: 'dias', items: selectedTeamItems.filter(i => COMPLETED_STATES.includes(i.state) && i.leadTime != null) },
+              { label: 'Conclusão', team: selectedStats.completionRate, global: globalAvg.completionRate, unit: '%', items: selectedTeamItems.filter(i => COMPLETED_STATES.includes(i.state)) },
+              { label: 'Bugs/Issues', team: selectedStats.bugRate, global: globalAvg.bugRate, unit: '%', inverse: true, items: selectedTeamItems.filter(i => BUG_TYPES.includes(i.type) || ISSUE_TYPES.includes(i.type)) },
+              { label: 'Total Itens', team: selectedStats.total, global: 0, unit: '', items: selectedTeamItems },
             ].map((m, i) => {
               const isGood = m.inverse ? m.team < m.global : m.team > m.global;
               return (
-                <div key={i} className="bg-ds-navy p-3 rounded-lg border border-ds-border text-center">
+                <div
+                  key={i}
+                  className="bg-ds-navy p-3 rounded-lg border border-ds-border text-center cursor-pointer hover:border-ds-green transition-colors"
+                  onClick={() => setModalData({ title: `${m.label} — ${selectedTeam}`, items: m.items, color: '#47C5FB' })}
+                >
                   <p className="text-ds-text text-xs">{m.label}</p>
                   <p className={`text-xl font-bold ${m.global > 0 ? (isGood ? 'text-green-400' : 'text-red-400') : 'text-ds-light-text'}`}>
                     {m.team} <span className="text-xs font-normal">{m.unit}</span>
@@ -450,7 +546,10 @@ const TeamInsightsDashboard: React.FC<TeamInsightsDashboardProps> = ({ data }) =
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Predictability */}
             {predictability && (
-              <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
+              <div
+                className="bg-ds-navy p-4 rounded-lg border border-ds-border cursor-pointer hover:border-ds-green transition-colors"
+                onClick={() => setModalData({ title: `Previsibilidade — ${selectedTeam}`, items: selectedTeamItems.filter(i => COMPLETED_STATES.includes(i.state) && i.cycleTime != null), color: '#47C5FB' })}
+              >
                 <h3 className="text-ds-light-text font-bold text-lg mb-4">🎯 Previsibilidade do Time</h3>
                 <ChartInfoLamp info="Mede o quão previsível é o time com base no coeficiente de variação (CV) do cycle time. CV < 30% = ótimo, 30-50% = razoável, >50% = imprevisível." />
                 <div className="flex items-center gap-6">
@@ -490,8 +589,21 @@ const TeamInsightsDashboard: React.FC<TeamInsightsDashboardProps> = ({ data }) =
             {/* Score Trend */}
             {scoreTrend.length > 0 && (
               <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
-                <h3 className="text-ds-light-text font-bold text-lg mb-4">📈 Tendência do Score (12 semanas)</h3>
-                <ChartInfoLamp info="Evolução semanal do Score e throughput do time nas últimas 12 semanas. Mostra se o time está melhorando ou piorando." />
+                <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                  <h3 className="text-ds-light-text font-bold text-lg">📈 Tendência do Score (últimos 12 períodos)</h3>
+                  <div className="flex gap-1">
+                    {PERIOD_GROUP_MODE_OPTIONS.map(opt => (
+                      <button
+                        key={opt.value}
+                        onClick={() => setScoreGroupMode(opt.value)}
+                        className={`px-3 py-1.5 text-xs rounded-md font-medium transition-colors ${scoreGroupMode === opt.value ? 'bg-ds-green text-ds-dark-blue' : 'bg-ds-muted/20 text-ds-text hover:bg-ds-muted/40'}`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <ChartInfoLamp info="Evolução do Score e throughput do time nos últimos 12 períodos. Mostra se o time está melhorando ou piorando." />
                 <ResponsiveContainer width="100%" height={220}>
                   <LineChart data={scoreTrend}>
                     <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
@@ -501,7 +613,18 @@ const TeamInsightsDashboard: React.FC<TeamInsightsDashboardProps> = ({ data }) =
                       formatter={(value: number, name: string) => [name === 'score' ? `${value} pts` : name === 'throughput' ? `${value} itens` : `${value}d`, name === 'score' ? 'Score' : name === 'throughput' ? 'Throughput' : 'CT Médio']} />
                     <Legend />
                     <Line type="monotone" dataKey="score" name="Score" stroke="#64FFDA" strokeWidth={2} dot={{ r: 3 }} />
-                    <Line type="monotone" dataKey="throughput" name="Throughput" stroke="#47C5FB" strokeWidth={1.5} dot={{ r: 2 }} />
+                    <Line
+                      type="monotone"
+                      dataKey="throughput"
+                      name="Throughput"
+                      stroke="#47C5FB"
+                      strokeWidth={1.5}
+                      dot={{ r: 2, cursor: 'pointer', onClick: (e: any) => {
+                        const point = e?.payload;
+                        if (!point) return;
+                        setModalData({ title: `Entregas — ${point.week}`, items: point.items || [], color: '#47C5FB' });
+                      } }}
+                    />
                   </LineChart>
                 </ResponsiveContainer>
               </div>

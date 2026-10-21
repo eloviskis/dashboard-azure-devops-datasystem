@@ -5,9 +5,11 @@ import {
   Cell, LabelList
 } from 'recharts';
 import { format, subMonths, startOfMonth, endOfMonth, isWithinInterval, eachMonthOfInterval, parseISO } from 'date-fns';
+import { getPeriodBuckets, PeriodGroupMode, PERIOD_GROUP_MODE_OPTIONS } from '../utils/periodGrouping';
 import { ptBR } from 'date-fns/locale';
 import { WorkItem } from '../types';
 import ChartInfoLamp from './ChartInfoLamp';
+import { exportItemsXlsx, ExportColumn } from '../utils/exportXlsx';
 import { useAuth } from '../contexts/AuthContext';
 
 // ─── tipos ───────────────────────────────────────────────────────────────────
@@ -666,6 +668,7 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
   const [activePersons, setActivePersons] = useState<Set<string>>(new Set());
   const [selectedPerson, setSelectedPerson] = useState<string | null>(null);
   const [modalData, setModalData] = useState<ModalData | null>(null);
+  const [trendGroupMode, setTrendGroupMode] = useState<PeriodGroupMode>('monthly');
   const [profileModalData, setProfileModalData] = useState<ProfileModalData | null>(null);
   const [filterBarCollapsed, setFilterBarCollapsed] = useState(false);
 
@@ -918,6 +921,29 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
     return map;
   }, [filteredMembers, periodItems, months]);
 
+  const [exportingXlsx, setExportingXlsx] = useState(false);
+  const handleExportXlsx = async () => {
+    if (filteredMembers.length === 0) return;
+    setExportingXlsx(true);
+    try {
+      const columns: ExportColumn<MemberConfig>[] = [
+        { header: 'Nome', key: 'name', width: 26, value: m => m.name },
+        { header: 'Senioridade', key: 'seniority', width: 16, value: m => m.seniority },
+        { header: 'Cargo', key: 'role', width: 12, value: m => m.role },
+        { header: 'Ativo', key: 'active', width: 10, value: m => m.active ? 'Sim' : 'Não' },
+        { header: 'Tempo de DS (anos)', key: 'years', width: 16, value: m => m.yearsAtCompany ?? '' },
+        { header: 'Entregues', key: 'delivered', width: 12, value: m => personMetrics[m.name]?.delivered ?? 0 },
+        { header: 'Em Andamento', key: 'inProgress', width: 14, value: m => personMetrics[m.name]?.inProgress ?? 0 },
+        { header: 'Bugs', key: 'bugs', width: 10, value: m => personMetrics[m.name]?.bugs ?? 0 },
+        { header: 'Cycle Time Médio (dias)', key: 'avgCT', width: 20, value: m => personMetrics[m.name]?.avgCycleTime != null ? Math.round((personMetrics[m.name].avgCycleTime as number) * 10) / 10 : '' },
+        { header: 'Story Points', key: 'sp', width: 14, value: m => personMetrics[m.name]?.storyPoints ?? 0 },
+      ];
+      await exportItemsXlsx(filteredMembers, columns, `TeamComparison_${format(new Date(), 'yyyy-MM-dd')}.xlsx`, 'Pessoas');
+    } finally {
+      setExportingXlsx(false);
+    }
+  };
+
   // ── dados para gráfico de throughput
   const throughputChartData = useMemo(() =>
     activeFilteredMembers
@@ -959,16 +985,27 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
     [activeFilteredMembers, personMetrics]
   );
 
+  // Baldes com a granularidade escolhida pelo usuário, sobre a mesma janela que `months` já cobre —
+  // separado de `months`/`byMonth` porque esses são compartilhados com outras partes da tela (fixos em mensal).
+  const trendBuckets = useMemo(() => {
+    if (months.length === 0) return [];
+    return getPeriodBuckets(months[0], endOfMonth(months[months.length - 1]), trendGroupMode);
+  }, [months, trendGroupMode]);
+
   const lineChartData = useMemo(() =>
-    months.map(m => {
-      const key = format(m, 'MMM/yy', { locale: ptBR });
-      const row: Record<string, any> = { mes: key };
+    trendBuckets.map(({ label, start, end }) => {
+      const row: Record<string, any> = { mes: label };
       top8.forEach(mc => {
-        row[mc.name.split(' ')[0]] = personMetrics[mc.name]?.byMonth[key] ?? 0;
+        const count = personMetrics[mc.name]?.items.filter(it => {
+          if (!COMPLETED_STATES.includes(it.state)) return false;
+          const d = it.closedDate ? new Date(it.closedDate as string) : new Date(it.changedDate || it.createdDate || '');
+          return d >= start && d <= end;
+        }).length ?? 0;
+        row[mc.name.split(' ')[0]] = count;
       });
       return row;
     }),
-    [months, top8, personMetrics]
+    [trendBuckets, top8, personMetrics]
   );
 
   // ── dados radar (top 6 comparativos)
@@ -1252,6 +1289,15 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
           )}
         </div>
 
+        <button
+          onClick={handleExportXlsx}
+          disabled={exportingXlsx || filteredMembers.length === 0}
+          className="px-3 py-2 text-xs rounded-md font-medium bg-ds-green text-ds-dark-blue hover:bg-ds-green/80 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          title="Exporta as pessoas filtradas para .xlsx"
+        >
+          {exportingXlsx ? 'Exportando…' : `📥 .xlsx (${filteredMembers.length})`}
+        </button>
+
         {/* ── botão limpar filtros ── */}
         <button
           onClick={() => {
@@ -1438,8 +1484,21 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
 
           {/* ── tendência histórica ── */}
           <div className="bg-ds-navy p-4 rounded-xl border border-ds-border">
-            <ChartInfoLamp info="Evolução dos itens entregues por pessoa ao longo dos meses. Clique nos nomes abaixo para mostrar/ocultar linhas." />
-            <h3 className="text-ds-light-text font-bold text-base mb-2">📈 Tendência de Entregas Mensais</h3>
+            <ChartInfoLamp info="Evolução dos itens entregues por pessoa ao longo do período. Clique nos nomes abaixo para mostrar/ocultar linhas." />
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
+              <h3 className="text-ds-light-text font-bold text-base">📈 Tendência de Entregas</h3>
+              <div className="flex gap-1">
+                {PERIOD_GROUP_MODE_OPTIONS.map(opt => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setTrendGroupMode(opt.value)}
+                    className={`px-3 py-1.5 text-xs rounded-md font-medium transition-colors ${trendGroupMode === opt.value ? 'bg-ds-green text-ds-dark-blue' : 'bg-ds-muted/20 text-ds-text hover:bg-ds-muted/40'}`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
             <p className="text-ds-text text-xs mb-4">Mostrando top {top8.length} pessoas por total de entregas. Clique para filtrar.</p>
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={lineChartData} margin={{ left: 0, right: 16, top: 8, bottom: 4 }}>
@@ -1449,14 +1508,28 @@ const TeamComparisonDashboard: React.FC<Props> = ({ data }) => {
                 <Tooltip content={<CustomTooltip />} />
                 {top8.map((mc, i) => {
                   const firstName = mc.name.split(' ')[0];
+                  const color = PERSON_PALETTE[i % PERSON_PALETTE.length];
                   return (
                     <Line
                       key={mc.name}
                       type="monotone"
                       dataKey={firstName}
-                      stroke={PERSON_PALETTE[i % PERSON_PALETTE.length]}
+                      stroke={color}
                       strokeWidth={isLineVisible(mc.name) ? 2 : 0}
-                      dot={{ r: 3 }}
+                      dot={{ r: 3, cursor: 'pointer', onClick: (e: any) => {
+                        const met = personMetrics[mc.name];
+                        if (!met) return;
+                        const mes = e?.payload?.mes;
+                        const bucket = trendBuckets.find(b => b.label === mes);
+                        const items = bucket
+                          ? met.items.filter(it => {
+                              if (!COMPLETED_STATES.includes(it.state)) return false;
+                              const d = it.closedDate ? new Date(it.closedDate as string) : new Date(it.changedDate || it.createdDate || '');
+                              return d >= bucket.start && d <= bucket.end;
+                            })
+                          : met.items;
+                        setModalData({ title: `Entregas — ${mc.name} (${mes || 'todo o período'})`, items, color });
+                      } }}
                       activeDot={{ r: 5 }}
                     />
                   );
