@@ -32,13 +32,15 @@ export interface WorkItem {
   tags?: string | string[];
   url?: string;
   cycleTime?: number | null;
+  // Cycle time em dias úteis (sem sábado/domingo), usado pelo Painel Mensal. Não substitui cycleTime.
+  cycleTimeBusinessDays?: number | null;
   leadTime?: number | null;
   age?: number;
   // Campos customizados e outros
   tipoCliente?: string | null;
   codeReviewLevel1?: string | null;
   codeReviewLevel2?: string | null;
-  // Campo simulado no frontend para análise de gargalos
+  // Tempo real (em dias) passado em cada status, calculado a partir do histórico de transições do Azure DevOps
   timeInStatusDays?: Record<string, number>;
   // Campos para análise de causa raiz em Issues (nomes corretos do Azure DevOps)
   priority?: number | string | null;
@@ -76,6 +78,8 @@ export interface WorkItem {
   remainingWork?: number | null;    // Trabalho restante em horas
   completedWork?: number | null;    // Trabalho completado em horas
   parentId?: number | null;         // ID do item pai (User Story/Issue)
+  startDate?: string | null;        // Microsoft.VSTS.Scheduling.StartDate — início planejado (Gantt)
+  targetDate?: string | null;       // Microsoft.VSTS.Scheduling.TargetDate — data alvo/fim planejado (Gantt)
   [key: string]: any;
 }
 
@@ -102,6 +106,8 @@ export interface PullRequestReviewer {
   name: string;
   vote: number; // 10=approved, 5=approved with suggestions, 0=no vote, -5=waiting, -10=rejected
   isRequired?: boolean;
+  isContainer?: boolean; // true = grupo (ex: "Code Review"), não é uma pessoa
+  team?: string | null; // time em que essa pessoa mais aparece como dev nos work items
 }
 
 export interface PullRequest {
@@ -121,5 +127,7 @@ export interface PullRequest {
   votes: { name: string; vote: number }[];
   hasValidaCRLabel: boolean;
   lifetimeDays: number | null;
+  // null = ainda não sincronizado do Azure (não confundir com PR de zero arquivos)
+  changedFilesCount?: number | null;
   url: string;
 }

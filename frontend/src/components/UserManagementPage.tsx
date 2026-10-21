@@ -1,15 +1,25 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth, ROLE_LABELS, UserRole } from '../contexts/AuthContext';
+import NotificationRoleConfigModal from './NotificationRoleConfigModal';
 
 interface User {
   id: number;
   username: string;
   email: string;
-  role: 'admin' | 'user';
+  role: UserRole;
   tabPermissions?: string[] | null;
   createdAt: string;
   updatedAt?: string;
 }
+
+const ROLE_BADGE_COLORS: Record<UserRole, string> = {
+  admin: 'bg-purple-500/20 text-purple-400',
+  QA: 'bg-teal-500/20 text-teal-400',
+  PO: 'bg-orange-500/20 text-orange-400',
+  DEV: 'bg-cyan-500/20 text-cyan-400',
+  GESTOR: 'bg-pink-500/20 text-pink-400',
+  user: 'bg-blue-500/20 text-blue-400',
+};
 
 // Lista de todas as abas do dashboard (espelha DEFAULT_TAB_CONFIG do App.tsx)
 const ALL_TABS = [
@@ -34,13 +44,15 @@ const ALL_TABS = [
   { id: 'dora',                label: 'Indicadores DevOps' },
   { id: 'tags',                label: 'Análise de Tags' },
   { id: 'clients',             label: 'Análise por Cliente' },
-  { id: 'scrum-ctc',           label: 'Scrum (CTC/Franquia)' },
+  { id: 'scrum-ctc',           label: 'Scrum' },
+  { id: 'gantt',                label: 'Gantt por Time' },
   { id: 'team-comparison',     label: 'Pessoas & Senioridade' },
   { id: 'item-list',           label: 'Lista de Itens' },
   { id: 'documentation',       label: '📖 Documentação' },
   { id: 'devtracker',          label: '🗂️ DevTracker' },
   { id: 'rituals',             label: '🗓️ Ritos & Cerimônias' },
   { id: 'qa-tracker',         label: '🧪 QA Tracker' },
+  { id: 'painel-mensal',       label: '📅 Painel por Time' },
 ];
 
 const UserManagementPage: React.FC = () => {
@@ -57,11 +69,13 @@ const UserManagementPage: React.FC = () => {
     username: '', 
     email: '', 
     password: '', 
-    role: 'user' as 'admin' | 'user',
+    role: 'user' as UserRole,
     tabPermissions: null as string[] | null,  // null = acesso total
   });
   const [restrictTabs, setRestrictTabs] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showNotificationConfig, setShowNotificationConfig] = useState(false);
+  const [resendingId, setResendingId] = useState<number | null>(null);
 
   const API_URL = import.meta.env.VITE_API_URL || '';
 
@@ -201,6 +215,37 @@ const UserManagementPage: React.FC = () => {
     }
   };
 
+  const handleResendCredentials = async (user: User) => {
+    if (!confirm(`Gerar uma nova senha temporária e reenviar por email para "${user.username}" (${user.email})?`)) {
+      return;
+    }
+
+    setError('');
+    setSuccess('');
+    setResendingId(user.id);
+
+    try {
+      const response = await fetch(`${API_URL}/api/users/${user.id}/resend-credentials`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setSuccess(`Credenciais reenviadas para ${user.email}.`);
+      } else {
+        setError(data.error || 'Erro ao reenviar credenciais');
+      }
+    } catch (err) {
+      setError('Erro de conexão');
+    } finally {
+      setResendingId(null);
+    }
+  };
+
   const startEdit = (user: User) => {
     setEditingUser(user);
     const hasRestrictions = Array.isArray(user.tabPermissions);
@@ -254,17 +299,32 @@ const UserManagementPage: React.FC = () => {
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-ds-light-text">Gerenciamento de Usuários</h1>
         {!showCreateForm && !editingUser && (
-          <button
-            onClick={() => setShowCreateForm(true)}
-            className="px-4 py-2 bg-ds-green hover:bg-ds-green/90 text-ds-dark-blue font-semibold rounded-lg transition-all flex items-center gap-2"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-            </svg>
-            Novo Usuário
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setShowNotificationConfig(true)}
+              className="px-4 py-2 bg-ds-navy hover:bg-ds-border border border-ds-border text-ds-light-text font-semibold rounded-lg transition-all flex items-center gap-2"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+              </svg>
+              Notificações por Cargo
+            </button>
+            <button
+              onClick={() => setShowCreateForm(true)}
+              className="px-4 py-2 bg-ds-green hover:bg-ds-green/90 text-ds-dark-blue font-semibold rounded-lg transition-all flex items-center gap-2"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
+              Novo Usuário
+            </button>
+          </div>
         )}
       </div>
+
+      {showNotificationConfig && (
+        <NotificationRoleConfigModal onClose={() => setShowNotificationConfig(false)} />
+      )}
 
       {/* Messages */}
       {error && (
@@ -334,11 +394,15 @@ const UserManagementPage: React.FC = () => {
               <select
                 id="um-role"
                 value={formData.role}
-                onChange={(e) => setFormData({ ...formData, role: e.target.value as 'admin' | 'user' })}
+                onChange={(e) => setFormData({ ...formData, role: e.target.value as UserRole })}
                 className="w-full px-4 py-2 bg-ds-dark-blue border border-ds-border rounded-lg text-ds-light-text focus:outline-none focus:ring-2 focus:ring-ds-green"
                 disabled={isSubmitting}
               >
-                <option value="user">Usuário</option>
+                <option value="user">Usuário (sem cargo definido)</option>
+                <option value="QA">QA</option>
+                <option value="PO">PO</option>
+                <option value="DEV">Desenvolvedor(a)</option>
+                <option value="GESTOR">Gestor(a)</option>
                 <option value="admin">Administrador</option>
               </select>
             </div>
@@ -451,12 +515,8 @@ const UserManagementPage: React.FC = () => {
               <tr key={user.id} className="hover:bg-ds-dark-blue/50 transition-colors">
                 <td className="px-4 py-3 text-ds-light-text">{user.username}</td>
                 <td className="px-4 py-3">
-                  <span className={`px-2 py-1 rounded text-xs font-medium ${
-                    user.role === 'admin' 
-                      ? 'bg-purple-500/20 text-purple-400' 
-                      : 'bg-blue-500/20 text-blue-400'
-                  }`}>
-                    {user.role === 'admin' ? 'Administrador' : 'Usuário'}
+                  <span className={`px-2 py-1 rounded text-xs font-medium ${ROLE_BADGE_COLORS[user.role] || ROLE_BADGE_COLORS.user}`}>
+                    {ROLE_LABELS[user.role] || 'Usuário'}
                   </span>
                   {Array.isArray(user.tabPermissions) ? (
                     <span className="ml-2 px-2 py-1 rounded text-xs font-medium bg-yellow-500/20 text-yellow-400" title={`Acesso restrito a ${user.tabPermissions.length} aba(s)`}>
@@ -473,6 +533,23 @@ const UserManagementPage: React.FC = () => {
                 </td>
                 <td className="px-4 py-3 text-right">
                   <div className="flex justify-end gap-2">
+                    <button
+                      onClick={() => handleResendCredentials(user)}
+                      disabled={resendingId === user.id}
+                      className="p-2 text-ds-text hover:text-blue-400 transition-colors disabled:opacity-40"
+                      title="Reenviar cadastro/senha"
+                    >
+                      {resendingId === user.id ? (
+                        <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                        </svg>
+                      ) : (
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                        </svg>
+                      )}
+                    </button>
                     <button
                       onClick={() => startEdit(user)}
                       className="p-2 text-ds-text hover:text-ds-green transition-colors"
