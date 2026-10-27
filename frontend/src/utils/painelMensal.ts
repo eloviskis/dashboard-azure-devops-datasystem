@@ -101,8 +101,10 @@ const pct = (parte: number, total: number): number | null =>
 
 // Fluxo de Eficiência como a GetNaves: ativo ÷ (ativo + fila) em cada item, depois a média dos itens.
 // Estados em minúsculo para casar com timeInStatusDays. Itens sem tempo nesses estados não entram.
+// "Para Desenvolver" conta como fila (confirmado comparando, item a item, com a API da GetNave: sem essa
+// coluna o erro total contra a planilha era de 36 pontos nos 9 meses de 2026 já fechados; com ela, 16).
 const ESTADOS_ATIVOS = ['active', 'testando qa'];
-const ESTADOS_FILA = ['aguardando code review', 'fazendo code review', 'aguardando qa'];
+const ESTADOS_FILA = ['aguardando code review', 'fazendo code review', 'aguardando qa', 'para desenvolver'];
 const diasEm = (item: WorkItem, estados: string[]) =>
   Object.entries(item.timeInStatusDays ?? {})
     .filter(([estado]) => estados.includes(estado.toLowerCase()))
