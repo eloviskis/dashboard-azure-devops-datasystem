@@ -1,7 +1,7 @@
 // Check do Painel por Time. Sem framework — `node painelMensal.check.mjs`
 // (Node 24 executa .ts por type-stripping, igual os outros checks).
 import assert from 'node:assert/strict';
-import { buildPainelMensal, dentroDaFaixa, faixaDoTime, itensDaMetrica, itensDoTime, METAS_PADRAO } from './painelMensal.ts';
+import { buildPainelMensal, dentroDaFaixa, faixaDoTime, itensDaMetrica, itensDoTime, METAS_PADRAO, metricasDoTime } from './painelMensal.ts';
 import { getPeriodBuckets } from './periodGrouping.ts';
 
 const MAR = (dia) => `2026-03-${String(dia).padStart(2, '0')}T12:00:00Z`;
@@ -46,6 +46,10 @@ const items = [
   // confirmado com o CSV real dos dois times
   item('Sustentacao', { type: 'Bug', cycleTimeBusinessDays: 999, cycleTime: 999 }),
   item('Boltz', { type: 'Bug', cycleTimeBusinessDays: 999, cycleTime: 999 }),
+  // Franquia, março: tem dado de Fluxo de Eficiência (o cálculo roda igual pra qualquer time), mas o perfil
+  // dela não acompanha essa métrica — prova que mediaTodos/mediaSemSustentacao não contam esse valor mesmo
+  // assim, embora o número por time (porTime.fluxo.Franquia) continue calculado normalmente.
+  item('Franquia', { timeInStatusDays: { Active: 9, 'Aguardando code review': 1 }, cycleTimeBusinessDays: 15, cycleTime: 15 }),
   // Sem Time nunca entra
   item('Sem Time', { cycleTimeBusinessDays: 999, cycleTime: 999 }),
 ];
@@ -57,12 +61,14 @@ const MAR_IDX = 2;
 const FEV_IDX = 1;
 
 assert.equal(p.labels.length, 12, 'uma coluna por mês');
-assert.deepEqual(p.times, ['Alfa', 'Beta', 'Gama', 'Sustentacao'], 'sem Sem Time, ordenados');
+assert.deepEqual(p.times, ['Alfa', 'Beta', 'Franquia', 'Gama', 'Sustentacao'], 'sem Sem Time, ordenados');
 
 // Fluxo de Eficiência (conta da aba Kanban)
 assert.equal(p.porTime.fluxo.Alfa[MAR_IDX], 75, '6 ativos ÷ (6+2) = 75%');
 assert.equal(p.porTime.fluxo.Alfa[0], null, 'sem concluídos em janeiro = null, não zero');
 assert.equal(p.porTime.fluxo.Beta[MAR_IDX], null, 'item sem tempo em nenhum estado não entra no fluxo');
+assert.equal(p.porTime.fluxo.Franquia[MAR_IDX], 90, 'Franquia: cálculo roda igual pra qualquer time (9 ativos ÷ (9+1))');
+assert.equal(p.mediaTodos.fluxo[MAR_IDX], 75, 'mas a Franquia não entra na média: perfil dela não acompanha Fluxo de Eficiência');
 
 // Cycle Time em dias úteis, P85: null não entra
 assert.equal(p.porTime.cycle.Alfa[MAR_IDX], 20, 'P85 nearest-rank de 10 e 20 = 20');
@@ -105,6 +111,14 @@ assert.equal(dentroDaFaixa(35, METAS_PADRAO.retrabalho), false);
 assert.equal(dentroDaFaixa(null, { min: 45, max: 50 }), null, 'sem dado não é verde nem vermelho');
 assert.deepEqual(faixaDoTime(METAS_PADRAO.fluxo, 'Sustentação'), { min: 50, max: 55 }, 'override da Sustentação');
 assert.deepEqual(faixaDoTime(METAS_PADRAO.fluxo, 'Alfa'), { min: 45, max: 50 });
+assert.deepEqual(faixaDoTime(METAS_PADRAO.slaP0, 'Sustentação'), { min: 60, max: 70 }, 'SLA P0 só tem meta própria de Sustentação');
+assert.deepEqual(faixaDoTime(METAS_PADRAO.bugs, 'Franquia'), { min: 80, max: 100 }, 'override da Franquia/CTC');
+assert.deepEqual(faixaDoTime(METAS_PADRAO.retrabalho, 'Franquia'), { min: null, max: 31 }, 'override da Franquia/CTC');
+
+// Perfil por time: quais métricas cada um acompanha, igual aos blocos da planilha de gestão
+assert.deepEqual(metricasDoTime('Sustentacao'), ['fluxo', 'cycle', 'slaP0', 'retrabalho', 'qtdP0'], 'Sustentação não tem Bugs Produção');
+assert.deepEqual(metricasDoTime('Franquia'), ['bugs', 'retrabalho', 'qtdP0'], 'Franquia/CTC não tem Fluxo nem Cycle Time');
+assert.deepEqual(metricasDoTime('Alfa'), ['fluxo', 'cycle', 'bugs', 'retrabalho', 'qtdP0'], 'time genérico cai no perfil padrão, sem SLA P0');
 
 // itensDaMetrica: a lista por trás do gráfico de barras nunca diverge do número da tabela
 const alfaMar = itensDoTime(items, 'Alfa');
@@ -116,4 +130,4 @@ assert.equal(itensDaMetrica(alfaMar, bucketMar, 'qtdP0').length, 2, 'qtdP0: os 2
 assert.equal(itensDaMetrica(alfaMar, bucketMar, 'slaP0').length, 1, 'slaP0: só o P0 concluído em até 7 dias (o de 9 dias fica fora)');
 assert.equal(itensDaMetrica(alfaMar, meses[FEV_IDX], 'bugs').length, 2, 'bugs: Issues criadas em fevereiro');
 
-console.log('✅ painelMensal: fluxo, cycle (P85), bugs, retrabalho, P0, semanal, consolidado, faixas e itensDaMetrica OK');
+console.log('✅ painelMensal: fluxo, cycle (P85), bugs, retrabalho, P0, semanal, consolidado, faixas, perfil por time e itensDaMetrica OK');

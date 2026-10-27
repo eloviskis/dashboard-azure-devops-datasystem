@@ -2,11 +2,12 @@
 // (dois lado a lado), médias e resumos como fórmulas, e fonte verde/vermelha conforme a meta.
 import type { CellValue, Workbook, Worksheet } from 'exceljs';
 import type { MetasPainel, MetricKey, PainelMensal } from './painelMensal.ts';
-import { dentroDaFaixa, faixaDoTime, normalizarTime, textoFaixa } from './painelMensal.ts';
+import { dentroDaFaixa, faixaDoTime, metricasDoTime, normalizarTime, textoFaixa } from './painelMensal.ts';
 
 // Ordem e nomes da planilha. Times fora dela entram depois, em ordem alfabética.
 const ORDEM: [string, string][] = [
   ['sustentacao', 'Sustentação'], ['boltz', 'Boltz'], ['estrategico', 'Estratégico'], ['tatico', 'Tático'], ['wakanda', 'Wakanda'],
+  ['franquia', 'Franquia/CTC'],
 ];
 const posicaoTime = (t: string) => {
   const i = ORDEM.findIndex(([k]) => k === normalizarTime(t));
@@ -104,7 +105,7 @@ export async function montarPainelXlsx(painel: PainelMensal, metas: MetasPainel)
     r += 2;
     cabecalho(r, COL_ROTULO, false);
     r++;
-    for (const t of times) {
+    for (const t of times.filter(t => metricasDoTime(t).includes(key))) {
       const vals = painel.porTime[key][t];
       celula(ws, r, COL_ROTULO, nomeTime(t), { alinhar: 'left' });
       vals.forEach((v, i) => celula(ws, r, COL_ROTULO + 1 + i, v, { formato }));
@@ -127,7 +128,9 @@ export async function montarPainelXlsx(painel: PainelMensal, metas: MetasPainel)
     ws.mergeCells(top, x, top, x + LARGURA - 1);
     celula(ws, top, x, nomeTime(t).toUpperCase(), { negrito: true, tamanho: 14 });
     cabecalho(top + 1, x, true);
-    METRICAS_BLOCO.forEach((m, j) => {
+    // Só as métricas que o perfil desse time acompanha (ex.: Franquia/CTC não tem Fluxo/Cycle Time) — o bloco
+    // fica mais curto, com espaço em branco embaixo, igual à própria planilha.
+    METRICAS_BLOCO.filter(m => metricasDoTime(t).includes(m.key)).forEach((m, j) => {
       const row = top + 2 + j;
       const faixa = faixaDoTime(metas[m.key], t);
       const vals = painel.porTime[m.key][t];
@@ -148,13 +151,17 @@ export async function montarPainelXlsx(painel: PainelMensal, metas: MetasPainel)
     cabecalho(r, X0, false);
     r++;
   };
-  const naoSust = times.filter(t => normalizarTime(t) !== 'sustentacao');
   const ehSust = (t: string) => normalizarTime(t) === 'sustentacao';
+  // Times cujo bloco tem a linha de Cycle Time / Fluxo de Eficiência (Franquia/CTC não tem nenhuma das duas —
+  // o offset fixo top+3/top+2 abaixo só é válido pra quem tem; ver filtro de METRICAS_BLOCO no bloco por time).
+  const timesComCycle = times.filter(t => metricasDoTime(t).includes('cycle'));
+  const timesComFluxo = times.filter(t => metricasDoTime(t).includes('fluxo'));
+  const naoSust = timesComFluxo.filter(t => !ehSust(t));
 
   // 1) CYCLE TIME — MÉDIA MENSAL (TODOS OS TIMES): cada linha aponta para a célula do bloco do time
   titulo('CYCLE TIME — MÉDIA MENSAL (TODOS OS TIMES)');
   const linhaCTTime: Record<string, number> = {};
-  for (const t of times) {
+  for (const t of timesComCycle) {
     const { x, top } = posicoes[t];
     linhaCTTime[t] = r;
     celula(ws, r, X0, nomeTime(t), { alinhar: 'left' });
@@ -164,7 +171,7 @@ export async function montarPainelXlsx(painel: PainelMensal, metas: MetasPainel)
     celula(ws, r, X0 + P + 1, formulaMedia([`${letra(X0 + 1)}${r}:${letra(X0 + P)}${r}`], media(painel.porTime.cycle[t])), { formato: '0.0' });
     r++;
   }
-  const ctTimes = times.map(t => linhaCTTime[t]);
+  const ctTimes = timesComCycle.map(t => linhaCTTime[t]);
   celula(ws, r, X0, 'MÉDIA GERAL', { alinhar: 'left', negrito: true });
   painel.mediaTodos.cycle.forEach((v, i) => {
     const col = letra(X0 + 1 + i);
@@ -174,7 +181,7 @@ export async function montarPainelXlsx(painel: PainelMensal, metas: MetasPainel)
   r++;
   const ctSemSust = r;
   celula(ws, r, X0, 'MÉDIA SEM SUSTENTAÇÃO', { alinhar: 'left', negrito: true });
-  const ctNaoSust = times.filter(t => !ehSust(t)).map(t => linhaCTTime[t]);
+  const ctNaoSust = timesComCycle.filter(t => !ehSust(t)).map(t => linhaCTTime[t]);
   painel.mediaSemSustentacao.cycle.forEach((v, i) => {
     const col = letra(X0 + 1 + i);
     celula(ws, r, X0 + 1 + i, ctNaoSust.length

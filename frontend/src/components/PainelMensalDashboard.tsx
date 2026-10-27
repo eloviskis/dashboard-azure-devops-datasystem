@@ -8,7 +8,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { baixarXlsx, montarPainelXlsx } from '../utils/painelXlsx.ts';
 import { getPeriodBuckets, type PeriodBucket, type PeriodGroupMode } from '../utils/periodGrouping.ts';
 import {
-  buildPainelMensal, dentroDaFaixa, faixaDoTime, itensDaMetrica, itensDoTime, METAS_PADRAO, TIMES_PLANILHA, textoFaixa,
+  buildPainelMensal, dentroDaFaixa, faixaDoTime, itensDaMetrica, itensDoTime, METAS_PADRAO, metricasDoTime,
+  TIMES_PADRAO_PAINEL, textoFaixa,
   type Faixa, type MetaMetrica, type MetasPainel, type MetricKey,
 } from '../utils/painelMensal.ts';
 
@@ -80,7 +81,12 @@ const INFO: Record<MetricKey, string> = {
   slaP0: '% dos itens P0 (prioridade vazia ou 0) concluídos no período com Cycle Time em até 7 dias corridos. Prioridade 1 (Crítica) não entra.',
 };
 
-const nomeTime = (t: string) => (t.toLowerCase().replace(/[^a-z]/g, '') === 'sustentacao' ? 'Sustentação' : t);
+const nomeTime = (t: string) => {
+  const norm = t.toLowerCase().replace(/[^a-z]/g, '');
+  if (norm === 'sustentacao') return 'Sustentação';
+  if (norm === 'franquia') return 'Franquia/CTC';
+  return t;
+};
 
 const corCelula = (ok: boolean | null) =>
   ok === true ? 'text-green-400' : ok === false ? 'text-red-400' : 'text-ds-text/40';
@@ -185,8 +191,8 @@ const PainelMensalDashboard: React.FC<Props> = ({ data }) => {
   }), [data, ciclo]);
 
   // Usa TODOS os itens (não o quickFilter): o painel tem a própria janela de datas.
-  // Times escolhidos no seletor. Começa com os 5 da planilha; o usuário marca/desmarca os outros.
-  const [timesEscolhidos, setTimesEscolhidos] = useState<Set<string>>(() => new Set(TIMES_PLANILHA));
+  // Times escolhidos no seletor. Começa com os 6 times com bloco na planilha; o usuário marca/desmarca os outros.
+  const [timesEscolhidos, setTimesEscolhidos] = useState<Set<string>>(() => new Set(TIMES_PADRAO_PAINEL));
   const todosTimes = useMemo(
     () => [...new Set(itens.map(i => i.team).filter((t): t is string => !!t && t !== 'Sem Time'))]
       .sort((a, b) => a.localeCompare(b, 'pt-BR')),
@@ -214,8 +220,11 @@ const PainelMensalDashboard: React.FC<Props> = ({ data }) => {
     });
   };
 
+  // Só os times cujo perfil acompanha essa métrica (ex.: Franquia some de Fluxo/Cycle, Sustentação some de Bugs).
+  const timesDaMetrica = (key: MetricKey) => painel.times.filter(t => metricasDoTime(t).includes(key));
+
   const linhasDaMetrica = (key: MetricKey) => [
-    ...painel.times.map(t => ({ nome: nomeTime(t), valores: painel.porTime[key][t], team: t, media: false })),
+    ...timesDaMetrica(key).map(t => ({ nome: nomeTime(t), valores: painel.porTime[key][t], team: t, media: false })),
     { nome: 'Média de todos os times', valores: painel.mediaTodos[key], team: undefined, media: true },
     { nome: 'Média sem Sustentação', valores: painel.mediaSemSustentacao[key], team: undefined, media: true },
   ];
@@ -254,7 +263,7 @@ const PainelMensalDashboard: React.FC<Props> = ({ data }) => {
   // Uma linha por período, uma coluna por time — usado pelo gráfico de linha e pelo de barras.
   const linhasGrafico = (key: MetricKey) => painel.labels.map((lab, i) => {
     const row: Record<string, string | number | null> = { periodo: lab };
-    painel.times.forEach(t => { row[nomeTime(t)] = painel.porTime[key][t][i]; });
+    timesDaMetrica(key).forEach(t => { row[nomeTime(t)] = painel.porTime[key][t][i]; });
     return row;
   });
 
@@ -275,7 +284,7 @@ const PainelMensalDashboard: React.FC<Props> = ({ data }) => {
           {meta.max !== null && meta.min === null && (
             <ReferenceLine y={meta.max} stroke="#64FFDA" strokeDasharray="4 4" label={{ value: `limite ${meta.max}${meta.unidade}`, fill: '#64FFDA', fontSize: 10 }} />
           )}
-          {painel.times.map((t, i) => (
+          {timesDaMetrica(key).map((t, i) => (
             <Line key={t} type="monotone" dataKey={nomeTime(t)} stroke={CHART_COLORS.palette[i % CHART_COLORS.palette.length]} strokeWidth={2} dot={{ r: 3 }} connectNulls={false} />
           ))}
         </LineChart>
@@ -305,7 +314,7 @@ const PainelMensalDashboard: React.FC<Props> = ({ data }) => {
           {meta.max !== null && meta.min === null && (
             <ReferenceLine y={meta.max} stroke="#64FFDA" strokeDasharray="4 4" />
           )}
-          {painel.times.map((t, i) => (
+          {timesDaMetrica(key).map((t, i) => (
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             <Bar key={t} dataKey={nomeTime(t)} fill={CHART_COLORS.palette[i % CHART_COLORS.palette.length]} cursor="pointer"
               onClick={(_: any, idx: number) => abrirModal(key, t, idx)} />
@@ -332,13 +341,13 @@ const PainelMensalDashboard: React.FC<Props> = ({ data }) => {
             <span className="w-56 text-ds-light-text">{m.label}</span>
             <label className="flex items-center gap-1">mín <input type="number" step="any" value={m.min ?? ''} onChange={e => ajustarLimite(key, 'min', e.target.value)} className="w-20 bg-ds-dark-blue border border-ds-border rounded px-2 py-1" /></label>
             <label className="flex items-center gap-1">máx <input type="number" step="any" value={m.max ?? ''} onChange={e => ajustarLimite(key, 'max', e.target.value)} className="w-20 bg-ds-dark-blue border border-ds-border rounded px-2 py-1" /></label>
-            {m.porTime?.sustentacao && (
-              <span className="flex items-center gap-2 text-ds-text">
-                Sustentação:
-                <label className="flex items-center gap-1">mín <input type="number" step="any" value={m.porTime.sustentacao.min ?? ''} onChange={e => ajustarLimite(key, 'min', e.target.value, 'sustentacao')} className="w-20 bg-ds-dark-blue border border-ds-border rounded px-2 py-1" /></label>
-                <label className="flex items-center gap-1">máx <input type="number" step="any" value={m.porTime.sustentacao.max ?? ''} onChange={e => ajustarLimite(key, 'max', e.target.value, 'sustentacao')} className="w-20 bg-ds-dark-blue border border-ds-border rounded px-2 py-1" /></label>
+            {Object.entries(m.porTime ?? {}).map(([teamKey, fx]) => (
+              <span key={teamKey} className="flex items-center gap-2 text-ds-text">
+                {nomeTime(teamKey)}:
+                <label className="flex items-center gap-1">mín <input type="number" step="any" value={fx.min ?? ''} onChange={e => ajustarLimite(key, 'min', e.target.value, teamKey)} className="w-20 bg-ds-dark-blue border border-ds-border rounded px-2 py-1" /></label>
+                <label className="flex items-center gap-1">máx <input type="number" step="any" value={fx.max ?? ''} onChange={e => ajustarLimite(key, 'max', e.target.value, teamKey)} className="w-20 bg-ds-dark-blue border border-ds-border rounded px-2 py-1" /></label>
               </span>
-            )}
+            ))}
           </div>
         );
       })}

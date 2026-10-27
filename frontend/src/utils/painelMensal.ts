@@ -22,23 +22,43 @@ export type MetasPainel = Record<MetricKey, MetaMetrica>;
 export const METAS_PADRAO: MetasPainel = {
   fluxo: { label: 'Fluxo de Eficiência', unidade: '%', min: 45, max: 50, porTime: { sustentacao: { min: 50, max: 55 } } },
   cycle: { label: 'Cycle Time (P85, dias úteis)', unidade: 'd', min: 20, max: 34, porTime: { sustentacao: { min: 10, max: 12 } } },
-  bugs: { label: 'Bugs Produção', unidade: '', min: 80, max: 100 },
-  retrabalho: { label: 'Índice de Retrabalho', unidade: '%', min: null, max: 31 },
+  bugs: { label: 'Bugs Produção', unidade: '', min: 80, max: 100, porTime: { franquia: { min: 80, max: 100 } } },
+  retrabalho: { label: 'Índice de Retrabalho', unidade: '%', min: null, max: 31, porTime: { franquia: { min: null, max: 31 } } },
   qtdP0: { label: 'Quantidade de P0', unidade: '', min: null, max: null },
-  slaP0: { label: 'SLA P0 (≤7 dias)', unidade: '%', min: 60, max: 70 },
+  // Só a Sustentação acompanha SLA P0 (ver PERFIS_TIME) — o geral fica igual ao override só pra não aparecer
+  // "sem meta" no cabeçalho da seção; nenhum outro time chega a usar esse valor geral.
+  slaP0: { label: 'SLA P0 (≤7 dias)', unidade: '%', min: 60, max: 70, porTime: { sustentacao: { min: 60, max: 70 } } },
 };
 
 // Retrabalho = Bug (achado em desenvolvimento) + Issue (escapou para produção): trabalho de correção.
 const TIPOS_RETRABALHO = ['Bug', 'Issue'];
 const SLA_P0_DIAS = 7;
 
-// Os 5 times da planilha de gestão. O painel mostra só estes por padrão.
+// Os 5 times da planilha de gestão com escopo de tipos confirmado contra o CSV da GetNaves (ver TIPOS_GETNAVES
+// abaixo). Não inclui Franquia/CTC de propósito — ver TIMES_PADRAO_PAINEL.
 export const TIMES_PLANILHA = ['Sustentacao', 'Boltz', 'Estrategico', 'Tatico', 'Wakanda'];
+
+// Times marcados por padrão ao abrir a tela. Inclui Franquia/CTC (tem bloco próprio na planilha), mas ela NÃO
+// entra em TIMES_PLANILHA: colocá-la lá também mudaria o escopo de tipos dela pra TIPOS_GETNAVES (só Issue/User
+// Story/Eventuality), que exclui Bug — e a Franquia tem Bugs reais (126 no banco) que entram no Índice de
+// Retrabalho. Sem validar isso contra um CSV real da GetNaves (como foi feito pros 5 times originais), ela fica
+// com o fallback de "todos os tipos" que já existe pra time novo (ver noEscopo).
+export const TIMES_PADRAO_PAINEL = [...TIMES_PLANILHA, 'Franquia'];
 
 export const normalizarTime = (team: string) =>
   team.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().trim();
 
 const isSustentacao = (team: string) => normalizarTime(team) === 'sustentacao';
+
+// Quais métricas cada time acompanha, igual aos blocos da planilha de gestão. qtdP0 não está em nenhum bloco da
+// planilha (é só da ferramenta), por isso entra nos 3 perfis sem distinção.
+const METRICAS_SUSTENTACAO: MetricKey[] = ['fluxo', 'cycle', 'slaP0', 'retrabalho', 'qtdP0'];
+const METRICAS_FRANQUIA: MetricKey[] = ['bugs', 'retrabalho', 'qtdP0'];
+const METRICAS_PADRAO_TIME: MetricKey[] = ['fluxo', 'cycle', 'bugs', 'retrabalho', 'qtdP0'];
+const PERFIS_TIME: Record<string, MetricKey[]> = { sustentacao: METRICAS_SUSTENTACAO, franquia: METRICAS_FRANQUIA };
+export function metricasDoTime(team: string): MetricKey[] {
+  return PERFIS_TIME[normalizarTime(team)] ?? METRICAS_PADRAO_TIME;
+}
 
 // Escopo por tipo, igual ao export da GetNaves: Issue, User Story e Eventuality. Confirmado com o CSV real de
 // cada um dos 5 times da planilha (Bug, QA, Task e os demais tipos ficam de fora).
@@ -156,8 +176,9 @@ export function buildPainelMensal(items: WorkItem[], buckets: PeriodBucket[], ti
   const consolidar = (filtro: (t: string) => boolean) => {
     const out = {} as Record<MetricKey, (number | null)[]>;
     for (const key of Object.keys(porTime) as MetricKey[]) {
+      const timesDaMetrica = times.filter(t => filtro(t) && metricasDoTime(t).includes(key));
       out[key] = buckets.map((_, idx) => media(
-        times.filter(filtro).map(t => porTime[key][t][idx]).filter((v): v is number => typeof v === 'number')
+        timesDaMetrica.map(t => porTime[key][t][idx]).filter((v): v is number => typeof v === 'number')
       ));
     }
     return out;
