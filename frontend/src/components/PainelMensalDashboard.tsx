@@ -73,7 +73,7 @@ const MODOS: { value: PeriodGroupMode; label: string }[] = [
 ];
 
 const INFO: Record<MetricKey, string> = {
-  fluxo: 'Fluxo de Eficiência = média, item a item, de Ativo ÷ (Ativo + Fila). Ativo = Desenvolvendo + Testando QA; Fila = Para Desenvolver + Aguardando Code Review + Fazendo Code Review + Aguardando QA. Período = primeira vez que o item chegou a Pronto ou foi Fechado (o que vier primeiro). Verde = dentro da faixa de meta. Sustentação tem faixa própria.',
+  fluxo: 'Fluxo de Eficiência = média, item a item, de Ativo ÷ (Ativo + Fila). Ativo = Desenvolvendo + Testando QA/Testing; Fila = Para Desenvolver + Aguardando Code Review + Fazendo Code Review + CodeReview + Aguardando QA. Período = primeira vez que o item chegou a Pronto ou foi Fechado (o que vier primeiro). Verde = dentro da faixa de meta. Sustentação tem faixa própria.',
   cycle: 'Cycle Time P85 em dias úteis (sábado e domingo descontados; feriados não), da criação até a primeira vez que o item chegou a Pronto ou foi Fechado (o que vier primeiro — um fechamento em lote, bem depois do Pronto, não conta). 85% dos itens concluídos no período levaram até esse número. Fechamentos em massa de itens antigos sobem o P85 do mês. As médias são a média dos valores dos times.',
   bugs: 'Quantidade de Issues (erros que escaparam para produção) criadas no período, por time.',
   retrabalho: '% das entregas concluídas no período que são Bug (achado em desenvolvimento) ou Issue (escapou para produção), sobre o total de entregas concluídas. Verde até 31%.',

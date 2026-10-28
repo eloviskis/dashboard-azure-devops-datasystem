@@ -52,6 +52,10 @@ const items = [
   item('Franquia', { timeInStatusDays: { Active: 9, 'Aguardando code review': 1 }, cycleTimeBusinessDays: 15, cycleTime: 15 }),
   // Delta, março: "Para Desenvolver" conta como fila — 6/(6+2) = 75% (confirmado contra a API da GetNave)
   item('Delta', { timeInStatusDays: { Active: 6, 'Para desenvolver': 2 } }),
+  // Epsilon, março: "Testing" conta como ativo e "CodeReview" conta como fila — grafia usada por
+  // Boltz/Tático/Estratégico, diferente de "Testando QA"/"Aguardando Code Review" de Sustentação.
+  // (4+2) ativo ÷ ((4+2)+2) fila = 75% (confirmado via query no banco de produção, não tinha CSV pra isso)
+  item('Epsilon', { timeInStatusDays: { Active: 4, Testing: 2, CodeReview: 2 } }),
   // Sem Time nunca entra
   item('Sem Time', { cycleTimeBusinessDays: 999, cycleTime: 999 }),
 ];
@@ -63,7 +67,7 @@ const MAR_IDX = 2;
 const FEV_IDX = 1;
 
 assert.equal(p.labels.length, 12, 'uma coluna por mês');
-assert.deepEqual(p.times, ['Alfa', 'Beta', 'Delta', 'Franquia', 'Gama', 'Sustentacao'], 'sem Sem Time, ordenados');
+assert.deepEqual(p.times, ['Alfa', 'Beta', 'Delta', 'Epsilon', 'Franquia', 'Gama', 'Sustentacao'], 'sem Sem Time, ordenados');
 
 // Fluxo de Eficiência (conta da aba Kanban)
 assert.equal(p.porTime.fluxo.Alfa[MAR_IDX], 75, '6 ativos ÷ (6+2) = 75%');
@@ -72,6 +76,7 @@ assert.equal(p.porTime.fluxo.Beta[MAR_IDX], null, 'item sem tempo em nenhum esta
 assert.equal(p.porTime.fluxo.Franquia[MAR_IDX], 90, 'Franquia: cálculo roda igual pra qualquer time (9 ativos ÷ (9+1))');
 assert.equal(p.mediaTodos.fluxo[MAR_IDX], 75, 'mas a Franquia não entra na média: perfil dela não acompanha Fluxo de Eficiência');
 assert.equal(p.porTime.fluxo.Delta[MAR_IDX], 75, '"Para Desenvolver" conta como fila: 6 ativos ÷ (6+2) = 75%');
+assert.equal(p.porTime.fluxo.Epsilon[MAR_IDX], 75, '"Testing" conta como ativo e "CodeReview" como fila: 6 ativos ÷ (6+2) = 75%');
 
 // Cycle Time em dias úteis, P85: null não entra
 assert.equal(p.porTime.cycle.Alfa[MAR_IDX], 20, 'P85 nearest-rank de 10 e 20 = 20');

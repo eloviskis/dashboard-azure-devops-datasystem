@@ -103,8 +103,12 @@ const pct = (parte: number, total: number): number | null =>
 // Estados em minúsculo para casar com timeInStatusDays. Itens sem tempo nesses estados não entram.
 // "Para Desenvolver" conta como fila (confirmado comparando, item a item, com a API da GetNave: sem essa
 // coluna o erro total contra a planilha era de 36 pontos nos 9 meses de 2026 já fechados; com ela, 16).
-const ESTADOS_ATIVOS = ['active', 'testando qa'];
-const ESTADOS_FILA = ['aguardando code review', 'fazendo code review', 'aguardando qa', 'para desenvolver'];
+// "Testing"/"CodeReview" (sem espaço) são nomes de coluna que Boltz/Tático/Estratégico usam e Sustentação
+// não — mesmo sentido de "Testando QA"/code review, só com grafia diferente. Sem eles, centenas de dias
+// desses 3 times ficavam de fora da conta (nem ativo nem fila), inflando o denominador artificialmente
+// pequeno e derrubando o Fluxo em até 30 pontos. Confirmado via query no banco de produção (2026-10-28).
+const ESTADOS_ATIVOS = ['active', 'testando qa', 'testing'];
+const ESTADOS_FILA = ['aguardando code review', 'fazendo code review', 'aguardando qa', 'para desenvolver', 'codereview'];
 const diasEm = (item: WorkItem, estados: string[]) =>
   Object.entries(item.timeInStatusDays ?? {})
     .filter(([estado]) => estados.includes(estado.toLowerCase()))
