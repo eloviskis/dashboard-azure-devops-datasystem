@@ -34,9 +34,10 @@ export const METAS_PADRAO: MetasPainel = {
 const TIPOS_RETRABALHO = ['Bug', 'Issue'];
 const SLA_P0_DIAS = 7;
 
-// Os 5 times da planilha de gestão com escopo de tipos confirmado contra o CSV da GetNaves (ver TIPOS_GETNAVES
-// abaixo). Não inclui Franquia/CTC de propósito — ver TIMES_PADRAO_PAINEL.
-export const TIMES_PLANILHA = ['Sustentacao', 'Boltz', 'Estrategico', 'Tatico', 'Wakanda'];
+// Times da planilha de gestão com escopo de tipos confirmado contra o CSV da GetNaves (ver TIPOS_GETNAVES
+// abaixo). Não inclui Franquia/CTC de propósito — ver TIMES_PADRAO_PAINEL. Estratégico tirado da lista a
+// pedido do usuário (2026-10-29).
+export const TIMES_PLANILHA = ['Sustentacao', 'Boltz', 'Tatico', 'Wakanda'];
 
 // Times marcados por padrão ao abrir a tela. Inclui Franquia/CTC (tem bloco próprio na planilha), mas ela NÃO
 // entra em TIMES_PLANILHA: colocá-la lá também mudaria o escopo de tipos dela pra TIPOS_GETNAVES (só Issue/User

@@ -12,7 +12,14 @@ const emailService = require('./email');
 const { getReportRecipientsOrFallback } = require('./userMatch');
 
 const REPORT_KEY = 'painel_por_time_quinzenal';
-const FALLBACK_RECIPIENTS = ['eloi.santaroza@datasystem.com.br'];
+// Até alguém configurar um cargo pela tela de Notificações por Cargo, vai só pra essa lista fixa
+// (pedido explícito do usuário em 2026-10-29).
+const FALLBACK_RECIPIENTS = [
+  'walter.gima@datasystem.com.br',
+  'felipe.cagnin@datasystem.com.br',
+  'huxley.ruanis@datasystem.com.br',
+  'vinicius.ferreira@datasystem.com.br',
+];
 const QUINZENA_MS = 15 * 24 * 60 * 60 * 1000;
 const DIA_MS = 24 * 60 * 60 * 1000;
 
