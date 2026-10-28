@@ -10,6 +10,7 @@ const SETTINGS_KEY = 'notification_role_mapping';
 const REPORT_TYPES: { key: string; label: string; description: string }[] = [
   { key: 'admin_overview_digest', label: 'Resumo diário', description: 'Impedimentos, times e fluxo — todo dia útil às 8h' },
   { key: 'weekly_team_report', label: 'Informativo semanal dos times', description: 'Ranking, composição, cycle/lead time por time — toda segunda às 8h' },
+  { key: 'painel_por_time_quinzenal', label: 'Resumo do Painel por Time', description: 'Comparação quinzenal por time, com insight de IA — a cada 15 dias. Sem cargo marcado, vai só pro e-mail padrão configurado no servidor' },
   { key: 'sync_failure', label: 'Alerta de falha de sincronização', description: 'Quando o sync com o Azure DevOps falha repetidamente' },
 ];
 

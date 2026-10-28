@@ -20,6 +20,7 @@ const { syncCodeReviewLevelDates } = require('./services/codeReviewLevelDates');
 const { calcularDiasUteis, diaBRT } = require('./services/businessDays');
 const { sendTeamsMessage } = require('./services/teams');
 const { getDailyReviewRanking } = require('./services/reviewRanking');
+const { runPainelPorTimeDigest, runPainelPorTimeDigestIfDue } = require('./services/painelPorTimeDigest');
 
 // Database driver: PostgreSQL (pg) with connection pooling
 const { Pool, types } = require('pg');
@@ -1646,6 +1647,18 @@ app.post('/api/notifications/resend/weekly-team-report', authenticateToken, requ
   } catch (error) {
     console.error('❌ Error resending weekly team report:', error);
     res.status(500).json({ error: 'Erro ao reenviar informativo semanal' });
+  }
+});
+
+// Reenvio manual do resumo quinzenal do Painel por Time — ignora o gate de 15 dias (é "testar/forçar agora").
+app.post('/api/notifications/resend/painel-por-time-quinzenal', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { recipients } = req.body || {};
+    await runPainelPorTimeDigest(sql, Array.isArray(recipients) && recipients.length ? recipients : undefined);
+    res.json({ message: 'Resumo quinzenal do Painel por Time reenviado com sucesso' });
+  } catch (error) {
+    console.error('❌ Error resending painel por time digest:', error);
+    res.status(500).json({ error: 'Erro ao reenviar resumo quinzenal do Painel por Time' });
   }
 });
 
@@ -4649,6 +4662,14 @@ schedule.scheduleJob('0 8 * * 1', () => {
   runWeeklyTeamReport().catch(e => console.error('❌ Weekly team report error (non-fatal):', e.message));
 });
 console.log('⏰ Scheduled weekly team report at 08:00 (Mondays)');
+
+// Resumo quinzenal do Painel por Time: checagem diária (cron não expressa "a cada N dias" direto),
+// só envia de fato se já passaram ≥15 dias desde o último envio (via notification_log.sent_at) —
+// resistente a restart/redeploy do processo, ver painelPorTimeDigest.js.
+schedule.scheduleJob('15 8 * * *', () => {
+  runPainelPorTimeDigestIfDue(sql).catch(e => console.error('❌ Painel por Time digest error (non-fatal):', e.message));
+});
+console.log('⏰ Scheduled Painel por Time digest check at 08:15 (daily; só envia quando passaram ≥15 dias)');
 
 // ===========================================
 // ALERTA DE PRs SEM REVIEW (MICROSOFT TEAMS)

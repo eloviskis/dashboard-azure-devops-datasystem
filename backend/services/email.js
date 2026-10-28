@@ -365,6 +365,55 @@ function weeklyTeamReportEmail({ closedWeekLabel, currentWeekLabel, ranking, tea
   };
 }
 
+// times: [{ nome, metricas: [{ label, anterior, atual, unidade, cor: 'verde'|'vermelho'|'cinza', metaTexto }] }]
+// Cor/meta já calculadas em painelPorTimeDigest.js (via faixaDoTime/dentroDaFaixa de services/painelMensal.js)
+// — este template só formata, não decide nada de domínio (mesmo papel dos outros templates do arquivo).
+function painelPorTimeDigestEmail({ periodoAnteriorLabel, periodoAtualLabel, times, insight }) {
+  const CORES = { verde: '#16a34a', vermelho: '#dc2626', cinza: '#6b7280' };
+  const formatar = (v, unidade) => (v === null || v === undefined ? '—' : `${v}${unidade}`);
+
+  const insightBlock = insight ? `
+    <div style="background:#f0f9ff; border:1px solid #bae6fd; border-radius:8px; padding:14px 16px; margin-bottom:20px;">
+      <strong style="color:#0369a1;">🤖 Análise do período</strong>
+      <p style="margin:8px 0 0; color:#0c4a6e;">${insight}</p>
+    </div>` : '';
+
+  const teamBlocks = times.map(t => {
+    const rows = t.metricas.map(m => `
+      <tr>
+        <td style="padding:6px 10px; border-bottom:1px solid #e5e7eb;">${m.label}</td>
+        <td style="padding:6px 10px; border-bottom:1px solid #e5e7eb; text-align:right; color:#6b7280;">${formatar(m.anterior, m.unidade)}</td>
+        <td style="padding:6px 10px; border-bottom:1px solid #e5e7eb; text-align:right; font-weight:600; color:${CORES[m.cor] || CORES.cinza};">${formatar(m.atual, m.unidade)}</td>
+        <td style="padding:6px 10px; border-bottom:1px solid #e5e7eb; text-align:right; color:#9ca3af; font-size:12px;">${m.metaTexto}</td>
+      </tr>`).join('');
+    return `
+      <div style="margin: 20px 0; padding: 16px; border: 1px solid #e5e7eb; border-radius: 8px;">
+        <h3 style="color:#111827; margin: 0 0 10px;">${t.nome}</h3>
+        <table style="width:100%; border-collapse:collapse; font-size:14px;">
+          <thead>
+            <tr style="background:#f3f4f6;">
+              <th style="padding:6px 10px; text-align:left;">Métrica</th>
+              <th style="padding:6px 10px; text-align:right;">Período anterior</th>
+              <th style="padding:6px 10px; text-align:right;">Período atual</th>
+              <th style="padding:6px 10px; text-align:right;">Meta</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+  }).join('');
+
+  return {
+    subject: '📅 Resumo quinzenal — Painel por Time',
+    html: layout('Resumo quinzenal do Painel por Time', `
+      <p style="color:#4b5563;">Período anterior: ${periodoAnteriorLabel} · Período atual: ${periodoAtualLabel}.</p>
+      ${insightBlock}
+      ${teamBlocks}
+      <p style="margin-top:20px;">${button(`${FRONTEND_URL}/?tab=painel-mensal`, 'Ver Painel por Time completo')}</p>
+    `),
+  };
+}
+
 function syncFailureEmail({ failureCount, lastError }) {
   return {
     subject: `⚠️ Falha na sincronização com Azure DevOps`,
@@ -388,6 +437,7 @@ module.exports = {
   dailyDigestEmail,
   adminOverviewDigestEmail,
   weeklyTeamReportEmail,
+  painelPorTimeDigestEmail,
   syncFailureEmail,
   FRONTEND_URL,
 };

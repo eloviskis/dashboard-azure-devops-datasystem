@@ -96,4 +96,25 @@ async function getReportRecipients(sql, reportKey) {
   }
 }
 
-module.exports = { findUserByName, getAdminEmails, isNotifiable, getUsersByRole, getReportRecipients };
+// Mesma leitura de app_settings.notification_role_mapping que getReportRecipients, mas sem cair no
+// default ['admin'] quando não há cargo configurado — usa fallbackEmails (lista fixa do chamador) em
+// vez disso. Pra relatórios novos que, antes de alguém configurar um cargo pela UI, devem ir só pra um
+// e-mail específico, não pra todos os admins.
+async function getReportRecipientsOrFallback(sql, reportKey, fallbackEmails) {
+  try {
+    const rows = await sql`SELECT value FROM app_settings WHERE key = 'notification_role_mapping'`;
+    if (rows.length) {
+      const mapping = JSON.parse(rows[0].value);
+      if (Array.isArray(mapping[reportKey]) && mapping[reportKey].length) {
+        const emails = await getUsersByRole(sql, mapping[reportKey]);
+        if (emails.length) return emails;
+      }
+    }
+    return fallbackEmails;
+  } catch (err) {
+    console.error('❌ userMatch.getReportRecipientsOrFallback error:', err.message);
+    return fallbackEmails;
+  }
+}
+
+module.exports = { findUserByName, getAdminEmails, isNotifiable, getUsersByRole, getReportRecipients, getReportRecipientsOrFallback };

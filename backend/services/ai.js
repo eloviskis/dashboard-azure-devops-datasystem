@@ -107,4 +107,12 @@ Títulos: ${JSON.stringify(titles)}`;
   }
 }
 
-module.exports = { generateWeeklyInsight, generateTeamNarrative, shortenTitles };
+// contextData: números do Painel por Time (período atual vs anterior, por time, só as métricas que cada
+// time acompanha, com indicação de dentro/fora da meta). Pede explicitamente sugestão de melhoria, que
+// generateWeeklyInsight não pede (é sobre impedimentos/fluxo semanal, domínio diferente).
+async function generatePainelPorTimeInsight(contextData) {
+  const prompt = `Você é um analista de engenharia de software e agilidade sênior. Analise os números do Painel por Time a seguir (JSON), comparando o período atual com o anterior, e escreva um resumo curto em português do Brasil para gestores, no máximo 4-5 frases, sem markdown: diga como as métricas evoluíram (melhorou/piorou/estável), destaque o time ou métrica mais fora da meta, e termine com 1-2 sugestões concretas de como melhorar no próximo período.\n\nDados: ${JSON.stringify(contextData)}`;
+  return callGemini(prompt);
+}
+
+module.exports = { generateWeeklyInsight, generateTeamNarrative, shortenTitles, generatePainelPorTimeInsight };

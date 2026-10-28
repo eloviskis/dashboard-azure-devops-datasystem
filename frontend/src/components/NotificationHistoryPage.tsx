@@ -17,6 +17,7 @@ interface UserOption {
 const TYPE_LABELS: Record<string, string> = {
   admin_overview_digest: 'Resumo diário',
   weekly_team_report: 'Informativo semanal',
+  painel_por_time_quinzenal: 'Resumo do Painel por Time',
   sync_failure: 'Alerta de falha de sync',
   daily_digest: 'Resumo pessoal de QA',
   qa_blocked: 'Item bloqueado (QA)',
@@ -32,6 +33,7 @@ const TYPE_LABELS: Record<string, string> = {
 const REPORTS = [
   { key: 'admin-overview-digest', typeKey: 'admin_overview_digest', label: 'Resumo Diário', hint: 'Impedimentos, times e fluxo — envia em segundos' },
   { key: 'weekly-team-report', typeKey: 'weekly_team_report', label: 'Informativo Semanal dos Times', hint: 'Ranking, composição e narrativa por IA — leva ~2 minutos' },
+  { key: 'painel-por-time-quinzenal', typeKey: 'painel_por_time_quinzenal', label: 'Resumo do Painel por Time', hint: 'Comparação quinzenal com insight de IA — envia em segundos' },
 ];
 
 const NotificationHistoryPage: React.FC = () => {
