@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { format } from 'date-fns';
 import { useAuth } from '../contexts/AuthContext';
+import { exportItemsXlsx, ExportColumn } from '../utils/exportXlsx';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -62,6 +64,20 @@ type SubView = 'overview' | 'developers' | 'features';
 
 const COMPLETED_STATES = ['Done', 'Concluído', 'Closed', 'Fechado', 'Finished', 'Resolved', 'Pronto'];
 
+const ACTIVE_TASK_EXPORT_COLUMNS: ExportColumn<ActiveTask>[] = [
+  { header: 'ID', key: 'id', width: 10, value: t => t.work_item_id },
+  { header: 'Título', key: 'title', width: 50, value: t => t.title },
+  { header: 'Tipo', key: 'type', width: 16, value: t => t.type },
+  { header: 'Estado', key: 'state', width: 14, value: t => t.state },
+  { header: 'Responsável', key: 'assigned_to', width: 22, value: t => t.assigned_to || '' },
+  { header: 'Feature', key: 'feature_title', width: 40, value: t => t.feature_title || '' },
+  { header: 'PO', key: 'po', width: 20, value: t => t.po || '' },
+  { header: 'QA', key: 'qa', width: 20, value: t => t.qa || '' },
+  { header: 'Prioridade', key: 'priority', width: 12, value: t => t.priority || '' },
+  { header: 'Story Points', key: 'story_points', width: 12, value: t => t.story_points ?? '' },
+  { header: 'URL', key: 'url', width: 20, value: t => t.url || '', isLink: true },
+];
+
 const CATEGORY_LABEL: Record<string, string> = {
   'paydev': 'PayDev',
   'nao-aderencia': 'Não Aderência',
@@ -89,7 +105,7 @@ function today(): string {
 function daysBetween(a: string | null, b: string | null): number | null {
   if (!a || !b) return null;
   const msPerDay = 1000 * 60 * 60 * 24;
-  return Math.round((new Date(b).getTime() - new Date(a).getTime()) / msPerDay);
+  return Math.ceil((new Date(b).getTime() - new Date(a).getTime()) / msPerDay);
 }
 
 function isCompleted(f: Feature): boolean {
@@ -292,6 +308,49 @@ function devMatchesAssignedTo(devName: string, assignedTo: string | null): boole
   return devName.toLowerCase().split(/\s+/).filter(Boolean).every(p => assigned.includes(p));
 }
 
+// ─── Simple List Modal (cards de resumo: devs, projetos, tarefas atrasadas) ────
+
+interface SimpleListItem { id: string | number; title: string; subtitle?: string; url?: string | null; }
+interface SimpleModalData { title: string; items: SimpleListItem[]; color: string; }
+
+const SimpleListModal: React.FC<{ data: SimpleModalData | null; onClose: () => void }> = ({ data, onClose }) => {
+  if (!data) return null;
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50" onClick={onClose}>
+      <div className="bg-ds-navy border border-ds-border rounded-lg shadow-2xl max-w-2xl w-full mx-4 max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="p-4 rounded-t-lg flex justify-between items-center" style={{ backgroundColor: data.color }}>
+          <h2 className="text-white font-bold text-lg">{data.title}</h2>
+          <button onClick={onClose} className="text-white hover:text-gray-200 text-2xl font-bold leading-none">×</button>
+        </div>
+        <div className="p-4 overflow-y-auto flex-1">
+          <div className="text-ds-text mb-3 text-sm">
+            Total: <span className="font-bold text-white">{data.items.length}</span>
+          </div>
+          {data.items.length === 0 ? (
+            <div className="text-ds-text text-center py-8">Nenhum item encontrado</div>
+          ) : (
+            <ul className="space-y-2">
+              {data.items.map((item, idx) => (
+                <li key={item.id ?? idx} className="bg-ds-dark-blue border border-ds-border rounded-lg p-3 hover:border-ds-green transition-colors">
+                  {item.url ? (
+                    <a href={item.url} target="_blank" rel="noopener noreferrer" className="text-white hover:text-ds-green font-medium block truncate">{item.title}</a>
+                  ) : (
+                    <p className="text-white font-medium truncate">{item.title}</p>
+                  )}
+                  {item.subtitle && <p className="text-ds-text text-xs mt-0.5">{item.subtitle}</p>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <div className="p-4 border-t border-ds-border">
+          <button onClick={onClose} className="w-full bg-ds-border hover:bg-ds-green text-white py-2 px-4 rounded-lg transition-colors">Fechar</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ─── Feature Tasks Modal ──────────────────────────────────────────────────────
 
 interface ModalContext { featureId: number | null; featureTitle: string | null; devName: string; allTasks: ActiveTask[]; }
@@ -455,6 +514,9 @@ const OverviewView: React.FC<{ developers: Developer[]; activeTasks: ActiveTask[
 
   // Feature expand state (gavetinhas): key = `${devId}-${featureId}`
   const [expandedFeatures, setExpandedFeatures] = useState<Set<string>>(new Set());
+  const [modalCtx, setModalCtx] = useState<ModalContext | null>(null);
+  const [exportingXlsx, setExportingXlsx] = useState(false);
+  const [simpleModalData, setSimpleModalData] = useState<SimpleModalData | null>(null);
 
   const toggleFeature = (key: string) => {
     setExpandedFeatures(prev => {
@@ -471,7 +533,8 @@ const OverviewView: React.FC<{ developers: Developer[]; activeTasks: ActiveTask[
   const allocatedDevIds = new Set(
     activeDevs.filter(dev => activeTasks.some(t => devMatchesAssignedTo(dev.name, t.assigned_to))).map(d => d.id)
   );
-  const delayedTasksCount = activeTasks.filter(t => taskDaysActive(t) > 30).length;
+  const delayedTasks = activeTasks.filter(t => taskDaysActive(t) > 30);
+  const delayedTasksCount = delayedTasks.length;
 
   function getDevAvatar(dev: Developer): string | null {
     return activeTasks.find(t => devMatchesAssignedTo(dev.name, t.assigned_to))?.avatar_url ?? null;
@@ -497,16 +560,49 @@ const OverviewView: React.FC<{ developers: Developer[]; activeTasks: ActiveTask[
   const CATEGORIES: Array<'paydev' | 'nao-aderencia' | 'demandas-internas'> = ['paydev', 'nao-aderencia', 'demandas-internas'];
   const activeCats = filterCat ? [filterCat] : CATEGORIES;
 
+  const handleExportXlsx = async () => {
+    const visibleTasks = activeDevs.filter(filterDev).flatMap(getDevTasks);
+    if (visibleTasks.length === 0) return;
+    setExportingXlsx(true);
+    try {
+      await exportItemsXlsx(visibleTasks, ACTIVE_TASK_EXPORT_COLUMNS, `DevTracker_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
+    } finally {
+      setExportingXlsx(false);
+    }
+  };
+
   return (
     <div className="space-y-5">
       {/* Summary cards */}
+      <SimpleListModal data={simpleModalData} onClose={() => setSimpleModalData(null)} />
       <div className="grid grid-cols-3 gap-3">
         {[
-          { label: 'Devs Ativos', value: activeDevs.length, icon: '👤', color: 'text-ds-cyan' },
-          { label: 'Projetos Ativos', value: activeFeatures.length, icon: '📁', color: 'text-ds-green' },
-          { label: 'Em Atraso (>30d)', value: delayedTasksCount, icon: '⚠️', color: 'text-red-400' },
+          {
+            label: 'Devs Ativos', value: activeDevs.length, icon: '👤', color: 'text-ds-cyan',
+            onClick: () => setSimpleModalData({
+              title: 'Devs Ativos',
+              items: activeDevs.map(d => ({ id: d.id, title: d.name, subtitle: `${d.role} · ${CATEGORY_LABEL[d.category]}` })),
+              color: '#22D3EE',
+            }),
+          },
+          {
+            label: 'Projetos Ativos', value: activeFeatures.length, icon: '📁', color: 'text-ds-green',
+            onClick: () => setSimpleModalData({
+              title: 'Projetos Ativos',
+              items: activeFeatures.map(f => ({ id: f.work_item_id, title: f.title, subtitle: f.team || '', url: f.url })),
+              color: '#7FD320',
+            }),
+          },
+          {
+            label: 'Em Atraso (>30d)', value: delayedTasksCount, icon: '⚠️', color: 'text-red-400',
+            onClick: () => setSimpleModalData({
+              title: 'Tarefas Em Atraso (>30d)',
+              items: delayedTasks.map(t => ({ id: t.work_item_id, title: t.title, subtitle: `${t.assigned_to || 'Não atribuído'} · ${taskDaysActive(t)}d`, url: t.url })),
+              color: '#EF4444',
+            }),
+          },
         ].map(card => (
-          <div key={card.label} className="bg-ds-navy border border-ds-border rounded-xl p-4 flex items-center gap-3">
+          <div key={card.label} className="bg-ds-navy border border-ds-border rounded-xl p-4 flex items-center gap-3 cursor-pointer hover:border-ds-green transition-colors" onClick={card.onClick}>
             <span className="text-2xl">{card.icon}</span>
             <div>
               <p className={`text-2xl font-bold ${card.color}`}>{card.value}</p>
@@ -569,6 +665,14 @@ const OverviewView: React.FC<{ developers: Developer[]; activeTasks: ActiveTask[
           <button onClick={() => { setSearchDev(''); setFilterCat(''); setFilterState(''); setFilterAlloc('all'); setFilterDelay('all'); setFilterAreaPath(''); setFilterImpedimento(false); }}
             className="text-xs text-ds-text hover:text-red-400 transition-colors px-2">✕ limpar filtros</button>
         )}
+        <button
+          onClick={handleExportXlsx}
+          disabled={exportingXlsx}
+          className="ml-auto px-3 py-1.5 text-xs rounded-lg font-medium bg-ds-green text-ds-dark-blue hover:bg-ds-green/80 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          title="Exporta as tarefas visíveis (respeitando os filtros) para .xlsx"
+        >
+          {exportingXlsx ? 'Exportando…' : '📥 Exportar .xlsx'}
+        </button>
       </div>
 
       {/* Dev cards by category — 2-column grid */}
@@ -619,8 +723,11 @@ const OverviewView: React.FC<{ developers: Developer[]; activeTasks: ActiveTask[
                           return (
                             <div key={fKey}>
                               {/* Feature row (gavetinha) */}
-                              <button
+                              <div
+                                role="button"
+                                tabIndex={0}
                                 onClick={() => toggleFeature(fKey)}
+                                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') toggleFeature(fKey); }}
                                 className={`w-full text-left rounded-lg p-2.5 transition-colors cursor-pointer bg-ds-dark-blue hover:bg-ds-dark-blue/80 ${
                                   isDelayed ? 'border-l-[3px] border-l-red-500 border-r border-t border-b border-r-ds-border border-t-ds-border border-b-ds-border' : 'border border-ds-border'
                                 }`}
@@ -631,6 +738,13 @@ const OverviewView: React.FC<{ developers: Developer[]; activeTasks: ActiveTask[
                                     {fg.featureTitle ?? 'Sem feature vinculada'}
                                   </p>
                                   <span className="text-xs text-ds-text shrink-0">{fg.tasks.length}</span>
+                                  <button
+                                    onClick={e => { e.stopPropagation(); setModalCtx({ featureId: fg.featureId, featureTitle: fg.featureTitle, devName: dev.name, allTasks: fg.tasks }); }}
+                                    className="text-ds-text hover:text-ds-cyan transition-colors shrink-0"
+                                    title="Ver detalhes das tarefas"
+                                  >
+                                    🔍
+                                  </button>
                                   <svg className={`w-4 h-4 text-ds-text shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                                   </svg>
@@ -648,7 +762,7 @@ const OverviewView: React.FC<{ developers: Developer[]; activeTasks: ActiveTask[
                                   )}
                                   {hasImpedimento && <span className="text-xs" title="Impedimento">💬</span>}
                                 </div>
-                              </button>
+                              </div>
 
                               {/* Expanded tasks (gavetinha aberta) */}
                               {isOpen && (
@@ -699,6 +813,7 @@ const OverviewView: React.FC<{ developers: Developer[]; activeTasks: ActiveTask[
           </div>
         );
       })}
+      {modalCtx && <FeatureTasksModal ctx={modalCtx} onClose={() => setModalCtx(null)} />}
     </div>
   );
 };

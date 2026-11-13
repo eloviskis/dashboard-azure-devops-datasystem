@@ -7,6 +7,62 @@ interface WIPLimitsProps {
   defaultPersonLimit?: number;
 }
 
+interface ModalData {
+  title: string;
+  items: WorkItem[];
+  color: string;
+}
+
+const AZURE_DEVOPS_BASE_URL = 'https://dev.azure.com/datasystemsoftwares/USE/_workitems/edit';
+
+const ItemListModal: React.FC<{ data: ModalData | null; onClose: () => void }> = ({ data, onClose }) => {
+  if (!data) return null;
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50" onClick={onClose}>
+      <div className="bg-ds-navy border border-ds-border rounded-lg shadow-2xl max-w-4xl w-full mx-4 max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="p-4 rounded-t-lg flex justify-between items-center" style={{ backgroundColor: data.color }}>
+          <h2 className="text-white font-bold text-lg">{data.title}</h2>
+          <button onClick={onClose} className="text-white hover:text-gray-200 text-2xl font-bold leading-none">×</button>
+        </div>
+        <div className="p-4 overflow-y-auto flex-1">
+          <div className="text-ds-text mb-3 text-sm">
+            Total: <span className="font-bold text-white">{data.items.length}</span> itens
+          </div>
+          {data.items.length === 0 ? (
+            <div className="text-ds-text text-center py-8">Nenhum item encontrado</div>
+          ) : (
+            <ul className="space-y-2">
+              {data.items.map((item, idx) => (
+                <li key={item.workItemId || idx} className="bg-ds-dark-blue border border-ds-border rounded-lg p-3 hover:border-ds-green transition-colors">
+                  <div className="flex items-start gap-3">
+                    <span className="text-xs font-mono px-2 py-1 rounded shrink-0 text-white" style={{ backgroundColor: data.color }}>
+                      #{item.workItemId}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <a href={`${AZURE_DEVOPS_BASE_URL}/${item.workItemId}`} target="_blank" rel="noopener noreferrer" className="text-white hover:text-ds-green font-medium block truncate mb-1" title={item.title}>
+                        {item.title}
+                      </a>
+                      <div className="grid grid-cols-2 gap-1 text-xs text-ds-text">
+                        <div>👤 {item.assignedTo || 'Não atribuído'}</div>
+                        <div>👥 {item.team || 'Sem time'}</div>
+                        <div>🏷️ {item.type}</div>
+                        <div>📊 {item.state}</div>
+                      </div>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <div className="p-4 border-t border-ds-border">
+          <button onClick={onClose} className="w-full bg-ds-border hover:bg-ds-green text-white py-2 px-4 rounded-lg transition-colors">Fechar</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const WIPLimits: React.FC<WIPLimitsProps> = ({ 
   workItems, 
   defaultTeamLimit = 10,
@@ -21,6 +77,8 @@ const WIPLimits: React.FC<WIPLimitsProps> = ({
     const saved = localStorage.getItem('devops-wip-person-limit');
     return saved ? Number(saved) : defaultPersonLimit;
   });
+
+  const [modalData, setModalData] = useState<ModalData | null>(null);
 
   const saveTeamLimit = (value: number) => {
     setTeamLimit(value);
@@ -62,11 +120,12 @@ const WIPLimits: React.FC<WIPLimitsProps> = ({
     });
 
     // WIP por coluna/estado
-    const columnWIP: Record<string, number> = {};
+    const columnWIP: Record<string, WorkItem[]> = {};
     const columnOrder = ['Para Desenvolver', 'Active', 'Ativo', 'Aguardando Code Review', 'Fazendo Code Review', 'Aguardando QA', 'Testando QA'];
     inProgressItems.forEach(item => {
       const state = item.state || 'Outros';
-      columnWIP[state] = (columnWIP[state] || 0) + 1;
+      if (!columnWIP[state]) columnWIP[state] = [];
+      columnWIP[state].push(item);
     });
 
     // Identificar violações
@@ -80,9 +139,10 @@ const WIPLimits: React.FC<WIPLimitsProps> = ({
 
     return {
       totalWIP: inProgressItems.length,
+      allInProgressItems: inProgressItems,
       teamWIP: Object.entries(teamWIP).sort((a, b) => b[1].count - a[1].count),
       personWIP: Object.entries(personWIP).sort((a, b) => b[1].count - a[1].count),
-      columnWIP: columnOrder.filter(s => columnWIP[s]).map(s => ({ state: s, count: columnWIP[s] || 0 })),
+      columnWIP: columnOrder.filter(s => columnWIP[s]).map(s => ({ state: s, count: columnWIP[s].length, items: columnWIP[s] })),
       teamViolations,
       personViolations,
       hasViolations: teamViolations.length > 0 || personViolations.length > 0
@@ -136,7 +196,11 @@ const WIPLimits: React.FC<WIPLimitsProps> = ({
       {wipAnalysis.hasViolations && (
         <div className="mb-3 max-h-28 overflow-y-auto space-y-1.5 flex-shrink-0 pr-1">
           {wipAnalysis.teamViolations.map(([team, data]) => (
-            <div key={team} className="bg-red-500/10 border border-red-500/30 text-red-400 p-2 rounded text-xs flex items-center gap-2">
+            <div
+              key={team}
+              className="bg-red-500/10 border border-red-500/30 text-red-400 p-2 rounded text-xs flex items-center gap-2 cursor-pointer hover:border-red-400 transition-colors"
+              onClick={() => setModalData({ title: `WIP acima do limite — ${team}`, items: data.items, color: '#DC2626' })}
+            >
               <span>🚨</span>
               <span className="truncate">
                 <strong>{team}</strong> está com {data.count} itens em WIP (limite: {teamLimit})
@@ -144,7 +208,11 @@ const WIPLimits: React.FC<WIPLimitsProps> = ({
             </div>
           ))}
           {wipAnalysis.personViolations.map(([person, data]) => (
-            <div key={person} className="bg-orange-500/10 border border-orange-500/30 text-orange-400 p-2 rounded text-xs flex items-center gap-2">
+            <div
+              key={person}
+              className="bg-orange-500/10 border border-orange-500/30 text-orange-400 p-2 rounded text-xs flex items-center gap-2 cursor-pointer hover:border-orange-400 transition-colors"
+              onClick={() => setModalData({ title: `WIP acima do limite — ${person}`, items: data.items, color: '#EA580C' })}
+            >
               <span>⚡</span>
               <span className="truncate">
                 <strong>{person}</strong> ({data.team}) está com {data.count} itens (limite: {personLimit})
@@ -170,7 +238,11 @@ const WIPLimits: React.FC<WIPLimitsProps> = ({
                 'Testando QA': 'bg-purple-600/20 text-purple-300 border-purple-600/30',
               };
               return (
-                <div key={col.state} className={`px-2 py-1 rounded border text-xs font-medium ${colColors[col.state] || 'bg-ds-muted/20 text-ds-text border-ds-border'}`}>
+                <div
+                  key={col.state}
+                  className={`px-2 py-1 rounded border text-xs font-medium cursor-pointer hover:brightness-125 transition-all ${colColors[col.state] || 'bg-ds-muted/20 text-ds-text border-ds-border'}`}
+                  onClick={() => setModalData({ title: `WIP — ${col.state}`, items: col.items, color: '#47C5FB' })}
+                >
                   {col.state}: <strong>{col.count}</strong>
                 </div>
               );
@@ -186,9 +258,10 @@ const WIPLimits: React.FC<WIPLimitsProps> = ({
           <h4 className="text-ds-text text-xs mb-2 uppercase tracking-wide flex-shrink-0">Por Time</h4>
           <div className="flex-1 min-h-0 overflow-y-auto space-y-1.5 pr-1">
             {wipAnalysis.teamWIP.map(([team, data]) => (
-              <div 
-                key={team} 
-                className={`p-2 rounded border text-xs ${getWIPColor(data.count, teamLimit)}`}
+              <div
+                key={team}
+                className={`p-2 rounded border text-xs cursor-pointer hover:brightness-125 transition-all ${getWIPColor(data.count, teamLimit)}`}
+                onClick={() => setModalData({ title: `WIP — Time ${team}`, items: data.items, color: '#47C5FB' })}
               >
                 <div className="flex justify-between items-center">
                   <span className="font-medium truncate">{team}</span>
@@ -213,9 +286,10 @@ const WIPLimits: React.FC<WIPLimitsProps> = ({
           <h4 className="text-ds-text text-xs mb-2 uppercase tracking-wide flex-shrink-0">Por Pessoa (Top 15)</h4>
           <div className="flex-1 min-h-0 overflow-y-auto space-y-1.5 pr-1">
             {wipAnalysis.personWIP.slice(0, 15).map(([person, data]) => (
-              <div 
-                key={person} 
-                className={`p-2 rounded border text-xs ${getWIPColor(data.count, personLimit)}`}
+              <div
+                key={person}
+                className={`p-2 rounded border text-xs cursor-pointer hover:brightness-125 transition-all ${getWIPColor(data.count, personLimit)}`}
+                onClick={() => setModalData({ title: `WIP — ${person}`, items: data.items, color: '#47C5FB' })}
               >
                 <div className="flex justify-between items-center gap-1">
                   <div className="min-w-0 flex-1">
@@ -240,10 +314,14 @@ const WIPLimits: React.FC<WIPLimitsProps> = ({
       </div>
 
       {/* Footer com total */}
-      <div className="mt-3 pt-2 border-t border-ds-border flex justify-between items-center flex-shrink-0">
+      <div
+        className="mt-3 pt-2 border-t border-ds-border flex justify-between items-center flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
+        onClick={() => setModalData({ title: 'Todos os itens em WIP', items: wipAnalysis.allInProgressItems, color: '#1D4ED8' })}
+      >
         <span className="text-ds-text text-xs">Total de itens em WIP:</span>
         <span className="text-ds-green text-xl font-bold">{wipAnalysis.totalWIP}</span>
       </div>
+      <ItemListModal data={modalData} onClose={() => setModalData(null)} />
     </div>
   );
 };

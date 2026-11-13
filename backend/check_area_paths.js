@@ -5,7 +5,7 @@ const client = new Client({
   port: 5432,
   database: 'devops_dashboard',
   user: 'devops_dash',
-  password: 'D3v0ps_D4sh_2026_Str0ng',
+  password: process.env.DB_PASSWORD,
 });
 
 async function checkAreaPaths() {

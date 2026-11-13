@@ -8,6 +8,7 @@ import { startOfWeek, subWeeks, isWithinInterval, format, getDay } from 'date-fn
 import { ptBR } from 'date-fns/locale/pt-BR';
 import { WorkItem } from '../types';
 import { COMPLETED_STATES, IN_PROGRESS_STATES } from '../utils/metrics';
+import { exportItemsXlsx, getWorkItemColumns } from '../utils/exportXlsx';
 
 interface TeamEvolutionDashboardProps {
   data: WorkItem[];
@@ -175,7 +176,7 @@ const TeamEvolutionDashboard: React.FC<TeamEvolutionDashboardProps> = ({ data })
     return Array.from(s).sort();
   }, [data, effectiveTeam]);
 
-  const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
+  const [selectedTypes, setSelectedTypes] = useState<string[]>(['Bug', 'Eventuality', 'User Story', 'Melhoria', 'Issue']);
 
   const toggleType = (t: string) =>
     setSelectedTypes(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t]);
@@ -290,6 +291,12 @@ const TeamEvolutionDashboard: React.FC<TeamEvolutionDashboardProps> = ({ data })
       });
       const criticalDone = criticalDoneItems.length;
 
+      // ── Finished / Resolved (quebra do Throughput por status específico — já contados nele) ──
+      const finishedItems = completed.filter(i => i.state === 'Finished');
+      const finishedCount = finishedItems.length;
+      const resolvedItems = completed.filter(i => i.state === 'Resolved');
+      const resolvedCount = resolvedItems.length;
+
       // ── taxa de retrabalho ─────────────────────────────────────────────
       const reworkItems = completed.filter(i => {
         const r = Number(i.reincidencia);
@@ -339,12 +346,15 @@ const TeamEvolutionDashboard: React.FC<TeamEvolutionDashboardProps> = ({ data })
         wip, impedimentos,
         typesSorted, criticalDone, reworkPct, reworkCount,
         topStatuses, projectedThroughput,
+        finishedCount, resolvedCount,
         completedItems: completed,
         wipItemsList,
         impedimentosList,
         criticalDoneItems,
         reworkItems,
         statusItemsMap,
+        finishedItems,
+        resolvedItems,
       };
     });
   }, [teamItems, weeks]);
@@ -369,6 +379,17 @@ const TeamEvolutionDashboard: React.FC<TeamEvolutionDashboardProps> = ({ data })
 
   const [modalData, setModalData] = useState<ModalData | null>(null);
   const openModal = (title: string, items: WorkItem[]) => { if (items.length > 0) setModalData({ title, items }); };
+
+  const [exportingXlsx, setExportingXlsx] = useState(false);
+  const handleExportXlsx = async () => {
+    if (teamItems.length === 0) return;
+    setExportingXlsx(true);
+    try {
+      await exportItemsXlsx(teamItems, getWorkItemColumns(), `TeamEvolution_${effectiveTeam}_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
+    } finally {
+      setExportingXlsx(false);
+    }
+  };
 
   if (!effectiveTeam) {
     return (
@@ -402,7 +423,7 @@ const TeamEvolutionDashboard: React.FC<TeamEvolutionDashboardProps> = ({ data })
             <label className="text-ds-text text-sm font-semibold">👥 Time:</label>
             <select
               value={effectiveTeam}
-              onChange={e => { setSelectedTeam(e.target.value); setSelectedTypes([]); }}
+              onChange={e => setSelectedTeam(e.target.value)}
               className="bg-ds-navy border border-ds-border text-ds-light-text rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-ds-green"
             >
               {teams.map(t => <option key={t} value={t}>{t}</option>)}
@@ -416,6 +437,14 @@ const TeamEvolutionDashboard: React.FC<TeamEvolutionDashboardProps> = ({ data })
               onClear={() => setSelectedTypes([])}
             />
           )}
+          <button
+            onClick={handleExportXlsx}
+            disabled={exportingXlsx || teamItems.length === 0}
+            className="px-3 py-2 text-xs rounded-md font-medium bg-ds-green text-ds-dark-blue hover:bg-ds-green/80 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            title="Exporta os itens do time selecionado para .xlsx"
+          >
+            {exportingXlsx ? 'Exportando…' : `📥 .xlsx (${teamItems.length})`}
+          </button>
         </div>
       </div>
 
@@ -470,6 +499,44 @@ const TeamEvolutionDashboard: React.FC<TeamEvolutionDashboardProps> = ({ data })
                     ? <span className="text-ds-green font-bold text-2xl">~{currentWeek.projectedThroughput}</span>
                     : <span className="text-ds-muted">—</span>}
                 </td>
+              </tr>
+
+              {/* Finalizados (Finished) */}
+              <tr className="hover:bg-ds-dark-blue/40">
+                <td className="px-4 py-3">
+                  <div className="text-ds-light-text font-medium">📗 Finalizados (Finished)</div>
+                  <div className="text-ds-muted text-xs">itens com status Finished — já incluídos no Throughput</div>
+                </td>
+                {stats.map((s, i) => {
+                  const prev = i > 0 ? stats[i - 1].finishedCount : null;
+                  return (
+                    <td key={i} className={`text-center px-4 py-3 ${s.isCurrent ? cwCls : ''} ${s.finishedCount > 0 ? 'cursor-pointer hover:bg-ds-green/10' : ''}`}
+                      onClick={() => s.finishedCount > 0 && openModal(`📗 Finalizados (Finished) — ${s.label}`, s.finishedItems)}>
+                      <span className="text-ds-light-text font-bold text-2xl">{s.finishedCount}</span>
+                      {prev !== null && <TrendIcon curr={s.finishedCount} prev={prev} higherIsBetter />}
+                    </td>
+                  );
+                })}
+                <td className="text-center px-4 py-3 text-ds-muted text-sm">—</td>
+              </tr>
+
+              {/* Resolvidos (Resolved) */}
+              <tr className="hover:bg-ds-dark-blue/40">
+                <td className="px-4 py-3">
+                  <div className="text-ds-light-text font-medium">📘 Resolvidos (Resolved)</div>
+                  <div className="text-ds-muted text-xs">itens com status Resolved — já incluídos no Throughput</div>
+                </td>
+                {stats.map((s, i) => {
+                  const prev = i > 0 ? stats[i - 1].resolvedCount : null;
+                  return (
+                    <td key={i} className={`text-center px-4 py-3 ${s.isCurrent ? cwCls : ''} ${s.resolvedCount > 0 ? 'cursor-pointer hover:bg-ds-green/10' : ''}`}
+                      onClick={() => s.resolvedCount > 0 && openModal(`📘 Resolvidos (Resolved) — ${s.label}`, s.resolvedItems)}>
+                      <span className="text-ds-light-text font-bold text-2xl">{s.resolvedCount}</span>
+                      {prev !== null && <TrendIcon curr={s.resolvedCount} prev={prev} higherIsBetter />}
+                    </td>
+                  );
+                })}
+                <td className="text-center px-4 py-3 text-ds-muted text-sm">—</td>
               </tr>
 
               {/* Cycle Time médio */}

@@ -7,19 +7,93 @@ import {
 } from 'recharts';
 
 interface Props { data: WorkItem[]; }
+
+interface ModalData {
+  title: string;
+  items: WorkItem[];
+  color: string;
+}
+
+const AZURE_DEVOPS_BASE_URL = 'https://dev.azure.com/datasystemsoftwares/USE/_workitems/edit';
+
+const ItemListModal: React.FC<{ data: ModalData | null; onClose: () => void }> = ({ data, onClose }) => {
+  if (!data) return null;
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50" onClick={onClose}>
+      <div className="bg-ds-navy border border-ds-border rounded-lg shadow-2xl max-w-4xl w-full mx-4 max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="p-4 rounded-t-lg flex justify-between items-center" style={{ backgroundColor: data.color }}>
+          <h2 className="text-white font-bold text-lg">{data.title}</h2>
+          <button onClick={onClose} className="text-white hover:text-gray-200 text-2xl font-bold leading-none">×</button>
+        </div>
+        <div className="p-4 overflow-y-auto flex-1">
+          <div className="text-ds-text mb-3 text-sm">
+            Total: <span className="font-bold text-white">{data.items.length}</span> itens
+          </div>
+          {data.items.length === 0 ? (
+            <div className="text-ds-text text-center py-8">Nenhum item encontrado</div>
+          ) : (
+            <ul className="space-y-2">
+              {data.items.map((item, idx) => (
+                <li key={item.workItemId || idx} className="bg-ds-dark-blue border border-ds-border rounded-lg p-3 hover:border-ds-green transition-colors">
+                  <div className="flex items-start gap-3">
+                    <span className="text-xs font-mono px-2 py-1 rounded shrink-0 text-white" style={{ backgroundColor: data.color }}>
+                      #{item.workItemId}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <a href={item.url || `${AZURE_DEVOPS_BASE_URL}/${item.workItemId}`} target="_blank" rel="noopener noreferrer" className="text-white hover:text-ds-green font-medium block truncate mb-1" title={item.title}>
+                        {item.title}
+                      </a>
+                      <div className="grid grid-cols-2 gap-1 text-xs text-ds-text">
+                        <div>👤 {item.assignedTo || 'Não atribuído'}</div>
+                        <div>👥 {item.team || 'Sem time'}</div>
+                        <div>🏷️ {item.type}</div>
+                        <div>📊 {item.state}</div>
+                      </div>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <div className="p-4 border-t border-ds-border">
+          <button onClick={onClose} className="w-full bg-ds-border hover:bg-ds-green text-white py-2 px-4 rounded-lg transition-colors">Fechar</button>
+        </div>
+      </div>
+    </div>
+  );
+};
 const COMPLETED_STATES = ['Done', 'Concluído', 'Closed', 'Fechado', 'Finished', 'Resolved', 'Pronto'];
-const PRIORITY_COLORS: Record<string, string> = { '1': '#F56565', '2': '#F6E05E', '3': '#47C5FB', '4': '#8892B0' };
-const PRIORITY_LABELS: Record<string, string> = { '1': 'Crítica', '2': 'Alta', '3': 'Média', '4': 'Baixa' };
+const OUTRAS = 'outras';
+const PRIORITY_COLORS: Record<string, string> = { '0': '#C53030', '1': '#F56565', '2': '#F6E05E', '3': '#47C5FB', [OUTRAS]: '#8892B0' };
+const PRIORITY_LABELS: Record<string, string> = { '0': 'Urgente', '1': 'Crítica', '2': 'Alta', '3': 'Média', [OUTRAS]: 'Demais Tarefas/Prioridades' };
+
+// P0 aqui é só prioridade 0 EXPLÍCITA, diferente do Root Cause/Painel por Time (lá, vazio também é P0 — faz
+// sentido pra Sustentação, onde vazio é parte do processo de P0). Nesta tela, que cobre todos os times,
+// prioridade vazia quase sempre é só "ninguém classificou", não "é urgente" — medido ao vivo, são 14 mil
+// itens vazios contra 632 com 0 de verdade. Juntar os dois faria o cartão de P0 engolir o painel inteiro.
+// Vazio, "4" e qualquer valor fora de 0-3 caem em "Demais Tarefas/Prioridades".
+const priorityKeyFor = (item: WorkItem): string => {
+  const p = item.priority;
+  if (p === null || p === undefined || p === '') return OUTRAS;
+  const n = Number.parseFloat(String(p));
+  if (Number.isNaN(n)) return OUTRAS;
+  const key = String(Math.floor(n));
+  return key === '0' || key === '1' || key === '2' || key === '3' ? key : OUTRAS;
+};
+// Título do cartão/modal: prioridade numerada leva "P" na frente; o balde de sobra não (não é P-nenhum).
+const priorityHeading = (key: string) => (key === OUTRAS ? PRIORITY_LABELS[key] : `P${key} - ${PRIORITY_LABELS[key]}`);
 
 const SLATrackingDashboard: React.FC<Props> = ({ data }) => {
   const [slaTarget, setSlaTarget] = useState<number>(7); // days
+  const [modalData, setModalData] = useState<ModalData | null>(null);
 
   // SLA analysis per priority
   const slaByPriority = useMemo(() => {
-    const priorities = ['1', '2', '3', '4'];
+    const priorities = ['0', '1', '2', '3', OUTRAS];
     return priorities.map(p => {
-      const items = data.filter(i => String(i.priority || '4') === p && COMPLETED_STATES.includes(i.state) && i.cycleTime != null);
-      if (items.length === 0) return { priority: p, label: PRIORITY_LABELS[p] || `P${p}`, avg: 0, p85: 0, withinSLA: 0, total: 0, pctSLA: 0 };
+      const items = data.filter(i => priorityKeyFor(i) === p && COMPLETED_STATES.includes(i.state) && i.cycleTime != null);
+      if (items.length === 0) return { priority: p, label: PRIORITY_LABELS[p] || `P${p}`, avg: 0, p85: 0, withinSLA: 0, total: 0, pctSLA: 0, items };
       const cts = items.map(i => i.cycleTime as number).sort((a, b) => a - b);
       const avg = cts.reduce((a, b) => a + b, 0) / cts.length;
       const p85 = cts[Math.floor(cts.length * 0.85)] || 0;
@@ -32,18 +106,20 @@ const SLATrackingDashboard: React.FC<Props> = ({ data }) => {
         withinSLA,
         total: items.length,
         pctSLA: Math.round((withinSLA / items.length) * 1000) / 10,
+        items,
       };
     });
   }, [data, slaTarget]);
 
   // SLA by Team
   const slaByTeam = useMemo(() => {
-    const teams: Record<string, { within: number; total: number; cts: number[] }> = {};
+    const teams: Record<string, { within: number; total: number; cts: number[]; items: WorkItem[] }> = {};
     data.filter(i => COMPLETED_STATES.includes(i.state) && i.cycleTime != null).forEach(item => {
       const team = item.team || 'Sem Time';
-      if (!teams[team]) teams[team] = { within: 0, total: 0, cts: [] };
+      if (!teams[team]) teams[team] = { within: 0, total: 0, cts: [], items: [] };
       teams[team].total++;
       teams[team].cts.push(item.cycleTime as number);
+      teams[team].items.push(item);
       if ((item.cycleTime as number) <= slaTarget) teams[team].within++;
     });
     return Object.entries(teams).map(([team, d]) => ({
@@ -53,6 +129,7 @@ const SLATrackingDashboard: React.FC<Props> = ({ data }) => {
       within: d.within,
       total: d.total,
       breached: d.total - d.within,
+      items: d.items,
     })).sort((a, b) => b.pctSLA - a.pctSLA);
   }, [data, slaTarget]);
 
@@ -67,7 +144,7 @@ const SLATrackingDashboard: React.FC<Props> = ({ data }) => {
       return ageDays > slaTarget;
     }).map(item => {
       const startDate = new Date(item.changedDate || item.createdDate!);
-      const ageDays = Math.round((Date.now() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+      const ageDays = Math.ceil((Date.now() - startDate.getTime()) / (1000 * 60 * 60 * 24));
       return { ...item, ageDays };
     }).sort((a, b) => b.ageDays - a.ageDays).slice(0, 20);
   }, [data, slaTarget]);
@@ -75,22 +152,26 @@ const SLATrackingDashboard: React.FC<Props> = ({ data }) => {
   // Overall SLA compliance
   const overallSLA = useMemo(() => {
     const completed = data.filter(i => COMPLETED_STATES.includes(i.state) && i.cycleTime != null);
-    const within = completed.filter(i => (i.cycleTime as number) <= slaTarget).length;
+    const withinItems = completed.filter(i => (i.cycleTime as number) <= slaTarget);
+    const breachedItemsList = completed.filter(i => (i.cycleTime as number) > slaTarget);
     return {
       total: completed.length,
-      within,
-      breached: completed.length - within,
-      pct: completed.length > 0 ? Math.round((within / completed.length) * 1000) / 10 : 0,
+      within: withinItems.length,
+      breached: breachedItemsList.length,
+      pct: completed.length > 0 ? Math.round((withinItems.length / completed.length) * 1000) / 10 : 0,
+      withinItems,
+      breachedItemsList,
     };
   }, [data, slaTarget]);
 
   const pieData = [
-    { name: 'Dentro do SLA', value: overallSLA.within, color: '#64FFDA' },
-    { name: 'Fora do SLA', value: overallSLA.breached, color: '#F56565' },
+    { name: 'Dentro do SLA', value: overallSLA.within, color: '#64FFDA', items: overallSLA.withinItems },
+    { name: 'Fora do SLA', value: overallSLA.breached, color: '#F56565', items: overallSLA.breachedItemsList },
   ];
 
   return (
     <div className="space-y-6">
+      <ItemListModal data={modalData} onClose={() => setModalData(null)} />
       {/* SLA Config */}
       <div className="bg-ds-navy p-4 rounded-lg border border-ds-border flex items-center gap-4 flex-wrap">
         <label htmlFor="sla-target" className="text-ds-text text-sm">Meta de SLA (Cycle Time máximo):</label>
@@ -99,13 +180,19 @@ const SLATrackingDashboard: React.FC<Props> = ({ data }) => {
           {[3, 5, 7, 10, 14, 21, 30].map(d => <option key={d} value={d}>{d} dias</option>)}
         </select>
         <div className="ml-auto flex items-center gap-4">
-          <div className="text-center">
+          <div
+            className="text-center cursor-pointer hover:opacity-80 transition-opacity"
+            onClick={() => setModalData({ title: 'Itens Dentro do SLA', items: overallSLA.withinItems, color: '#64FFDA' })}
+          >
             <p className="text-xs text-ds-text">Compliance Geral</p>
             <p className={`text-2xl font-bold ${overallSLA.pct >= 80 ? 'text-green-400' : overallSLA.pct >= 60 ? 'text-yellow-400' : 'text-red-400'}`}>
               {overallSLA.pct}%
             </p>
           </div>
-          <div className="text-center">
+          <div
+            className={`text-center ${breachedItems.length > 0 ? 'cursor-pointer hover:opacity-80 transition-opacity' : ''}`}
+            onClick={() => breachedItems.length > 0 && setModalData({ title: 'Em Risco Agora (fora do SLA, ainda em progresso)', items: breachedItems, color: '#F97316' })}
+          >
             <p className="text-xs text-ds-text">Em Risco Agora</p>
             <p className="text-2xl font-bold text-orange-400">{breachedItems.length}</p>
           </div>
@@ -113,12 +200,16 @@ const SLATrackingDashboard: React.FC<Props> = ({ data }) => {
       </div>
 
       {/* KPI Row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         {slaByPriority.map((p, i) => (
-          <div key={i} className="bg-ds-navy p-4 rounded-lg border border-ds-border">
+          <div
+            key={i}
+            className={`bg-ds-navy p-4 rounded-lg border border-ds-border ${p.items.length > 0 ? 'cursor-pointer hover:border-ds-green transition-colors' : ''}`}
+            onClick={() => p.items.length > 0 && setModalData({ title: priorityHeading(p.priority), items: p.items, color: PRIORITY_COLORS[p.priority] })}
+          >
             <div className="flex items-center gap-2 mb-2">
-              <span className="w-3 h-3 rounded-full" style={{ backgroundColor: PRIORITY_COLORS[p.priority] }}></span>
-              <p className="text-ds-light-text text-sm font-semibold">P{p.priority} - {p.label}</p>
+              <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: PRIORITY_COLORS[p.priority] }}></span>
+              <p className="text-ds-light-text text-sm font-semibold">{priorityHeading(p.priority)}</p>
             </div>
             <p className={`text-xl font-bold ${p.pctSLA >= 80 ? 'text-green-400' : p.pctSLA >= 60 ? 'text-yellow-400' : 'text-red-400'}`}>
               {p.pctSLA}% <span className="text-xs text-ds-text font-normal">dentro SLA</span>
@@ -140,7 +231,13 @@ const SLATrackingDashboard: React.FC<Props> = ({ data }) => {
               <YAxis type="category" dataKey="team" tick={{ fill: '#CCD6F6', fontSize: 11 }} width={120} />
               <Tooltip contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }} labelStyle={{ color: '#64ffda', fontWeight: 'bold' }} itemStyle={{ color: '#e6f1ff' }}
                 formatter={(value: number) => [`${value}%`]} />
-              <Bar dataKey="pctSLA" name="% dentro SLA" label={{ position: 'right', fill: '#D8EBF5', fontSize: 11, fontWeight: 'bold', formatter: (v: number) => `${v}%` }}>
+              <Bar
+                dataKey="pctSLA"
+                name="% dentro SLA"
+                cursor="pointer"
+                onClick={(d: any) => setModalData({ title: `Itens concluídos — ${d.team}`, items: d.items, color: '#47C5FB' })}
+                label={{ position: 'right', fill: '#D8EBF5', fontSize: 11, fontWeight: 'bold', formatter: (v: number) => `${v}%` }}
+              >
                 {slaByTeam.map((entry, i) => (
                   <Cell key={i} fill={entry.pctSLA >= 80 ? '#64FFDA' : entry.pctSLA >= 60 ? '#F6E05E' : '#F56565'} />
                 ))}
@@ -156,6 +253,8 @@ const SLATrackingDashboard: React.FC<Props> = ({ data }) => {
           <ResponsiveContainer width="100%" height={280}>
             <PieChart>
               <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100}
+                cursor="pointer"
+                onClick={(entry: any) => setModalData({ title: entry.name, items: entry.items, color: entry.color })}
                 label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
                 {pieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
               </Pie>
@@ -199,7 +298,7 @@ const SLATrackingDashboard: React.FC<Props> = ({ data }) => {
                     <td className="px-3 py-2">{item.assignedTo || '-'}</td>
                     <td className="px-3 py-2">{item.state}</td>
                     <td className="px-3 py-2"><span className="text-red-400 font-bold">{item.ageDays}d</span></td>
-                    <td className="px-3 py-2"><span style={{ color: PRIORITY_COLORS[String(item.priority || '4')] }}>P{item.priority || '4'}</span></td>
+                    <td className="px-3 py-2"><span style={{ color: PRIORITY_COLORS[priorityKeyFor(item)] }}>{priorityKeyFor(item) === OUTRAS ? 'Outras' : `P${priorityKeyFor(item)}`}</span></td>
                   </tr>
                 ))}
               </tbody>

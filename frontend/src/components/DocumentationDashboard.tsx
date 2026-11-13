@@ -479,8 +479,8 @@ const DOCUMENTATION: DocSection[] = [
   },
   {
     id: 'scrum-ctc',
-    title: '🏃 Scrum (CTC/Franquia)',
-    description: 'Métricas específicas para times Scrum CTC e Franquia.',
+    title: '🏃 Scrum',
+    description: 'Métricas específicas para times que trabalham em Scrum, com seleção de time e sprint.',
     metrics: [
       {
         name: 'Velocity',

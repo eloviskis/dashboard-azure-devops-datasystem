@@ -338,15 +338,16 @@ export const POAnalysisDashboard: React.FC<Props> = ({ data }) => {
 
     if (itensAbertos.length === 0) return { chartData: [], statusOrder: [] };
 
-    const statsPorTime: Record<string, { count: number; statuses: Record<string, number> }> = {};
+    const statsPorTime: Record<string, { count: number; statuses: Record<string, number>; items: WorkItem[] }> = {};
     const allStatuses = new Set<string>();
 
     itensAbertos.forEach(item => {
       const team = item.team || 'Sem Time';
       if (!statsPorTime[team]) {
-        statsPorTime[team] = { count: 0, statuses: {} };
+        statsPorTime[team] = { count: 0, statuses: {}, items: [] };
       }
       statsPorTime[team].count++;
+      statsPorTime[team].items.push(item);
       Object.entries(item.timeInStatusDays!).forEach(([status, days]) => {
         statsPorTime[team].statuses[status] = (statsPorTime[team].statuses[status] || 0) + (days as number);
         allStatuses.add(status);
@@ -359,7 +360,7 @@ export const POAnalysisDashboard: React.FC<Props> = ({ data }) => {
         Object.entries(info.statuses).forEach(([status, totalDays]) => {
           avg[status] = parseFloat((totalDays / info.count).toFixed(1));
         });
-        return { name: team, ...avg };
+        return { name: team, ...avg, items: info.items };
       })
       .sort((a, b) => {
         const totalA = Object.values(a).reduce((s, v) => s + (typeof v === 'number' ? v : 0), 0);
@@ -370,6 +371,14 @@ export const POAnalysisDashboard: React.FC<Props> = ({ data }) => {
     const statusOrder = Array.from(allStatuses).sort();
     return { chartData, statusOrder };
   }, [data]);
+
+  // Backlog aberto do time (não dá pra isolar com precisão qual status foi clicado, já que
+  // são médias por time — abre a lista completa do backlog aberto daquele time).
+  const handleTempoPorStateClick = (e: any) => {
+    const p = e?.activePayload?.[0]?.payload;
+    if (!p) return;
+    setModalData({ title: `Backlog aberto — Time ${p.name} (média por status, ${p.items.length} itens)`, items: p.items, color: '#64FFDA' });
+  };
 
   // Handler para clique no gráfico de backlog
   const handleBacklogTimeClick = (chartData: any) => {
@@ -460,14 +469,16 @@ export const POAnalysisDashboard: React.FC<Props> = ({ data }) => {
 
   // Métricas gerais
   const totalCriados = itemsComCriador.length;
-  const totalFechados = itemsComCriador.filter(item => 
+  const itemsFechados = itemsComCriador.filter(item =>
     COMPLETED_STATES.includes(item.state)
-  ).length;
+  );
+  const totalFechados = itemsFechados.length;
   const taxaGeralConclusao = totalCriados > 0 ? ((totalFechados / totalCriados) * 100).toFixed(1) : '0';
   const totalCriadores = new Set(itemsComCriador.map(item => item.createdBy)).size;
-  const totalComDOR = itemsComCriador.filter(item => 
+  const itemsComDOR = itemsComCriador.filter(item =>
     item.readyDate && item.readyDate !== null && String(item.readyDate).trim() !== ''
-  ).length;
+  );
+  const totalComDOR = itemsComDOR.length;
   const taxaDOR = totalCriados > 0 ? ((totalComDOR / totalCriados) * 100).toFixed(1) : '0';
   // Flag para indicar que dados de DOR ainda não foram sincronizados
   const dorSemDados = totalCriados > 0 && totalComDOR === 0;
@@ -479,27 +490,27 @@ export const POAnalysisDashboard: React.FC<Props> = ({ data }) => {
 
       {/* Cards de métricas */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-        <div className="bg-blue-700 text-white p-4 rounded-lg">
+        <div className="bg-blue-700 text-white p-4 rounded-lg cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setModalData({ title: 'Itens Criados', items: itemsComCriador, color: '#1E88E5' })}>
           <div className="text-lg font-bold">Itens Criados</div>
           <div className="text-3xl">{totalCriados}</div>
           <div>Work items</div>
         </div>
-        <div className="bg-green-700 text-white p-4 rounded-lg">
+        <div className="bg-green-700 text-white p-4 rounded-lg cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setModalData({ title: 'Itens Fechados', items: itemsFechados, color: '#43A047' })}>
           <div className="text-lg font-bold">Itens Fechados</div>
           <div className="text-3xl">{totalFechados}</div>
           <div>Work items</div>
         </div>
-        <div className="bg-purple-700 text-white p-4 rounded-lg">
+        <div className="bg-purple-700 text-white p-4 rounded-lg cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setModalData({ title: 'Itens Fechados (base da Taxa de Conclusão)', items: itemsFechados, color: '#8E24AA' })}>
           <div className="text-lg font-bold">Taxa de Conclusão</div>
           <div className="text-3xl">{taxaGeralConclusao}%</div>
           <div>Do período</div>
         </div>
-        <div className={`${dorSemDados ? 'bg-gray-700' : 'bg-teal-700'} text-white p-4 rounded-lg`}>
+        <div className={`${dorSemDados ? 'bg-gray-700' : 'bg-teal-700'} text-white p-4 rounded-lg ${!dorSemDados ? 'cursor-pointer hover:opacity-90 transition-opacity' : ''}`} onClick={() => !dorSemDados && setModalData({ title: 'Itens com DOR (Ready)', items: itemsComDOR, color: '#00B8A9' })}>
           <div className="text-lg font-bold">Taxa DOR (Ready)</div>
           <div className="text-3xl">{dorSemDados ? '?' : `${taxaDOR}%`}</div>
           <div className="text-xs">{dorSemDados ? '⚠️ Requer nova sincronização' : `${totalComDOR} de ${totalCriados}`}</div>
         </div>
-        <div className="bg-orange-700 text-white p-4 rounded-lg">
+        <div className="bg-orange-700 text-white p-4 rounded-lg cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setModalData({ title: 'Itens de Criadores Ativos', items: itemsComCriador, color: '#FF9800' })}>
           <div className="text-lg font-bold">Criadores Ativos</div>
           <div className="text-3xl">{totalCriadores}</div>
           <div>Pessoas</div>
@@ -643,6 +654,8 @@ export const POAnalysisDashboard: React.FC<Props> = ({ data }) => {
             <BarChart
               data={tempoMedioPorStatePorTime.chartData}
               margin={{ top: 20, right: 30, left: 20, bottom: 50 }}
+              className="cursor-pointer"
+              onClick={handleTempoPorStateClick}
             >
               <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
               <XAxis
@@ -700,7 +713,7 @@ export const POAnalysisDashboard: React.FC<Props> = ({ data }) => {
               contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }} labelStyle={{ color: '#64ffda', fontWeight: 'bold' }} itemStyle={{ color: '#e6f1ff' }}
             />
             <Legend />
-            <Bar dataKey="criados" name="Criados" fill="#64B5F6" radius={[4, 4, 0, 0]} label={{ position: 'top', fill: '#64B5F6', fontSize: 9 }} />
+            <Bar dataKey="criados" name="Criados" fill="#64B5F6" radius={[4, 4, 0, 0]} cursor="pointer" onClick={(d: any, index: number) => handleCriadorClick(d, index)} label={{ position: 'top', fill: '#64B5F6', fontSize: 9 }} />
             <Bar 
               dataKey="fechados" 
               name="Fechados" 
@@ -755,8 +768,8 @@ export const POAnalysisDashboard: React.FC<Props> = ({ data }) => {
         <div className="flex items-center justify-between mb-1">
           <div className="font-bold text-white text-lg">🔴 Priorização por Impacto — Clientes Afetados</div>
           <div className="flex gap-3 text-sm">
-            <span className="bg-red-700 text-white px-3 py-1 rounded">{itensPluriClientes} itens afetando múltiplos clientes</span>
-            <span className="bg-orange-700 text-white px-3 py-1 rounded">{totalClientesAfetados} incidências totais</span>
+            <span className="bg-red-700 text-white px-3 py-1 rounded cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setModalData({ title: 'Itens Afetando Múltiplos Clientes', items: clientesAfetadosData, color: '#C62828' })}>{itensPluriClientes} itens afetando múltiplos clientes</span>
+            <span className="bg-orange-700 text-white px-3 py-1 rounded cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setModalData({ title: 'Itens Afetando Múltiplos Clientes', items: clientesAfetadosData, color: '#EF6C00' })}>{totalClientesAfetados} incidências totais</span>
           </div>
         </div>
         <ChartInfoLamp info="Lista de issues e bugs com o campo 'Reincidência' preenchido, indicando quantos clientes estão enfrentando o mesmo problema. Itens com maior número de clientes afetados = maior prioridade de correção." />
@@ -891,7 +904,12 @@ export const POAnalysisDashboard: React.FC<Props> = ({ data }) => {
             </thead>
             <tbody>
               {melhorDesempenho.map((item, idx) => (
-                <tr key={idx} className="border-b border-ds-border hover:bg-ds-dark-blue">
+                <tr
+                  key={idx}
+                  className="border-b border-ds-border hover:bg-ds-dark-blue cursor-pointer"
+                  onClick={() => handleCriadorClick({ name: item.name }, idx)}
+                  title="Clique para ver os itens"
+                >
                   <td className="p-2 text-ds-text">
                     {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx + 1}º`}
                   </td>

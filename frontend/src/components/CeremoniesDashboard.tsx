@@ -52,6 +52,11 @@ const DEFAULT_RITUALS = [
   { ritual_type: 'Apresentação de Resultados', frequency: 'monthly'  as Frequency },
 ];
 
+// Cerimônias do wizard de registro manual — lista fixa à parte de DEFAULT_RITUALS (que também alimenta
+// a configuração de ritos por time) pra não herdar variações de texto usadas nos dados reais (ex.
+// "Sprint Review" vs "Review" aparecendo como duas opções diferentes).
+const WIZARD_RITUAL_TYPES = ['Refinamento', 'Review', 'Retrospectiva', 'Apresentação de Resultados', 'Daily/Checkpoint'];
+
 const FREQ_LABEL: Record<Frequency, string> = {
   weekly: 'Semanal',
   biweekly: 'Quinzenal',
@@ -102,6 +107,49 @@ function pct(done: number, total: number): number {
   return total === 0 ? 0 : Math.round((done / total) * 100);
 }
 
+// ─── XLSX Export ──────────────────────────────────────────────────────────────
+async function exportCeremoniesXlsx(records: CeremonyRecord[], from: string, to: string): Promise<void> {
+  // Buffer polyfill required by ExcelJS in browser
+  if (typeof (globalThis as Record<string, unknown>).Buffer === 'undefined') {
+    const { Buffer: Buf } = await import('buffer');
+    (globalThis as Record<string, unknown>).Buffer = Buf;
+  }
+  const ExcelJS = await import('exceljs');
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'DS Metrics · Ritos & Cerimônias';
+  wb.created = new Date();
+
+  const ws = wb.addWorksheet('Ritos & Cerimônias');
+  ws.columns = [
+    { header: 'Time', key: 'team', width: 20 },
+    { header: 'Cerimônia', key: 'ritual_type', width: 22 },
+    { header: 'Data', key: 'scheduled_date', width: 14 },
+    { header: 'Status', key: 'status', width: 14 },
+    { header: 'Motivo', key: 'reason', width: 30 },
+    { header: 'Notas', key: 'notes', width: 40 },
+  ];
+  ws.getRow(1).font = { bold: true };
+  records.forEach(r => ws.addRow({
+    team: r.team,
+    ritual_type: r.ritual_type,
+    scheduled_date: r.scheduled_date,
+    status: STATUS_CONFIG[r.status]?.label || r.status,
+    reason: r.reason || '',
+    notes: r.notes || '',
+  }));
+
+  const buf  = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `Ritos-Cerimonias_${from}_a_${to}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 // ─── sub-components ───────────────────────────────────────────────────────────
 
 const StatusBadge: React.FC<{ status: Status; onClick?: () => void }> = ({ status, onClick }) => {
@@ -113,6 +161,45 @@ const StatusBadge: React.FC<{ status: Status; onClick?: () => void }> = ({ statu
     >
       {cfg.icon} {cfg.label}
     </button>
+  );
+};
+
+interface RecordsModalData { title: string; records: CeremonyRecord[]; color: string; }
+
+const RecordsListModal: React.FC<{ data: RecordsModalData | null; onClose: () => void }> = ({ data, onClose }) => {
+  if (!data) return null;
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50" onClick={onClose}>
+      <div className="bg-ds-navy border border-ds-border rounded-lg shadow-2xl max-w-2xl w-full mx-4 max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="p-4 rounded-t-lg flex justify-between items-center" style={{ backgroundColor: data.color }}>
+          <h2 className="text-white font-bold text-lg">{data.title}</h2>
+          <button onClick={onClose} className="text-white hover:text-gray-200 text-2xl font-bold leading-none">×</button>
+        </div>
+        <div className="p-4 overflow-y-auto flex-1">
+          <div className="text-ds-text mb-3 text-sm">
+            Total: <span className="font-bold text-white">{data.records.length}</span> registros
+          </div>
+          {data.records.length === 0 ? (
+            <div className="text-ds-text text-center py-8">Nenhum registro encontrado</div>
+          ) : (
+            <ul className="space-y-2">
+              {data.records.map(r => (
+                <li key={r.id} className="bg-ds-dark-blue border border-ds-border rounded-lg p-3 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-white font-medium truncate">{r.team} · {r.ritual_type}</p>
+                    <p className="text-ds-text text-xs mt-0.5">{r.scheduled_date}{r.reason ? ` — ${r.reason}` : ''}</p>
+                  </div>
+                  <StatusBadge status={r.status} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <div className="p-4 border-t border-ds-border">
+          <button onClick={onClose} className="w-full bg-ds-border hover:bg-ds-green text-white py-2 px-4 rounded-lg transition-colors">Fechar</button>
+        </div>
+      </div>
+    </div>
   );
 };
 
@@ -274,6 +361,160 @@ const RecordModal: React.FC<RecordModalProps> = ({ record, prefill, onClose, onS
   );
 };
 
+// ─── new record wizard ────────────────────────────────────────────────────────
+const STEP_LABELS = ['Time & Cerimônia', 'Data & Status', 'Motivo & Notas'];
+
+const NewRecordWizard: React.FC<{
+  teams: string[];
+  ritualTypes: string[];
+  onClose: () => void;
+  onSaved: () => void;
+  token: string;
+}> = ({ teams, ritualTypes, onClose, onSaved, token }) => {
+  const [step, setStep]       = useState(1);
+  const [team, setTeam]       = useState('');
+  const [ritualType, setRitualType] = useState('');
+  const [date, setDate]       = useState('');
+  const [status, setStatus]   = useState<Status>('done');
+  const [reason, setReason]   = useState('');
+  const [notes, setNotes]     = useState('');
+  const [saving, setSaving]   = useState(false);
+  const [error, setError]     = useState('');
+
+  const goNext = () => {
+    setError('');
+    if (step === 1 && (!team || !ritualType)) { setError('Selecione o time e a cerimônia'); return; }
+    if (step === 2 && !date) { setError('Selecione uma data'); return; }
+    setStep(s => s + 1);
+  };
+  const goBack = () => { setError(''); setStep(s => Math.max(1, s - 1)); };
+
+  const handleSave = async () => {
+    if ((status === 'rescheduled' || status === 'cancelled') && !reason) {
+      setError('Motivo é obrigatório pra status remarcado/cancelado');
+      return;
+    }
+    setSaving(true); setError('');
+    try {
+      const res = await fetch(`${API}/api/ceremonies/records`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ team, ritual_type: ritualType, scheduled_date: date, status, reason: reason || null, notes: notes || null }),
+      });
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Erro ao salvar'); }
+      onSaved();
+      onClose();
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
+      <div className="bg-ds-dark-blue border border-ds-border rounded-xl shadow-2xl w-full max-w-md mx-4" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-ds-border">
+          <h3 className="text-ds-light-text font-bold text-sm">➕ Registrar Manualmente</h3>
+          <button onClick={onClose} className="text-ds-muted hover:text-white text-xl">&times;</button>
+        </div>
+
+        <div className="flex border-b border-ds-border">
+          {STEP_LABELS.map((label, i) => (
+            <div key={label}
+              className={`flex-1 text-center py-2 text-xs font-semibold border-b-2 ${
+                step === i + 1 ? 'text-ds-green border-ds-green' : 'text-ds-muted border-transparent'
+              }`}>
+              {i + 1}. {label}
+            </div>
+          ))}
+        </div>
+
+        <div className="p-5 space-y-4">
+          {error && <div className="text-red-400 text-xs bg-red-500/10 rounded p-2">{error}</div>}
+
+          {step === 1 && (
+            <>
+              <div className="space-y-1">
+                <label className="text-ds-text text-xs">Time</label>
+                <select value={team} onChange={e => setTeam(e.target.value)}
+                  className="w-full bg-ds-navy border border-ds-border rounded-lg px-3 py-2 text-sm text-ds-light-text focus:outline-none focus:border-ds-green">
+                  <option value="">Selecione...</option>
+                  {teams.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-ds-text text-xs">Cerimônia</label>
+                <select value={ritualType} onChange={e => setRitualType(e.target.value)}
+                  className="w-full bg-ds-navy border border-ds-border rounded-lg px-3 py-2 text-sm text-ds-light-text focus:outline-none focus:border-ds-green">
+                  <option value="">Selecione...</option>
+                  {ritualTypes.map(rt => <option key={rt} value={rt}>{rt}</option>)}
+                </select>
+              </div>
+            </>
+          )}
+
+          {step === 2 && (
+            <>
+              <div className="space-y-1">
+                <label className="text-ds-text text-xs">Data</label>
+                <input type="date" value={date} onChange={e => setDate(e.target.value)}
+                  className="w-full bg-ds-navy border border-ds-border rounded-lg px-3 py-2 text-sm text-ds-light-text focus:outline-none focus:border-ds-green" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-ds-text text-xs">Status</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {(Object.entries(STATUS_CONFIG) as [Status, typeof STATUS_CONFIG[Status]][]).map(([s, cfg]) => (
+                    <button key={s} onClick={() => setStatus(s)}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm transition-colors ${status === s ? `${cfg.bg} ${cfg.color} border-current` : 'border-ds-border text-ds-text hover:border-ds-green'}`}>
+                      {cfg.icon} {cfg.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+
+          {step === 3 && (
+            <>
+              {(status === 'rescheduled' || status === 'cancelled') && (
+                <div className="space-y-1">
+                  <label className="text-ds-text text-xs">Motivo *</label>
+                  <input type="text" value={reason} onChange={e => setReason(e.target.value)} placeholder="Ex: feriado, indisponibilidade..."
+                    className="w-full bg-ds-navy border border-ds-border rounded-lg px-3 py-2 text-sm text-ds-light-text focus:outline-none focus:border-ds-green" />
+                </div>
+              )}
+              <div className="space-y-1">
+                <label className="text-ds-text text-xs">Observações (opcional)</label>
+                <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3} placeholder="Pauta, participantes, resultado..."
+                  className="w-full bg-ds-navy border border-ds-border rounded-lg px-3 py-2 text-sm text-ds-light-text focus:outline-none focus:border-ds-green resize-none" />
+              </div>
+            </>
+          )}
+        </div>
+
+        <div className="flex items-center justify-between px-5 py-4 border-t border-ds-border">
+          <button onClick={goBack} disabled={step === 1}
+            className="px-4 py-2 text-sm bg-ds-border/30 text-ds-text rounded-lg hover:bg-ds-border/50 disabled:opacity-40">
+            Voltar
+          </button>
+          {step < 3 ? (
+            <button onClick={goNext}
+              className="px-4 py-2 text-sm bg-ds-green text-ds-dark-blue font-bold rounded-lg hover:bg-ds-green/80">
+              Avançar
+            </button>
+          ) : (
+            <button onClick={handleSave} disabled={saving}
+              className="px-4 py-2 text-sm bg-ds-green text-ds-dark-blue font-bold rounded-lg hover:bg-ds-green/80 disabled:opacity-50">
+              {saving ? 'Salvando...' : 'Salvar'}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ─── config modal ─────────────────────────────────────────────────────────────
 const ConfigModal: React.FC<{
   configs: CeremonyConfig[];
@@ -390,6 +631,7 @@ const CeremoniesDashboard: React.FC = () => {
   const defaultMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
   const overviewLoadedRef = React.useRef(false);
+  const [recordsModalData, setRecordsModalData] = useState<RecordsModalData | null>(null);
 
   const [teams, setTeams]       = useState<string[]>([]);
   const [selectedTeam, setSelectedTeam] = useState('');
@@ -408,6 +650,8 @@ const CeremoniesDashboard: React.FC = () => {
   const [dateFrom, setDateFrom]             = useState('2025-06-01');
   const [dateTo, setDateTo]                 = useState(isoDate(new Date()));
   const [overviewPage, setOverviewPage]     = useState(0);
+  const [generatingReport, setGeneratingReport] = useState(false);
+  const [clearingData, setClearingData]         = useState(false);
   const OVERVIEW_PAGE_SIZE = 30;
 
   const [recordModal, setRecordModal] = useState<{
@@ -416,6 +660,7 @@ const CeremoniesDashboard: React.FC = () => {
   } | null>(null);
   const [showConfig, setShowConfig]     = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
+  const [showNewRecordWizard, setShowNewRecordWizard] = useState(false);
 
   const fetchTeams = useCallback(async () => {
     try {
@@ -450,6 +695,37 @@ const CeremoniesDashboard: React.FC = () => {
   useEffect(() => {
     if (view === 'overview') { setOverviewPage(0); fetchOverview(); }
   }, [view, fetchOverview]);
+
+  const handleGenerateReport = useCallback(async () => {
+    if (!overviewData?.records.length) return;
+    setGeneratingReport(true);
+    try { await exportCeremoniesXlsx(overviewData.records, dateFrom, dateTo); }
+    finally { setGeneratingReport(false); }
+  }, [overviewData, dateFrom, dateTo]);
+
+  const handleClearData = useCallback(async () => {
+    const count = overviewData?.summary.total ?? 0;
+    if (!count) return;
+    const teamLabel = filterTeam ? ` do time ${filterTeam}` : '';
+    if (!confirm(`Tem certeza que deseja excluir ${count} registro(s)${teamLabel} entre ${dateFrom} e ${dateTo}? Essa ação não pode ser desfeita.`)) return;
+    setClearingData(true);
+    try {
+      const params = new URLSearchParams({ from: dateFrom, to: dateTo });
+      if (filterTeam)   params.append('team',        filterTeam);
+      if (filterRitual) params.append('ritual_type', filterRitual);
+      if (filterStatus) params.append('status',      filterStatus);
+      const res = await fetch(`${API}/api/ceremonies/records/bulk?${params}`, {
+        method: 'DELETE', headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        await fetchOverview();
+      } else {
+        const d = await res.json().catch(() => ({}));
+        alert(d.error || 'Erro ao limpar dados');
+      }
+    } catch { alert('Erro de conexão'); }
+    setClearingData(false);
+  }, [token, dateFrom, dateTo, filterTeam, filterRitual, filterStatus, overviewData, fetchOverview]);
 
   const fetchConfigs = useCallback(async () => {
     if (!selectedTeam) return;
@@ -590,6 +866,15 @@ const CeremoniesDashboard: React.FC = () => {
       {showCalendar && (
         <CalendarImportMulti teams={teams} month={month} onClose={() => setShowCalendar(false)} onImported={fetchAll} />
       )}
+      {showNewRecordWizard && (
+        <NewRecordWizard
+          teams={teams}
+          ritualTypes={WIZARD_RITUAL_TYPES}
+          onClose={() => setShowNewRecordWizard(false)}
+          onSaved={onSaved}
+          token={token!}
+        />
+      )}
 
       <div className="space-y-6">
         {/* header */}
@@ -614,6 +899,10 @@ const CeremoniesDashboard: React.FC = () => {
             <button onClick={() => setShowCalendar(true)}
               className="flex items-center gap-1.5 px-3 py-2 text-sm bg-blue-600/20 text-blue-400 border border-blue-500/30 rounded-lg hover:bg-blue-600/30 transition-colors">
               📅 Importar Calendário
+            </button>
+            <button onClick={() => setShowNewRecordWizard(true)}
+              className="flex items-center gap-1.5 px-3 py-2 text-sm bg-ds-navy border border-ds-border text-ds-text rounded-lg hover:border-ds-green hover:text-ds-light-text transition-colors">
+              ➕ Registrar Manualmente
             </button>
             {isAdmin && (
               <button onClick={() => setShowConfig(true)}
@@ -673,6 +962,18 @@ const CeremoniesDashboard: React.FC = () => {
                   className="px-4 py-2 bg-ds-green text-ds-dark-blue text-sm font-bold rounded-lg hover:bg-ds-green/80 disabled:opacity-50 transition-colors">
                   {overviewLoading ? '⏳' : '🔍 Filtrar'}
                 </button>
+                {isAdmin && (
+                  <>
+                    <button onClick={handleGenerateReport} disabled={generatingReport || !overviewData?.records.length}
+                      className="px-4 py-2 bg-ds-navy border border-ds-border text-ds-text text-sm font-semibold rounded-lg hover:border-ds-green hover:text-ds-light-text disabled:opacity-50 transition-colors">
+                      {generatingReport ? '⏳' : '📄 Gerar Relatório'}
+                    </button>
+                    <button onClick={handleClearData} disabled={clearingData || !overviewData?.summary.total}
+                      className="px-4 py-2 bg-red-600/20 border border-red-500/40 text-red-400 text-sm font-semibold rounded-lg hover:bg-red-600/30 disabled:opacity-50 transition-colors">
+                      {clearingData ? '⏳' : '🗑️ Limpar Dados'}
+                    </button>
+                  </>
+                )}
               </div>
             </div>
 
@@ -685,23 +986,36 @@ const CeremoniesDashboard: React.FC = () => {
             {!overviewLoading && overviewData && (
               <>
                 {/* summary cards */}
+                <RecordsListModal data={recordsModalData} onClose={() => setRecordsModalData(null)} />
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="rounded-xl border border-ds-border bg-ds-navy p-4 text-center">
+                  <div
+                    className="rounded-xl border border-ds-border bg-ds-navy p-4 text-center cursor-pointer hover:border-ds-green transition-colors"
+                    onClick={() => setRecordsModalData({ title: 'Todos os Registros', records: overviewData.records, color: '#8892B0' })}
+                  >
                     <p className="text-ds-muted text-xs uppercase tracking-wide mb-1">Total</p>
                     <p className="text-3xl font-black text-ds-light-text">{overviewData.summary.total}</p>
                     <p className="text-ds-muted text-xs mt-1">registros</p>
                   </div>
-                  <div className="rounded-xl border border-green-500/30 bg-green-500/5 p-4 text-center">
+                  <div
+                    className="rounded-xl border border-green-500/30 bg-green-500/5 p-4 text-center cursor-pointer hover:border-green-400 transition-colors"
+                    onClick={() => setRecordsModalData({ title: 'Realizados', records: overviewData.records.filter(r => r.status === 'done'), color: '#22C55E' })}
+                  >
                     <p className="text-green-400 text-xs uppercase tracking-wide mb-1">✅ Realizados</p>
                     <p className="text-3xl font-black text-green-400">{overviewData.summary.done}</p>
                     <p className="text-green-400/70 text-xs mt-1">{pct(overviewData.summary.done, overviewData.summary.total)}% do total</p>
                   </div>
-                  <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/5 p-4 text-center">
+                  <div
+                    className="rounded-xl border border-yellow-500/30 bg-yellow-500/5 p-4 text-center cursor-pointer hover:border-yellow-400 transition-colors"
+                    onClick={() => setRecordsModalData({ title: 'Remarcados', records: overviewData.records.filter(r => r.status === 'rescheduled'), color: '#EAB308' })}
+                  >
                     <p className="text-yellow-400 text-xs uppercase tracking-wide mb-1">🔄 Remarcados</p>
                     <p className="text-3xl font-black text-yellow-400">{overviewData.summary.rescheduled}</p>
                     <p className="text-yellow-400/70 text-xs mt-1">{pct(overviewData.summary.rescheduled, overviewData.summary.total)}% do total</p>
                   </div>
-                  <div className="rounded-xl border border-red-500/30 bg-red-500/5 p-4 text-center">
+                  <div
+                    className="rounded-xl border border-red-500/30 bg-red-500/5 p-4 text-center cursor-pointer hover:border-red-400 transition-colors"
+                    onClick={() => setRecordsModalData({ title: 'Cancelados', records: overviewData.records.filter(r => r.status === 'cancelled'), color: '#EF4444' })}
+                  >
                     <p className="text-red-400 text-xs uppercase tracking-wide mb-1">❌ Cancelados</p>
                     <p className="text-3xl font-black text-red-400">{overviewData.summary.cancelled}</p>
                     <p className="text-red-400/70 text-xs mt-1">{pct(overviewData.summary.cancelled, overviewData.summary.total)}% do total</p>

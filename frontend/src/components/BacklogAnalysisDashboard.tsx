@@ -236,15 +236,18 @@ const BacklogAnalysisDashboard: React.FC<Props> = ({ data }) => {
   // Métricas gerais
   const overallMetrics = useMemo(() => {
     const totalThroughput = completedItems.length;
-    const avgCycle = completedItems.filter(i => i.cycleTime && i.cycleTime > 0).reduce((sum, i) => sum + (i.cycleTime || 0), 0) / completedItems.filter(i => i.cycleTime && i.cycleTime > 0).length || 0;
-    const avgLead = completedItems.filter(i => i.leadTime && i.leadTime > 0).reduce((sum, i) => sum + (i.leadTime || 0), 0) / completedItems.filter(i => i.leadTime && i.leadTime > 0).length || 0;
-    
+    const ctItems = completedItems.filter(i => i.cycleTime && i.cycleTime > 0);
+    const ltItems = completedItems.filter(i => i.leadTime && i.leadTime > 0);
+    const avgCycle = ctItems.reduce((sum, i) => sum + (i.cycleTime || 0), 0) / ctItems.length || 0;
+    const avgLead = ltItems.reduce((sum, i) => sum + (i.leadTime || 0), 0) / ltItems.length || 0;
+
     return {
       totalThroughput,
       avgCycleTime: avgCycle.toFixed(1),
       avgLeadTime: avgLead.toFixed(1),
       teamsCount: teamMetrics.length,
-      typesCount: typeMetrics.length
+      typesCount: typeMetrics.length,
+      ctItems, ltItems,
     };
   }, [completedItems, teamMetrics, typeMetrics]);
 
@@ -275,27 +278,27 @@ const BacklogAnalysisDashboard: React.FC<Props> = ({ data }) => {
     <div className="space-y-6">
       {/* Cards de Métricas Gerais */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-        <div className="bg-linear-to-br from-blue-600 to-blue-800 text-white p-6 rounded-lg shadow-lg">
+        <div className="bg-linear-to-br from-blue-600 to-blue-800 text-white p-6 rounded-lg shadow-lg cursor-pointer hover:brightness-110 transition-all" onClick={() => setModalData({ title: 'Vazão Total (Período)', items: completedItems, color: '#2563EB' })}>
           <div className="text-sm opacity-90 mb-2">Vazão Total (Período)</div>
           <div className="text-4xl font-bold">{overallMetrics.totalThroughput}</div>
           <div className="text-xs opacity-75 mt-2">Itens concluídos</div>
         </div>
-        <div className="bg-linear-to-br from-green-600 to-green-800 text-white p-6 rounded-lg shadow-lg">
+        <div className="bg-linear-to-br from-green-600 to-green-800 text-white p-6 rounded-lg shadow-lg cursor-pointer hover:brightness-110 transition-all" onClick={() => setModalData({ title: 'Itens usados no Cycle Time Médio', items: overallMetrics.ctItems, color: '#16A34A' })}>
           <div className="text-sm opacity-90 mb-2">Cycle Time Médio</div>
           <div className="text-4xl font-bold">{overallMetrics.avgCycleTime}</div>
           <div className="text-xs opacity-75 mt-2">dias</div>
         </div>
-        <div className="bg-linear-to-br from-purple-600 to-purple-800 text-white p-6 rounded-lg shadow-lg">
+        <div className="bg-linear-to-br from-purple-600 to-purple-800 text-white p-6 rounded-lg shadow-lg cursor-pointer hover:brightness-110 transition-all" onClick={() => setModalData({ title: 'Itens usados no Lead Time Médio', items: overallMetrics.ltItems, color: '#9333EA' })}>
           <div className="text-sm opacity-90 mb-2">Lead Time Médio</div>
           <div className="text-4xl font-bold">{overallMetrics.avgLeadTime}</div>
           <div className="text-xs opacity-75 mt-2">dias</div>
         </div>
-        <div className="bg-linear-to-br from-orange-600 to-orange-800 text-white p-6 rounded-lg shadow-lg">
+        <div className="bg-linear-to-br from-orange-600 to-orange-800 text-white p-6 rounded-lg shadow-lg cursor-pointer hover:brightness-110 transition-all" onClick={() => setModalData({ title: 'Vazão Total — Times Ativos', items: completedItems, color: '#EA580C' })}>
           <div className="text-sm opacity-90 mb-2">Times Ativos</div>
           <div className="text-4xl font-bold">{overallMetrics.teamsCount}</div>
           <div className="text-xs opacity-75 mt-2">equipes</div>
         </div>
-        <div className="bg-linear-to-br from-pink-600 to-pink-800 text-white p-6 rounded-lg shadow-lg">
+        <div className="bg-linear-to-br from-pink-600 to-pink-800 text-white p-6 rounded-lg shadow-lg cursor-pointer hover:brightness-110 transition-all" onClick={() => setModalData({ title: 'Vazão Total — Tipos de Work Item', items: completedItems, color: '#DB2777' })}>
           <div className="text-sm opacity-90 mb-2">Tipos de Work Item</div>
           <div className="text-4xl font-bold">{overallMetrics.typesCount}</div>
           <div className="text-xs opacity-75 mt-2">categorias</div>

@@ -1,6 +1,6 @@
 
 
-import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 // Fix: Import `subDays` from its submodule `date-fns/subDays` to resolve the export error.
 import { subDays, subWeeks, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { GoogleGenAI } from '@google/genai';
@@ -9,6 +9,10 @@ import { GoogleGenAI } from '@google/genai';
 import { useAuth } from './contexts/AuthContext';
 import LoginPage from './components/LoginPage';
 import UserManagementPage from './components/UserManagementPage';
+import NotificationHistoryPage from './components/NotificationHistoryPage';
+import TeamsIntegrationPage from './components/TeamsIntegrationPage';
+import SettingsPage from './components/SettingsPage';
+import Sidebar from './components/Sidebar';
 
 // Import Hooks
 import { useAzureDevOpsData } from './hooks/useAzureDevOpsData.ts';
@@ -53,10 +57,12 @@ import TeamInsightsDashboard from './components/TeamInsightsDashboard.tsx';
 import TabsConfigModal, { loadTabsConfig, saveTabsConfig } from './components/TabsConfigModal.tsx';
 import PullRequestsDashboard from './components/PullRequestsDashboard.tsx';
 import ScrumCTCDashboard from './components/ScrumCTCDashboard.tsx';
+import GanttDashboard from './components/GanttDashboard.tsx';
 import DORAMetricsDashboard from './components/DORAMetricsDashboard.tsx';
 import SLATrackingDashboard from './components/SLATrackingDashboard.tsx';
 import ExecutiveHomeDashboard from './components/ExecutiveHomeDashboard.tsx';
 import FlowEfficiencyChart from './components/FlowEfficiencyChart.tsx';
+import PainelMensalDashboard from './components/PainelMensalDashboard.tsx';
 import ActivityHeatmap from './components/ActivityHeatmap.tsx';
 import ReworkAnalysisChart from './components/ReworkAnalysisChart.tsx';
 import StoryPointsVsCycleTimeChart from './components/StoryPointsVsCycleTimeChart.tsx';
@@ -73,13 +79,69 @@ import QATrackerDashboard from './components/QATrackerDashboard.tsx';
 import { WorkItem, WorkItemFilters } from './types.ts';
 
 // Import Metrics
-import { calculatePerformanceMetrics, calculateQualityMetrics, COMPLETED_STATES } from './utils/metrics.ts';
+import { calculatePerformanceMetrics, calculateQualityMetrics, COMPLETED_STATES, IN_PROGRESS_STATES } from './utils/metrics.ts';
 
-type Tab = 'executive' | 'team-insights' | 'team-evolution' | 'cycle-analytics' | 'performance' | 'quality' | 'kanban' | 'detailed-throughput' | 'bottlenecks' | 'tags' | 'clients' | 'montecarlo' | 'item-list' | 'rootcause' | 'period-comparison' | 'backlog' | 'impedimentos' | 'po-analysis' | 'pull-requests' | 'scrum-ctc' | 'dora' | 'sla' | 'metas' | 'documentation' | 'team-comparison' | 'devtracker' | 'rituals' | 'qa-tracker';
+interface ModalData {
+  title: string;
+  items: WorkItem[];
+  color: string;
+}
+
+const AZURE_DEVOPS_BASE_URL = 'https://dev.azure.com/datasystemsoftwares/USE/_workitems/edit';
+
+const ItemListModal: React.FC<{ data: ModalData | null; onClose: () => void }> = ({ data, onClose }) => {
+  if (!data) return null;
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50" onClick={onClose}>
+      <div className="bg-ds-navy border border-ds-border rounded-lg shadow-2xl max-w-4xl w-full mx-4 max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="p-4 rounded-t-lg flex justify-between items-center" style={{ backgroundColor: data.color }}>
+          <h2 className="text-white font-bold text-lg">{data.title}</h2>
+          <button onClick={onClose} className="text-white hover:text-gray-200 text-2xl font-bold leading-none">×</button>
+        </div>
+        <div className="p-4 overflow-y-auto flex-1">
+          <div className="text-ds-text mb-3 text-sm">
+            Total: <span className="font-bold text-white">{data.items.length}</span> itens
+          </div>
+          {data.items.length === 0 ? (
+            <div className="text-ds-text text-center py-8">Nenhum item encontrado</div>
+          ) : (
+            <ul className="space-y-2">
+              {data.items.map((item, idx) => (
+                <li key={item.workItemId || idx} className="bg-ds-dark-blue border border-ds-border rounded-lg p-3 hover:border-ds-green transition-colors">
+                  <div className="flex items-start gap-3">
+                    <span className="text-xs font-mono px-2 py-1 rounded shrink-0 text-white" style={{ backgroundColor: data.color }}>
+                      #{item.workItemId}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <a href={item.url || `${AZURE_DEVOPS_BASE_URL}/${item.workItemId}`} target="_blank" rel="noopener noreferrer" className="text-white hover:text-ds-green font-medium block truncate mb-1" title={item.title}>
+                        {item.title}
+                      </a>
+                      <div className="grid grid-cols-2 gap-1 text-xs text-ds-text">
+                        <div>👤 {item.assignedTo || 'Não atribuído'}</div>
+                        <div>👥 {item.team || 'Sem time'}</div>
+                        <div>🏷️ {item.type}</div>
+                        <div>📊 {item.state}</div>
+                      </div>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <div className="p-4 border-t border-ds-border">
+          <button onClick={onClose} className="w-full bg-ds-border hover:bg-ds-green text-white py-2 px-4 rounded-lg transition-colors">Fechar</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+type Tab ='executive' | 'team-insights' | 'team-evolution' | 'cycle-analytics' | 'performance' | 'quality' | 'kanban' | 'detailed-throughput' | 'bottlenecks' | 'tags' | 'clients' | 'montecarlo' | 'item-list' | 'rootcause' | 'period-comparison' | 'backlog' | 'impedimentos' | 'po-analysis' | 'pull-requests' | 'scrum-ctc' | 'gantt' | 'dora' | 'sla' | 'metas' | 'documentation' | 'team-comparison' | 'devtracker' | 'rituals' | 'qa-tracker' | 'painel-mensal';
 
 type QuickFilter = 'weekly' | 'biweekly' | 'monthly' | 'global';
 
-const QUICK_FILTER_EXCLUDED_TABS: Tab[] = ['period-comparison', 'team-comparison', 'pull-requests', 'documentation', 'devtracker', 'team-evolution', 'rituals', 'qa-tracker'];
+const QUICK_FILTER_EXCLUDED_TABS: Tab[] = ['period-comparison', 'team-comparison', 'pull-requests', 'documentation', 'devtracker', 'team-evolution', 'rituals', 'qa-tracker', 'painel-mensal', 'team-insights', 'cycle-analytics', 'scrum-ctc', 'gantt'];
 
 const DEFAULT_TAB_CONFIG = [
   // 🧭 1. Camada Executiva
@@ -108,7 +170,8 @@ const DEFAULT_TAB_CONFIG = [
   { id: 'tags', label: '🏷️ Análise de Tags', visible: true },
   // 👥 5. Visões Específicas
   { id: 'clients', label: '🏢 Análise por Cliente', visible: true },
-  { id: 'scrum-ctc', label: '🏃 Scrum (CTC/Franquia)', visible: true },
+  { id: 'scrum-ctc', label: '🏃 Scrum', visible: true },
+  { id: 'gantt', label: '📅 Gantt por Time', visible: true },
   { id: 'team-comparison', label: '👥 Pessoas & Senioridade', visible: true },
   // 📋 6. Operacional / Dados Brutos
   { id: 'item-list', label: '📝 Lista de Itens', visible: true },
@@ -120,6 +183,8 @@ const DEFAULT_TAB_CONFIG = [
   { id: 'rituals', label: '🗓️ Ritos & Cerimônias', visible: true },
   // 🧪 10. Qualidade
   { id: 'qa-tracker', label: '🧪 QA Tracker', visible: true },
+  // 📅 Painel por Time — aba própria, fora dos grupos
+  { id: 'painel-mensal', label: '📅 Painel por Time', visible: true },
 ];
 
 const App = () => {
@@ -130,14 +195,36 @@ const App = () => {
     return urlTab && DEFAULT_TAB_CONFIG.some(t => t.id === urlTab) ? urlTab : 'executive';
   });
   const [showUserManagement, setShowUserManagement] = useState(false);
+  const [showNotificationHistory, setShowNotificationHistory] = useState(false);
+  const [showTeamsIntegration, setShowTeamsIntegration] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const { workItems, loading: loadingWIs, error: errorWIs, lastSyncStatus, syncing, handleSync } = useAzureDevOpsData(isAuthenticated);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalData, setModalData] = useState<ModalData | null>(null);
   const [aiInsight, setAiInsight] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState('');
   const [tabsConfig, setTabsConfig] = useState(() => loadTabsConfig(DEFAULT_TAB_CONFIG));
   const [isTabsConfigOpen, setIsTabsConfigOpen] = useState(false);
+
+  // Abas realmente visíveis pro usuário atual: precisa estar habilitada globalmente (tabsConfig.visible)
+  // E, se o usuário tiver restrição (tabPermissions é um array, mesmo que vazio), estar na lista permitida.
+  const visibleTabs = useMemo(
+    () => tabsConfig
+      .filter(t => t.visible)
+      .filter(t => !user?.tabPermissions || user.tabPermissions.includes(t.id)),
+    [tabsConfig, user?.tabPermissions]
+  );
+
+  // Se a aba ativa não estiver mais entre as permitidas (restrição mudou, ou é a aba padrão fora da lista),
+  // troca pra primeira aba permitida — nunca renderiza conteúdo de uma aba que o usuário não deveria ver.
+  useEffect(() => {
+    if (!visibleTabs.length) return;
+    if (!visibleTabs.some(t => t.id === activeTab)) {
+      setActiveTab(visibleTabs[0].id as Tab);
+    }
+  }, [visibleTabs, activeTab]);
 
   // ── buscar config global de abas do backend (para não-admins)
   const GLOBAL_TABS_KEY = 'global_tabs_config';
@@ -256,6 +343,16 @@ const App = () => {
     });
   }, [filteredWorkItems, quickFilter]);
 
+  // Mesma exclusão de impedimento/bloqueio de filteredWorkItems, mas SEM o resto da barra grande (Equipe,
+  // Responsável, Tipo, Status, Prioridade, Tags, Período) — pras abas que escondem essa barra mas têm Time/
+  // Período próprios (Insights por Time, Evolução Times, Cycle Time Analytics, Painel por Time, Comparação de
+  // Períodos). Sem isso, um filtro deixado ativo em outra aba "vazava" pra essas, sem jeito de ver ou tirar.
+  const impedimentoFilteredWorkItems = useMemo(() => workItems.filter(item => {
+    if (workItemFilters.excludeImpedimentos && item.impedimento === true) return false;
+    if (workItemFilters.excludeBloqueios && item.bloqueio === true) return false;
+    return true;
+  }), [workItems, workItemFilters.excludeImpedimentos, workItemFilters.excludeBloqueios]);
+
   const handleGenerateInsights = async () => {
       setAiLoading(true);
       setAiError('');
@@ -326,7 +423,8 @@ const App = () => {
     const prevMetrics = calculatePerformanceMetrics(prevItems);
     const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
     const prevCompletionRate = prevMetrics.total > 0 ? Math.round((prevMetrics.completed / prevMetrics.total) * 100) : 0;
-    
+    const prevCompletedItems = prevItems.filter(i => COMPLETED_STATES.includes(i.state));
+
     return {
       completionRate,
       prevTotal: prevMetrics.total,
@@ -334,15 +432,25 @@ const App = () => {
       prevCompletionRate,
       totalDiff: total - prevMetrics.total,
       completedDiff: completed - prevMetrics.completed,
+      prevItems,
+      prevCompletedItems,
     };
   }, [quickFilteredWorkItems, workItems, workItemFilters.period, total, completed]);
   
-  const handleTabClick = (tab: Tab) => {
-    setActiveTab(tab);
+  // string (não Tab) pra poder ser passado direto como prop estável pro Sidebar sem wrapper inline
+  // a cada render (o wrapper quebraria o React.memo do Sidebar).
+  const handleTabClick = useCallback((tab: string) => {
+    setActiveTab(tab as Tab);
     const url = new URL(window.location.href);
     url.searchParams.set('tab', tab);
     window.history.replaceState({}, '', url.toString());
-  }
+  }, []);
+
+  const openUserManagement = useCallback(() => setShowUserManagement(true), []);
+  const openNotificationHistory = useCallback(() => setShowNotificationHistory(true), []);
+  const openTeamsIntegration = useCallback(() => setShowTeamsIntegration(true), []);
+  const openSettings = useCallback(() => setShowSettings(true), []);
+  const openTabsConfig = useCallback(() => setIsTabsConfigOpen(true), []);
 
   const handleOpenModal = () => {
     setAiInsight('');
@@ -370,63 +478,75 @@ const App = () => {
     if (loadingWIs) return <div className="text-center p-10 text-ds-light-text">Carregando dados do backend...</div>;
     if (errorWIs) return <div className="text-center p-10 text-red-500">Erro ao carregar dados do backend. Verifique se o servidor está rodando.</div>;
 
+    if (!visibleTabs.length) {
+      return (
+        <div className="text-center p-10 text-ds-light-text">
+          <p className="text-lg font-semibold mb-2">🙅 Ops! Nenhuma aba disponível.</p>
+          <p className="text-ds-text">Fale com o administrador.</p>
+        </div>
+      );
+    }
+    if (!visibleTabs.some(t => t.id === activeTab)) return null; // aguarda o useEffect trocar pra uma aba permitida
+
     switch (activeTab) {
       case 'team-insights':
         return (
           <>
             <SectionHeader title="Insights por Time" />
-            <TeamInsightsDashboard data={quickFilteredWorkItems} />
+            <TeamInsightsDashboard data={impedimentoFilteredWorkItems} />
           </>
         );
       case 'team-evolution':
         return (
           <>
             <SectionHeader title="Evolução por Time" />
-            <TeamEvolutionDashboard data={quickFilteredWorkItems} />
+            <TeamEvolutionDashboard data={impedimentoFilteredWorkItems} />
           </>
         );
       case 'cycle-analytics':
         return (
           <>
             <SectionHeader title="Cycle Time Analytics" />
-            <CycleTimeAnalyticsDashboard data={quickFilteredWorkItems} />
+            <CycleTimeAnalyticsDashboard data={impedimentoFilteredWorkItems} />
           </>
         );
-      case 'performance':
+      case 'performance': {
+        const perfCompletedItems = quickFilteredWorkItems.filter(i => COMPLETED_STATES.includes(i.state));
+        const perfInProgressItems = quickFilteredWorkItems.filter(i => IN_PROGRESS_STATES.includes(i.state));
         return (
           <>
             <SectionHeader title="Visão Geral de Performance" />
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-6">
-              <SummaryCard title="Total de Itens" value={total} />
-              <SummaryCard title="Concluídos no Período" value={completed} />
-              <SummaryCard title="Em Progresso" value={inProgress} />
-              <SummaryCard title="Cycle Time Médio" value={avgCycleTime} unit="dias" />
-              <SummaryCard title="Taxa de Conclusão" value={`${previousPeriodComparison?.completionRate ?? 0}%`} />
+              <SummaryCard title="Total de Itens" value={total} onClick={() => setModalData({ title: 'Total de Itens', items: quickFilteredWorkItems, color: '#7FD320' })} />
+              <SummaryCard title="Concluídos no Período" value={completed} onClick={() => setModalData({ title: 'Concluídos no Período', items: perfCompletedItems, color: '#64FFDA' })} />
+              <SummaryCard title="Em Progresso" value={inProgress} onClick={() => setModalData({ title: 'Em Progresso', items: perfInProgressItems, color: '#47C5FB' })} />
+              <SummaryCard title="Cycle Time Médio" value={avgCycleTime} unit="dias" onClick={() => setModalData({ title: 'Itens usados no Cycle Time Médio', items: perfCompletedItems, color: '#FFB86C' })} />
+              <SummaryCard title="Taxa de Conclusão" value={`${previousPeriodComparison?.completionRate ?? 0}%`} onClick={() => setModalData({ title: 'Concluídos no Período', items: perfCompletedItems, color: '#64FFDA' })} />
             </div>
             {/* Comparison with previous period */}
             {previousPeriodComparison && previousPeriodComparison.prevTotal > 0 && (
               <div className="bg-ds-navy p-4 rounded-lg border border-ds-border mb-6">
                 <h3 className="text-ds-light-text font-bold text-sm mb-2">📊 Comparativo com Período Anterior</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-center">
-                  <div>
+                  <div className="cursor-pointer hover:bg-ds-muted/10 rounded-lg p-1 transition-colors" onClick={() => setModalData({ title: 'Total Atual', items: quickFilteredWorkItems, color: '#7FD320' })}>
                     <p className="text-ds-text text-xs">Total Atual</p>
                     <p className="text-lg font-bold text-ds-light-text">{total}</p>
                     <p className={`text-xs ${previousPeriodComparison.totalDiff >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                       {previousPeriodComparison.totalDiff >= 0 ? '▲' : '▼'} {Math.abs(previousPeriodComparison.totalDiff)} vs anterior
                     </p>
                   </div>
-                  <div>
+                  <div className="cursor-pointer hover:bg-ds-muted/10 rounded-lg p-1 transition-colors" onClick={() => setModalData({ title: 'Concluídos Atual', items: perfCompletedItems, color: '#64FFDA' })}>
                     <p className="text-ds-text text-xs">Concluídos Atual</p>
                     <p className="text-lg font-bold text-ds-green">{completed}</p>
                     <p className={`text-xs ${previousPeriodComparison.completedDiff >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                       {previousPeriodComparison.completedDiff >= 0 ? '▲' : '▼'} {Math.abs(previousPeriodComparison.completedDiff)} vs anterior
                     </p>
                   </div>
-                  <div>
+                  <div className="cursor-pointer hover:bg-ds-muted/10 rounded-lg p-1 transition-colors" onClick={() => setModalData({ title: 'Concluídos Atual', items: perfCompletedItems, color: '#64FFDA' })}>
                     <p className="text-ds-text text-xs">Conclusão Atual</p>
                     <p className="text-lg font-bold text-ds-green">{previousPeriodComparison.completionRate}%</p>
                   </div>
-                  <div>
+                  <div className="cursor-pointer hover:bg-ds-muted/10 rounded-lg p-1 transition-colors" onClick={() => setModalData({ title: 'Concluídos no Período Anterior', items: previousPeriodComparison.prevCompletedItems, color: '#8892B0' })}>
                     <p className="text-ds-text text-xs">Conclusão Anterior</p>
                     <p className="text-lg font-bold text-ds-text">{previousPeriodComparison.prevCompletionRate}%</p>
                   </div>
@@ -474,23 +594,27 @@ const App = () => {
             </div>
           </>
         );
-      case 'quality':
+      }
+      case 'quality': {
         const totalQualityItems = quickFilteredWorkItems.length;
         const bugItems = quickFilteredWorkItems.filter(i => i.type === 'Bug');
         const issueItems = quickFilteredWorkItems.filter(i => i.type === 'Issue');
         const defectRate = totalQualityItems > 0 ? Math.round((bugItems.length / totalQualityItems) * 1000) / 10 : 0;
         const totalDefects = bugItems.length + issueItems.length;
         const devDetectionRate = totalDefects > 0 ? Math.round((bugItems.length / totalDefects) * 1000) / 10 : 0;
+        const openBugItems = bugItems.filter(i => !COMPLETED_STATES.includes(i.state));
+        const openIssueItems = issueItems.filter(i => !COMPLETED_STATES.includes(i.state));
+        const resolvedQualityItems = [...bugItems, ...issueItems].filter(i => COMPLETED_STATES.includes(i.state) && i.cycleTime != null);
         return (
           <>
             <SectionHeader title="Análise de Qualidade" />
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6 mb-6">
-                <SummaryCard title="Bugs Abertos (Retrabalho)" value={openBugs} />
-                <SummaryCard title="Issues em Aberto (Prod.)" value={openIssues} />
-                <SummaryCard title="MTTR (Res. Média)" value={avgResolutionTime} unit="dias" />
-                <SummaryCard title="Taxa de Defeito" value={`${defectRate}%`} />
-                <SummaryCard title="Detecção em Dev" value={`${devDetectionRate}%`} />
-                <SummaryCard title="Itens Qualidade Abertos" value={openBugs + openIssues} />
+                <SummaryCard title="Bugs Abertos (Retrabalho)" value={openBugs} onClick={() => setModalData({ title: 'Bugs Abertos', items: openBugItems, color: '#FF5555' })} />
+                <SummaryCard title="Issues em Aberto (Prod.)" value={openIssues} onClick={() => setModalData({ title: 'Issues em Aberto', items: openIssueItems, color: '#FFB86C' })} />
+                <SummaryCard title="MTTR (Res. Média)" value={avgResolutionTime} unit="dias" onClick={() => setModalData({ title: 'Itens usados no MTTR', items: resolvedQualityItems, color: '#47C5FB' })} />
+                <SummaryCard title="Taxa de Defeito" value={`${defectRate}%`} onClick={() => setModalData({ title: 'Bugs (Taxa de Defeito)', items: bugItems, color: '#FF5555' })} />
+                <SummaryCard title="Detecção em Dev" value={`${devDetectionRate}%`} onClick={() => setModalData({ title: 'Bugs + Issues (base da Detecção em Dev)', items: [...bugItems, ...issueItems], color: '#64FFDA' })} />
+                <SummaryCard title="Itens Qualidade Abertos" value={openBugs + openIssues} onClick={() => setModalData({ title: 'Itens de Qualidade Abertos', items: [...openBugItems, ...openIssueItems], color: '#FF79C6' })} />
             </div>
              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
@@ -522,6 +646,7 @@ const App = () => {
             </div>
           </>
         );
+      }
       case 'clients':
         return (
           <>
@@ -567,7 +692,7 @@ const App = () => {
                 </div>
             </div>
             {/* Flow Efficiency */}
-            <ChartInfoLamp info="Mostra a eficiência do fluxo por time: % de tempo que os itens passam em trabalho ativo vs. tempo total em fila. Ajuda a reduzir tempos de espera." />
+            <ChartInfoLamp info="Mostra a eficiência do fluxo por time: do tempo de vida do item, quanto alguém estava de fato trabalhando nele vs. quanto ele ficou parado em fila. Calculado a partir do histórico real de mudança de estado no Azure DevOps." />
             <FlowEfficiencyChart data={quickFilteredWorkItems} />
           </>
         );
@@ -664,7 +789,7 @@ const App = () => {
             <SectionHeader title="Comparação de Períodos" />
             <div className="mb-6">
               <ChartInfoLamp info="Compare métricas entre dois períodos diferentes para identificar tendências e evoluções. Útil para validar impacto de melhorias ou identificar regressões." />
-              <PeriodComparisonDashboard data={workItems} />
+              <PeriodComparisonDashboard data={impedimentoFilteredWorkItems} />
             </div>
           </>
         );
@@ -708,14 +833,23 @@ const App = () => {
       case 'scrum-ctc':
         return (
           <>
-            <SectionHeader title="Scrum Dashboard — CTC/Franquia" />
-            <ScrumCTCDashboard data={quickFilteredWorkItems} />
+            <SectionHeader title="Scrum Dashboard" />
+            <ScrumCTCDashboard data={impedimentoFilteredWorkItems} />
             {/* Story Points vs Cycle Time — movido para cá pois é métrica Scrum */}
             <div className="mt-6">
-              <StoryPointsVsCycleTimeChart data={quickFilteredWorkItems} />
+              <StoryPointsVsCycleTimeChart data={impedimentoFilteredWorkItems} />
             </div>
           </>
         );
+      case 'gantt':
+        return (
+          <>
+            <SectionHeader title="Gantt por Time" />
+            <GanttDashboard data={impedimentoFilteredWorkItems} />
+          </>
+        );
+      case 'painel-mensal':
+        return <PainelMensalDashboard data={impedimentoFilteredWorkItems} />;
       case 'executive':
         return (
           <>
@@ -769,40 +903,6 @@ const App = () => {
     }
   };
 
-  const NavButton: React.FC<{tabId: Tab, children: React.ReactNode}> = ({ tabId, children }) => (
-      <button onClick={() => handleTabClick(tabId)} className={`py-2 px-3 text-sm font-medium whitespace-nowrap ${activeTab === tabId ? 'border-b-2 border-ds-green text-ds-green' : 'text-ds-text hover:text-ds-light-text'}`}>
-          {children}
-      </button>
-  );
-
-  // Tabs scroll logic
-  const tabsScrollRef = useRef<HTMLDivElement>(null);
-  const [canScrollLeft, setCanScrollLeft] = useState(false);
-  const [canScrollRight, setCanScrollRight] = useState(false);
-
-  const checkTabsScroll = useCallback(() => {
-    const el = tabsScrollRef.current;
-    if (!el) return;
-    setCanScrollLeft(el.scrollLeft > 2);
-    setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 2);
-  }, []);
-
-  useEffect(() => {
-    const el = tabsScrollRef.current;
-    if (!el) return;
-    checkTabsScroll();
-    el.addEventListener('scroll', checkTabsScroll, { passive: true });
-    const ro = new ResizeObserver(checkTabsScroll);
-    ro.observe(el);
-    return () => { el.removeEventListener('scroll', checkTabsScroll); ro.disconnect(); };
-  }, [checkTabsScroll]);
-
-  const scrollTabs = (dir: 'left' | 'right') => {
-    const el = tabsScrollRef.current;
-    if (!el) return;
-    el.scrollBy({ left: dir === 'left' ? -200 : 200, behavior: 'smooth' });
-  };
-
   // Tela de loading enquanto verifica autenticação
   if (authLoading) {
     return (
@@ -822,7 +922,7 @@ const App = () => {
 
   return (
     <div className="min-h-screen bg-ds-dark-blue">
-      <Header lastSyncStatus={lastSyncStatus} onOpenUserManagement={isAdmin ? () => setShowUserManagement(true) : undefined} onSync={handleSync} syncing={syncing} workItems={workItems} />
+      <Header lastSyncStatus={lastSyncStatus} onOpenUserManagement={isAdmin ? openUserManagement : undefined} onOpenNotificationHistory={isAdmin ? openNotificationHistory : undefined} onOpenTeamsIntegration={isAdmin ? openTeamsIntegration : undefined} onOpenSettings={isAdmin ? openSettings : undefined} onSync={handleSync} syncing={syncing} workItems={workItems} />
 
       {showUserManagement ? (
         <div className="p-6 md:p-10">
@@ -837,49 +937,53 @@ const App = () => {
           </div>
           <UserManagementPage />
         </div>
-      ) : (
-      <div className="p-6 md:p-10">
-        <div className="mb-6">
-            <div className="flex border-b border-ds-border overflow-x-auto tabs-scrollbar"
-                 ref={tabsScrollRef}>
-                {canScrollLeft && (
-                  <button
-                    onClick={() => scrollTabs('left')}
-                    className="sticky left-0 z-10 flex items-center px-1.5 bg-gradient-to-r from-ds-dark-blue via-ds-dark-blue to-transparent text-ds-text hover:text-ds-green transition-colors shrink-0"
-                    aria-label="Scroll tabs left"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
-                  </button>
-                )}
-                {tabsConfig
-                  .filter(t => t.visible)
-                  .filter(t => !user?.tabPermissions || user.tabPermissions.includes(t.id))
-                  .map(tab => (
-                  <NavButton key={tab.id} tabId={tab.id as Tab}>{tab.label}</NavButton>
-                ))}
-                {/* Engrenagem só aparece para admin */}
-                {isAdmin && (
-                <button
-                  onClick={() => setIsTabsConfigOpen(true)}
-                  className="py-2 px-3 text-sm font-medium whitespace-nowrap text-ds-text hover:text-ds-green transition-colors"
-                  title="Configurar Abas"
-                >
-                  ⚙️
-                </button>
-                )}
-                {canScrollRight && (
-                  <button
-                    onClick={() => scrollTabs('right')}
-                    className="sticky right-0 z-10 flex items-center px-1.5 bg-gradient-to-l from-ds-dark-blue via-ds-dark-blue to-transparent text-ds-text hover:text-ds-green transition-colors shrink-0"
-                    aria-label="Scroll tabs right"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-                  </button>
-                )}
-            </div>
+      ) : showNotificationHistory ? (
+        <div className="p-6 md:p-10">
+          <div className="flex items-center gap-4 mb-6">
+            <button
+              onClick={() => setShowNotificationHistory(false)}
+              className="flex items-center gap-2 px-4 py-2 bg-ds-navy hover:bg-ds-border rounded-lg transition-colors text-sm text-ds-light-text"
+            >
+              ← Voltar ao Dashboard
+            </button>
+          </div>
+          <NotificationHistoryPage />
         </div>
-        
-        {activeTab !== 'cycle-analytics' && activeTab !== 'team-insights' && activeTab !== 'pull-requests' && activeTab !== 'scrum-ctc' && activeTab !== 'team-comparison' && activeTab !== 'period-comparison' && activeTab !== 'devtracker' && activeTab !== 'team-evolution' && activeTab !== 'rituals' && activeTab !== 'qa-tracker' && (
+      ) : showTeamsIntegration ? (
+        <div className="p-6 md:p-10">
+          <div className="flex items-center gap-4 mb-6">
+            <button
+              onClick={() => setShowTeamsIntegration(false)}
+              className="flex items-center gap-2 px-4 py-2 bg-ds-navy hover:bg-ds-border rounded-lg transition-colors text-sm text-ds-light-text"
+            >
+              ← Voltar ao Dashboard
+            </button>
+          </div>
+          <TeamsIntegrationPage />
+        </div>
+      ) : showSettings ? (
+        <div className="p-6 md:p-10">
+          <div className="flex items-center gap-4 mb-6">
+            <button
+              onClick={() => setShowSettings(false)}
+              className="flex items-center gap-2 px-4 py-2 bg-ds-navy hover:bg-ds-border rounded-lg transition-colors text-sm text-ds-light-text"
+            >
+              ← Voltar ao Dashboard
+            </button>
+          </div>
+          <SettingsPage />
+        </div>
+      ) : (
+      <div className="flex flex-col md:flex-row">
+        <Sidebar
+          visibleTabs={visibleTabs}
+          activeTab={activeTab}
+          onTabClick={handleTabClick}
+          isAdmin={isAdmin}
+          onOpenTabsConfig={openTabsConfig}
+        />
+      <div className="flex-1 min-w-0 p-6 md:p-10">
+        {activeTab !== 'cycle-analytics' && activeTab !== 'team-insights' && activeTab !== 'pull-requests' && activeTab !== 'scrum-ctc' && activeTab !== 'gantt' && activeTab !== 'team-comparison' && activeTab !== 'period-comparison' && activeTab !== 'devtracker' && activeTab !== 'team-evolution' && activeTab !== 'rituals' && activeTab !== 'qa-tracker' && activeTab !== 'painel-mensal' && (
         <div className="relative">
           <button
             onClick={() => setFilterBarCollapsed(!filterBarCollapsed)}
@@ -889,10 +993,11 @@ const App = () => {
             <span>{filterBarCollapsed ? '▼ Mostrar Filtros' : '▲ Recolher Filtros'}</span>
           </button>
           {!filterBarCollapsed && (
-            <FilterBar 
+            <FilterBar
                 activeTab={activeTab}
                 workItems={workItems}
                 filteredWorkItems={filteredWorkItems}
+                visibleWorkItems={quickFilteredWorkItems}
                 workItemFilters={workItemFilters}
                 onWorkItemFiltersChange={setWorkItemFilters}
                 onClearFilters={() => {
@@ -903,6 +1008,8 @@ const App = () => {
         </div>
         )}
         
+        <ItemListModal data={modalData} onClose={() => setModalData(null)} />
+
         <AIInsightsModal
             isOpen={isModalOpen}
             onClose={() => setIsModalOpen(false)}
@@ -987,6 +1094,7 @@ const App = () => {
               {renderContent()}
             </ErrorBoundary>
         </main>
+      </div>
       </div>
       )}
     </div>
