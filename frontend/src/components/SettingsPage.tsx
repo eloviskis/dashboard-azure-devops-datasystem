@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import SyncWizard from './sync/SyncWizard';
 
 interface EntraIdSettings {
   enabled: boolean;
@@ -19,6 +20,7 @@ const SettingsPage: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [showSyncWizard, setShowSyncWizard] = useState(false);
 
   const API_URL = import.meta.env.VITE_API_URL || '';
 
@@ -132,6 +134,25 @@ const SettingsPage: React.FC = () => {
           {isSaving ? 'Salvando...' : 'Salvar'}
         </button>
       </div>
+
+      <div className="bg-ds-navy rounded-lg p-6 mb-4 border border-ds-border">
+        <h2 className="text-sm font-semibold text-ds-light-text mb-3">Sincronização de Dados</h2>
+        <p className="text-xs text-ds-text mb-4">
+          Carrega dado de usuários/DevTracker do Postgres de produção e/ou sincroniza work items e pull
+          requests direto da API do Azure DevOps pro banco desta ferramenta.
+        </p>
+        <button
+          type="button"
+          onClick={() => setShowSyncWizard(true)}
+          className="px-4 py-2 bg-ds-green hover:bg-ds-green/80 text-ds-dark-blue font-medium rounded-md text-sm transition-colors"
+        >
+          Abrir assistente de sincronização
+        </button>
+      </div>
+
+      {showSyncWizard && token && (
+        <SyncWizard onClose={() => setShowSyncWizard(false)} token={token} apiUrl={API_URL} />
+      )}
     </div>
   );
 };
