@@ -11,6 +11,7 @@ import LoginPage from './components/LoginPage';
 import UserManagementPage from './components/UserManagementPage';
 import NotificationHistoryPage from './components/NotificationHistoryPage';
 import TeamsIntegrationPage from './components/TeamsIntegrationPage';
+import SettingsPage from './components/SettingsPage';
 import Sidebar from './components/Sidebar';
 
 // Import Hooks
@@ -196,6 +197,7 @@ const App = () => {
   const [showUserManagement, setShowUserManagement] = useState(false);
   const [showNotificationHistory, setShowNotificationHistory] = useState(false);
   const [showTeamsIntegration, setShowTeamsIntegration] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const { workItems, loading: loadingWIs, error: errorWIs, lastSyncStatus, syncing, handleSync } = useAzureDevOpsData(isAuthenticated);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -447,6 +449,7 @@ const App = () => {
   const openUserManagement = useCallback(() => setShowUserManagement(true), []);
   const openNotificationHistory = useCallback(() => setShowNotificationHistory(true), []);
   const openTeamsIntegration = useCallback(() => setShowTeamsIntegration(true), []);
+  const openSettings = useCallback(() => setShowSettings(true), []);
   const openTabsConfig = useCallback(() => setIsTabsConfigOpen(true), []);
 
   const handleOpenModal = () => {
@@ -919,7 +922,7 @@ const App = () => {
 
   return (
     <div className="min-h-screen bg-ds-dark-blue">
-      <Header lastSyncStatus={lastSyncStatus} onOpenUserManagement={isAdmin ? openUserManagement : undefined} onOpenNotificationHistory={isAdmin ? openNotificationHistory : undefined} onOpenTeamsIntegration={isAdmin ? openTeamsIntegration : undefined} onSync={handleSync} syncing={syncing} workItems={workItems} />
+      <Header lastSyncStatus={lastSyncStatus} onOpenUserManagement={isAdmin ? openUserManagement : undefined} onOpenNotificationHistory={isAdmin ? openNotificationHistory : undefined} onOpenTeamsIntegration={isAdmin ? openTeamsIntegration : undefined} onOpenSettings={isAdmin ? openSettings : undefined} onSync={handleSync} syncing={syncing} workItems={workItems} />
 
       {showUserManagement ? (
         <div className="p-6 md:p-10">
@@ -957,6 +960,18 @@ const App = () => {
             </button>
           </div>
           <TeamsIntegrationPage />
+        </div>
+      ) : showSettings ? (
+        <div className="p-6 md:p-10">
+          <div className="flex items-center gap-4 mb-6">
+            <button
+              onClick={() => setShowSettings(false)}
+              className="flex items-center gap-2 px-4 py-2 bg-ds-navy hover:bg-ds-border rounded-lg transition-colors text-sm text-ds-light-text"
+            >
+              ← Voltar ao Dashboard
+            </button>
+          </div>
+          <SettingsPage />
         </div>
       ) : (
       <div className="flex flex-col md:flex-row">

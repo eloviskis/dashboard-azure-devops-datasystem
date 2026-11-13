@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
+import { PublicClientApplication } from '@azure/msal-browser';
 import { useAuth } from '../contexts/AuthContext';
 
 function generateCaptcha() {
@@ -35,9 +36,45 @@ const LoginPage: React.FC = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [failCount, setFailCount] = useState(0);
-  const { login } = useAuth();
+  const { login, loginWithEntraIdToken } = useAuth();
 
   const API_URL = import.meta.env.VITE_API_URL || '';
+
+  // Botão "Entrar com Microsoft" só aparece se um admin habilitou o conector em Configurações
+  // (ver components/SettingsPage.tsx) — tenant/client aqui não são segredo, o MSAL roda no navegador.
+  const [entraId, setEntraId] = useState<{ enabled: boolean; tenantId: string; clientId: string } | null>(null);
+  const [msalLoading, setMsalLoading] = useState(false);
+  const [msalError, setMsalError] = useState('');
+
+  useEffect(() => {
+    fetch(`${API_URL}/api/settings/entra-id`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.enabled && data.tenant_id && data.client_id) {
+          setEntraId({ enabled: true, tenantId: data.tenant_id, clientId: data.client_id });
+        }
+      })
+      .catch(() => {}); // backend .NET pode nem estar no ar ainda — login usuário+senha continua normal
+  }, [API_URL]);
+
+  const handleMicrosoftLogin = async () => {
+    if (!entraId) return;
+    setMsalError('');
+    setMsalLoading(true);
+    try {
+      const msal = new PublicClientApplication({
+        auth: { clientId: entraId.clientId, authority: `https://login.microsoftonline.com/${entraId.tenantId}` },
+      });
+      await msal.initialize();
+      const result = await msal.loginPopup({ scopes: ['openid', 'profile', 'email'] });
+      const errorMessage = await loginWithEntraIdToken(result.idToken);
+      if (errorMessage) setMsalError(errorMessage);
+    } catch (err) {
+      setMsalError('Não foi possível entrar com a conta Microsoft');
+    } finally {
+      setMsalLoading(false);
+    }
+  };
 
   // Detecta ?reset=TOKEN na URL para abrir direto a tela de nova senha
   const resetTokenFromUrl = new URLSearchParams(window.location.search).get('reset');
@@ -253,6 +290,37 @@ const LoginPage: React.FC = () => {
                       'Entrar'
                     )}
                   </button>
+
+                  {entraId?.enabled && (
+                    <>
+                      <div className="flex items-center gap-3 text-xs text-ds-muted">
+                        <div className="flex-1 h-px bg-ds-border" />
+                        ou
+                        <div className="flex-1 h-px bg-ds-border" />
+                      </div>
+
+                      {msalError && (
+                        <div className="p-3 bg-red-500/10 border border-red-500/50 rounded-lg">
+                          <p className="text-red-400 text-sm text-center">{msalError}</p>
+                        </div>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={handleMicrosoftLogin}
+                        disabled={msalLoading}
+                        className="w-full py-3 px-4 rounded-lg border border-ds-border bg-ds-navy hover:bg-ds-border/50 transition-colors flex items-center justify-center gap-2 text-ds-light-text text-sm disabled:opacity-50"
+                      >
+                        <svg width="18" height="18" viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg">
+                          <rect x="1" y="1" width="9" height="9" fill="#f25022" />
+                          <rect x="11" y="1" width="9" height="9" fill="#7fba00" />
+                          <rect x="1" y="11" width="9" height="9" fill="#00a4ef" />
+                          <rect x="11" y="11" width="9" height="9" fill="#ffb900" />
+                        </svg>
+                        {msalLoading ? 'Entrando...' : 'Entrar com Microsoft'}
+                      </button>
+                    </>
+                  )}
                 </form>
               </div>
             )}
