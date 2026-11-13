@@ -30,6 +30,7 @@ const SyncWizard: React.FC<{ onClose: () => void; token: string; apiUrl: string 
   const [azureOrg, setAzureOrg] = useState('');
   const [azureProject, setAzureProject] = useState('');
   const [azurePat, setAzurePat] = useState('');
+  const [azureAutoSyncEnabled, setAzureAutoSyncEnabled] = useState(false);
   const [azureTestResult, setAzureTestResult] = useState<TestResult>(null);
   const [azureTesting, setAzureTesting] = useState(false);
 
@@ -41,6 +42,21 @@ const SyncWizard: React.FC<{ onClose: () => void; token: string; apiUrl: string 
   const authHeaders = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
 
   useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
+
+  // Pré-preenche organização/projeto/toggle já salvos (não é segredo) — o PAT nunca volta por GET, fica
+  // em branco de propósito (preencher de novo = trocar; deixar em branco = manter o já salvo).
+  useEffect(() => {
+    fetch(`${apiUrl}/api/settings/sync/azure-devops`, { headers: authHeaders })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (!data) return;
+        if (data.organization) setAzureOrg(data.organization);
+        if (data.project) setAzureProject(data.project);
+        setAzureAutoSyncEnabled(!!data.auto_sync_enabled);
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const goNext = async () => {
     setError('');
@@ -63,7 +79,7 @@ const SyncWizard: React.FC<{ onClose: () => void; token: string; apiUrl: string 
           if (!azureOrg.trim() || !azureProject.trim()) { setError('Preencha organização e projeto do Azure DevOps'); setSaving(false); return; }
           const res = await fetch(`${apiUrl}/api/settings/sync/azure-devops`, {
             method: 'PUT', headers: authHeaders,
-            body: JSON.stringify({ organization: azureOrg, project: azureProject, personalAccessToken: azurePat || null }),
+            body: JSON.stringify({ organization: azureOrg, project: azureProject, personalAccessToken: azurePat || null, autoSyncEnabled: azureAutoSyncEnabled }),
           });
           if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'Erro ao salvar conexão do Azure DevOps'); }
         }
@@ -224,6 +240,10 @@ const SyncWizard: React.FC<{ onClose: () => void; token: string; apiUrl: string 
                       </span>
                     )}
                   </div>
+                  <label className="flex items-center gap-2 pt-1">
+                    <input type="checkbox" checked={azureAutoSyncEnabled} onChange={e => setAzureAutoSyncEnabled(e.target.checked)} className="accent-ds-green" />
+                    <span className="text-xs text-ds-text">Habilitar sincronização automática (a cada 30 min, sem precisar abrir este assistente)</span>
+                  </label>
                 </div>
               )}
             </div>
