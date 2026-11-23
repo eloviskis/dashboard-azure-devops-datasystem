@@ -143,7 +143,15 @@ const toRetroDto = (r, withColumns) => ({
 
 // ---------------------------------------------------------------- validação de entrada
 const str = (v, max) => String(v ?? '').trim().slice(0, max);
-const isoDate = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? String(v) : null);
+// Só datas de calendário válidas (30/02 passaria no regex e o Postgres recusaria o INSERT com 500).
+const isoDate = (v) => {
+  const s = String(v || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  const d = new Date(`${s}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s ? s : null;
+};
+// Aceita true/"true" (o frontend manda boolean; outro cliente pode mandar texto).
+const bool = (v) => v === true || v === 'true';
 
 function cleanColumns(cols) {
   if (!Array.isArray(cols) || !cols.length) throw Object.assign(new Error('A retro precisa ter colunas'), { status: 400 });
@@ -226,7 +234,7 @@ function registerRetro(app, { getSql, authenticateToken }) {
     const cur = await getAction(id);
     if (!cur) throw fail(404, 'Ação não encontrada');
     const has = (k) => Object.prototype.hasOwnProperty.call(body, k);
-    const recurring = has('recurring') ? !!body.recurring : cur.recurring;
+    const recurring = has('recurring') ? bool(body.recurring) : cur.recurring;
     const next = {
       title: has('title') ? str(body.title, 140) : cur.title,
       detail: has('detail') ? str(body.detail, 2000) : cur.detail,
@@ -291,6 +299,10 @@ function registerRetro(app, { getSql, authenticateToken }) {
       UPDATE retro_action SET azdo_sync_status = 'ok', azdo_work_item_id = ${workItemId}, azdo_url = ${url},
         azdo_managed_tags = ${JSON.stringify(managedTags)}::jsonb, azdo_sync_error = NULL, azdo_synced_at = NOW(),
         azdo_next_attempt_at = NULL, azdo_last_state = 'New' WHERE id = ${id}`,
+    isLive: async (id) => {
+      const r = await db()`SELECT state FROM retro_action WHERE id = ${id}`;
+      return !!r.length && R.LIVE.includes(r[0].state);
+    },
     markSimulated: (id) => db()`
       UPDATE retro_action SET azdo_sync_status = 'simulado', azdo_sync_error = NULL, azdo_synced_at = NOW() WHERE id = ${id}`,
     markError: (id, message, delayMs) => db()`
@@ -322,8 +334,10 @@ function registerRetro(app, { getSql, authenticateToken }) {
         const patch = [...AZ.buildUpdatePatch(a, ctx, wi?.fields?.['System.Tags'] || '', a.azdo_managed_tags || []),
           ...(adoState ? AZ.buildStatePatch(adoState) : [])];
         await client.updateWorkItem(a.azdo_work_item_id, patch);
+        // Estado empurrado daqui vira o "último visto": a volta do ADO não reage à nossa própria mudança.
         await db()`UPDATE retro_action SET azdo_managed_tags = ${JSON.stringify(AZ.managedTags(a, ctx))}::jsonb,
-          azdo_sync_status = 'ok', azdo_sync_error = NULL, azdo_synced_at = NOW() WHERE id = ${id}`;
+          azdo_sync_status = 'ok', azdo_sync_error = NULL, azdo_synced_at = NOW(),
+          azdo_last_state = COALESCE(${adoState || null}, azdo_last_state) WHERE id = ${id}`;
       } catch (e) {
         console.error(`❌ retro: falha ao atualizar work item #${a.azdo_work_item_id}: ${e.message}`);
         await db()`UPDATE retro_action SET azdo_sync_status = 'erro', azdo_sync_error = ${String(e.message).slice(0, 500)} WHERE id = ${id}`.catch(() => {});
@@ -356,7 +370,7 @@ function registerRetro(app, { getSql, authenticateToken }) {
   async function reconcileFromWorkItems() {
     const sql = db();
     const rows = await sql`
-      SELECT a.id, a.state, a.azdo_work_item_id, w.state AS ado_state
+      SELECT a.id, a.state, a.azdo_work_item_id, a.azdo_last_state, w.state AS ado_state
       FROM retro_action a JOIN work_items w ON w.work_item_id = a.azdo_work_item_id
       WHERE a.azdo_work_item_id IS NOT NULL AND w.state IS NOT NULL AND w.state IS DISTINCT FROM a.azdo_last_state`;
     for (const r of rows) {
@@ -366,7 +380,8 @@ function registerRetro(app, { getSql, authenticateToken }) {
       const done = await sql`UPDATE retro_action SET azdo_last_state = ${r.ado_state},
         state = COALESCE(${change?.state ?? null}, state),
         state_changed_at = CASE WHEN ${change?.state ?? null}::text IS NULL THEN state_changed_at ELSE NOW() END
-        WHERE id = ${r.id} AND state = ${r.state} RETURNING id`;
+        WHERE id = ${r.id} AND state = ${r.state} AND azdo_last_state IS NOT DISTINCT FROM ${r.azdo_last_state}
+        RETURNING id`; // azdo_last_state na condição: duas reconciliações simultâneas não anotam duas vezes
       if (change && done.length) {
         await sql`INSERT INTO retro_action_update (action_id, author_id, text) VALUES (${r.id}, NULL, ${change.note})`;
         console.log(`[retro] ação ${r.id}: work item #${r.azdo_work_item_id} → "${r.ado_state}"${change.state ? ` (ação para ${change.state})` : ''}`);
@@ -483,13 +498,18 @@ function registerRetro(app, { getSql, authenticateToken }) {
     const teams = await getTeams();
     const items = Array.isArray(req.body?.retros) ? req.body.retros : [];
     if (!items.length) throw fail(400, 'Nenhuma retro enviada');
-    const created = [];
-    for (const it of items.slice(0, 20)) {
-      if (!teams.some(t => t.key === it?.teamKey)) throw fail(400, `Time inválido: ${it?.teamKey || '(vazio)'}`);
+    if (items.length > 20) throw fail(400, 'Importe no máximo 20 retros por vez');
+    // Valida o lote inteiro antes de gravar: um arquivo ruim não deixa os anteriores salvos pela metade.
+    const valid = items.map((it, i) => {
+      if (!teams.some(t => t.key === it?.teamKey)) throw fail(400, `Retro ${i + 1}: time inválido (${it?.teamKey || 'vazio'})`);
       const title = str(it.title, 200);
-      if (!title) throw fail(400, 'Toda retro precisa de título');
-      const columns = cleanColumns(it.columns);
-      const date = isoDate(it.date);
+      if (!title) throw fail(400, `Retro ${i + 1}: falta o título`);
+      if (it.date && !isoDate(it.date)) throw fail(400, `Retro ${i + 1}: data inválida (${it.date})`);
+      return { ...it, title, columns: cleanColumns(it.columns), date: isoDate(it.date) };
+    });
+    const created = [];
+    for (const it of valid) {
+      const { title, columns, date } = it;
       const id = R.newId(`${it.teamKey}-${date || 'retro'}`);
       await sql`
         INSERT INTO retro (id, team_key, title, date, source_file, columns, stats, created_by)
@@ -585,7 +605,7 @@ function registerRetro(app, { getSql, authenticateToken }) {
     if (leader && !ownerId && !fallback) throw fail(400, 'Escolha o responsável');
     const retroId = b.retroId ? (await sql`SELECT id FROM retro WHERE id = ${b.retroId}`)[0]?.id || null : null;
     const id = R.newId(`${b.teamKey}-${title}`);
-    const recurring = !!b.recurring;
+    const recurring = bool(b.recurring);
     await sql`
       INSERT INTO retro_action (id, retro_id, team_key, title, detail, origin, priority, owner_id, owner_name_fallback, due_date, recurring,
         state, source, created_by, approved_at, approved_by, state_changed_at, azdo_sync_status)
@@ -617,9 +637,17 @@ function registerRetro(app, { getSql, authenticateToken }) {
     const cur = await getAction(req.params.id);
     if (!cur) throw fail(404, 'Ação não encontrada');
     if (cur.state !== 'sugerida') throw fail(409, 'Esta ação já foi aprovada ou descartada.');
-    const edited = await applyEdits(cur.id, req.body || {}, teams);
-    const err = R.approveError(edited);
+    // Valida com os valores que ficariam depois da edição ANTES de gravar: aprovação recusada não salva nada.
+    const b = req.body || {};
+    const has = (k) => Object.prototype.hasOwnProperty.call(b, k);
+    const err = R.approveError({
+      state: cur.state,
+      title: has('title') ? str(b.title, 140) : cur.title,
+      owner_id: has('ownerId') ? (b.ownerId || null) : cur.owner_id,
+      owner_name_fallback: has('ownerNameFallback') ? str(b.ownerNameFallback, 120) : cur.owner_name_fallback,
+    });
     if (err) throw fail(400, err);
+    await applyEdits(cur.id, b, teams);
     // UPDATE condicional: aprovar duas vezes (duplo clique, duas abas) só vale uma vez.
     const ok = await sql`
       UPDATE retro_action SET state = 'aberta', approved_at = NOW(), approved_by = ${req.user.id}, state_changed_at = NOW(),
@@ -657,11 +685,16 @@ function registerRetro(app, { getSql, authenticateToken }) {
     const err = R.moveError(cur.state, to, R.isLeader(req.user));
     if (err) throw fail(err === R.LEADER_ONLY_MSG ? 403 : 400, err);
     if (cur.state !== to) {
-      await sql`
+      const moved = await sql`
         UPDATE retro_action SET state = ${to}, state_changed_at = NOW(),
           closed_at = ${to === 'concluida' ? new Date().toISOString() : null},
           closed_by = ${to === 'concluida' ? req.user.id : null}
-        WHERE id = ${cur.id} AND state = ${cur.state}`;
+        WHERE id = ${cur.id} AND state = ${cur.state} RETURNING id`;
+      // Fechar/reabrir aqui espelha no board Kaizen (as outras colunas são só nossas).
+      if (moved.length && cur.azdo_work_item_id) {
+        if (to === 'concluida') queueUpdate(cur.id, 'Closed');
+        else if (cur.state === 'concluida') queueUpdate(cur.id, 'Active');
+      }
     }
     res.json(toActionDto(await getAction(cur.id)));
   }));

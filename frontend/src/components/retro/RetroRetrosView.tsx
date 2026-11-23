@@ -4,7 +4,7 @@ import { retroApi } from './retroApi.ts';
 import type { RetroDetail, RetroSummary } from './retroApi.ts';
 import type { RetroCtx } from './RetroDashboard.tsx';
 import {
-  inferDate, inferTeam, normalizeAiPdf, parseCsv, parseRows, pdfHeuristic, pdfItemsToLines, readXlsxRows, retroStats,
+  PDF_AI_MAX_CHARS, inferDate, inferTeam, normalizeAiPdf, parseCsv, parseRows, pdfHeuristic, pdfItemsToLines, readXlsxRows, retroStats,
 } from '../../utils/retroParser.ts';
 import type { ParsedRetro, PdfLine } from '../../utils/retroParser.ts';
 import {
@@ -39,7 +39,10 @@ async function parseFile(file: File, aiAvailable: boolean): Promise<ParsedRetro>
     const lines = await readPdfLines(await file.arrayBuffer());
     if (!lines.length) throw new Error('O PDF não tem texto legível (pode ser só imagem).');
     if (aiAvailable) {
-      try { return normalizeAiPdf(await retroApi.structurePdf(lines.map(l => l.t).join('\n')), file.name); } catch { /* cai na heurística */ }
+      const text = lines.map(l => l.t).join('\n');
+      try {
+        return { ...normalizeAiPdf(await retroApi.structurePdf(text), file.name), truncated: text.length > PDF_AI_MAX_CHARS };
+      } catch { /* cai na heurística */ }
     }
     return pdfHeuristic(lines, file.name);
   }
@@ -142,6 +145,7 @@ const ImportModal: React.FC<{ ctx: RetroCtx; onClose: () => void; onDone: (ids: 
                   {!d.teamKey && <p className="text-xs text-amber-300">Não reconheci o time no título: escolha acima.</p>}
                   {d.parsed!.via === 'estimado' && <p className="text-xs text-amber-300">Colunas estimadas pelo tamanho da fonte do PDF (sem IA). Confira os cards depois de importar.</p>}
                   {d.parsed!.via === 'ia' && <p className="text-xs text-ds-text">Estrutura do PDF montada pela IA.</p>}
+                  {d.parsed!.truncated && <p className="text-xs text-amber-300">PDF longo: só o começo do texto coube na leitura da IA. Confira se faltam colunas ou cards no fim.</p>}
                   {sim && <p className="text-xs text-amber-300">Já existe uma retro parecida: “{sim.title}” ({fmtDate(sim.date, true) || 'sem data'}).</p>}
                 </>
               );

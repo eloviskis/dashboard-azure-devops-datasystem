@@ -1,7 +1,9 @@
 // Peças visuais da aba Retrô (padrão local dos dashboards: Modal/Input/Select com tokens ds-*).
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { ActionState, ActionType, Person, Priority, RetroAction, RetroTeam, Tone } from './retroApi.ts';
-import { splitMerged } from '../../utils/retroParser.ts';
+import { norm, splitMerged, todayStr } from '../../utils/retroParser.ts';
+
+export { norm, todayStr };
 
 export const STATE_LABEL: Record<ActionState, string> = {
   sugerida: 'Sugestão', aberta: 'A fazer', andamento: 'Em andamento', validacao: 'Validar', concluida: 'Fechada', descartada: 'Descartada',
@@ -21,7 +23,6 @@ export const TYPE_HUES: { hue: number; name: string }[] = [
   { hue: 330, name: 'Rosa' }, { hue: 48, name: 'Amarelo' }, { hue: 0, name: 'Vermelho' }, { hue: 235, name: 'Índigo' }, { hue: 290, name: 'Magenta' },
 ];
 
-export const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 export function fmtDate(iso: string | null | undefined, long = false) {
   if (!iso) return '';
   const [y, m, d] = String(iso).slice(0, 10).split('-');
@@ -31,18 +32,21 @@ export const fmtDateTime = (iso: string | null | undefined) => (iso ? new Date(i
 export const initials = (name: string | null | undefined) =>
   String(name || '?').split(/\s+|,|\s+e\s+/).filter(w => w && w.toLowerCase() !== 'e').slice(0, 2).map(w => w[0]?.toUpperCase()).join('') || '?';
 export const hashHue = (s: string) => { let x = 0; for (const ch of s) x = (x * 31 + ch.charCodeAt(0)) >>> 0; return x % 360; };
-export const norm = (s: unknown) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
 
 // ---------------------------------------------------------------- base
 export const Modal: React.FC<{ title: string; onClose: () => void; children: React.ReactNode; wide?: boolean }> = ({ title, onClose, children, wide }) => {
   const ref = useRef<HTMLDivElement>(null);
+  // onClose num ref: o efeito roda só ao abrir. Com onClose nas dependências, cada re-render do pai (que passa
+  // uma arrow nova) devolvia o foco pro primeiro campo no meio da digitação.
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
   useEffect(() => {
     const prev = document.activeElement as HTMLElement | null;
     ref.current?.querySelector<HTMLElement>('input, select, textarea, button')?.focus();
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeRef.current(); };
     document.addEventListener('keydown', onKey);
     return () => { document.removeEventListener('keydown', onKey); prev?.focus?.(); };
-  }, [onClose]);
+  }, []);
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onMouseDown={e => e.target === e.currentTarget && onClose()}>
       <div ref={ref} role="dialog" aria-modal="true" aria-label={title}

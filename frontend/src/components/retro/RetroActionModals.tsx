@@ -48,6 +48,16 @@ export const ActionDetailModal: React.FC<{ ctx: RetroCtx; id: string; onClose: (
     catch (e) { ctx.toast((e as Error).message, true); } finally { setBusy(false); }
   };
 
+  // Mudar o estado não recarrega o formulário: as edições ainda não salvas (título, prazo…) continuam lá.
+  const moveState = async (to: ActionState) => {
+    setBusy(true);
+    try {
+      const moved = await retroApi.move(id, to);
+      setA(prev => (prev ? { ...prev, ...moved, updates: prev.updates } : prev));
+      await ctx.reload();
+    } catch (e) { ctx.toast((e as Error).message, true); } finally { setBusy(false); }
+  };
+
   if (err) return <Modal title="Ação" onClose={onClose}><p className="text-red-300 text-sm">{err}</p></Modal>;
   if (!a) return <Modal title="Ação" onClose={onClose}><p className="text-ds-text text-sm">Carregando…</p></Modal>;
 
@@ -79,7 +89,7 @@ export const ActionDetailModal: React.FC<{ ctx: RetroCtx; id: string; onClose: (
           </Field>
           <Field label="Estado">
             {LIVE.includes(a.state) ? (
-              <Select value={a.state} disabled={busy || locked} onChange={e => run(() => retroApi.move(a.id, e.target.value as ActionState))}>
+              <Select value={a.state} disabled={busy || locked} onChange={e => moveState(e.target.value as ActionState)}>
                 {LIVE.map(s => <option key={s} value={s} disabled={s === 'concluida' && !leader}>{STATE_LABEL[s]}{s === 'concluida' && !leader ? ' (só liderança)' : ''}</option>)}
               </Select>
             ) : <Input value={STATE_LABEL[a.state]} disabled />}

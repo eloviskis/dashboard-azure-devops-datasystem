@@ -81,13 +81,16 @@ function buildCreatePatch(action, ctx) {
 }
 
 // Atualização de um item já criado: título, descrição (prazo/prioridade/responsável), tags e responsável.
+// AssignedTo só vai quando a identidade foi resolvida: sem isso, editar a ação aqui apagaria uma atribuição
+// feita à mão no ADO (ex.: responsável que só existe como texto livre na Retrô).
 function buildUpdatePatch(action, ctx, currentTags, previousManaged) {
-  return [
+  const ops = [
     field('System.Title', String(action.title).slice(0, 255)),
     field('System.Description', descriptionHtml(action, ctx)),
     field('System.Tags', mergeTags(currentTags, previousManaged, managedTags(action, ctx))),
-    field('System.AssignedTo', ctx.assignedTo || ''),
   ];
+  if (ctx.assignedTo) ops.push(field('System.AssignedTo', ctx.assignedTo));
+  return ops;
 }
 
 const buildStatePatch = (state) => [field('System.State', state)];
@@ -105,6 +108,7 @@ function createAzdoClient({ org, project, pat, fetchImpl = fetch, apiVersion = '
       headers: { Authorization: auth, Accept: 'application/json', ...(body ? { 'Content-Type': contentType } : {}) },
       body: body ? JSON.stringify(body) : undefined,
       redirect: 'manual', // credencial inválida vira 302 pra página de login, não um 401
+      signal: AbortSignal.timeout(60000), // fetch não tem timeout: um ADO travado prenderia o job pra sempre
     });
     const text = await res.text();
     let data = null;
@@ -140,7 +144,8 @@ function createAzdoClient({ org, project, pat, fetchImpl = fetch, apiVersion = '
     // ponytail: WIQL não busca relações; o filtro por título+data é o que dá pra fazer barato. Se o título for
     // editado no ADO nesse intervalo, cai no POST e pode duplicar (janela de segundos, aceitável).
     async findExisting(action, ctx) {
-      const since = String(action.approved_at || new Date().toISOString()).slice(0, 10);
+      // approved_at vem do pg como Date (TIMESTAMPTZ): String(date) daria "Mon Nov 23…", data inválida no WIQL.
+      const since = new Date(action.approved_at || Date.now()).toISOString().slice(0, 10);
       const q = `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @project AND [System.AreaPath] = '${ctx.areaPath.replace(/'/g, "''")}' AND [System.Title] = '${String(action.title).slice(0, 255).replace(/'/g, "''")}' AND [System.CreatedDate] >= '${since}'`;
       const r = await req('POST', `${base}/_apis/wit/wiql?$top=20&api-version=${apiVersion}`, { query: q });
       for (const { id } of r?.workItems || []) {
@@ -166,6 +171,7 @@ function createAzdoClient({ org, project, pat, fetchImpl = fetch, apiVersion = '
 // Cria o work item de uma ação aprovada, uma vez só. `repo` isola o banco (claim atômico + gravações):
 //   claim(id) → linha da ação ou null (já criada / outro processo pegou / fora da fila)
 //   markOk(id, {workItemId, url, managedTags}) · markSimulated(id, patch) · markError(id, message, nextAttemptDelayMs|null)
+//   isLive(id) → a ação ainda existe e está no quadro? (descartada/excluída durante o POST → tira o item do board)
 // `ctxFor(action)` monta time, tipos, retro, responsável, área, iteração e URL.
 async function syncAction({ actionId, repo, client, ctxFor, writeEnabled, log = () => {} }) {
   const action = await repo.claim(actionId);
@@ -180,6 +186,13 @@ async function syncAction({ actionId, repo, client, ctxFor, writeEnabled, log = 
     }
     const wi = (await client.findExisting(action, ctx)) || (await client.createWorkItem(ctx.workItemType, patch));
     await repo.markOk(actionId, { workItemId: wi.id, url: wi.url, managedTags: managedTags(action, ctx) });
+    // A liderança pode ter descartado/excluído a ação enquanto o POST estava em andamento: o descarte não viu id
+    // nenhum pra remover, então quem remove é quem criou.
+    if (repo.isLive && !(await repo.isLive(actionId))) {
+      await client.updateWorkItem(wi.id, buildStatePatch('Removed'));
+      log(`[retro] ação ${actionId} saiu do quadro durante a criação — work item #${wi.id} movido para Removed`);
+      return { status: 'removido', workItemId: wi.id };
+    }
     return { status: 'ok', workItemId: wi.id };
   } catch (e) {
     const attempts = (action.azdo_attempts || 0) + 1;

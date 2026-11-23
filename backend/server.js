@@ -81,7 +81,9 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(express.json());
+// /api/retro tem parser próprio com limite maior (importação de retros); o global (100kb) recusaria antes.
+const jsonParser = express.json();
+app.use((req, res, next) => (req.path.startsWith('/api/retro') ? next() : jsonParser(req, res, next)));
 
 // PostgreSQL setup for VPS database
 const DATABASE_URL = process.env.DATABASE_URL;

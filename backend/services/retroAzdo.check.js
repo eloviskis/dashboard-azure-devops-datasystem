@@ -49,7 +49,8 @@ const A = require('./retroAzdo');
     'Retro; Kaizen; CTC; Comunicação; Prioridade-Média; urgente-cliente');
   const up = A.buildUpdatePatch({ ...action, priority: 'media' }, { ...ctx, typeNames: ['Comunicação'], assignedTo: null }, 'Retro; Testes; x', prev);
   assert.equal(up.find(o => o.path === '/fields/System.Tags').value, 'Retro; Kaizen; CTC; Comunicação; Prioridade-Média; x');
-  assert.equal(up.find(o => o.path === '/fields/System.AssignedTo').value, '', 'responsável removido limpa o campo');
+  assert.ok(!up.some(o => o.path === '/fields/System.AssignedTo'), 'sem identidade resolvida não mexe no responsável do ADO');
+  assert.equal(A.buildUpdatePatch(action, ctx, '', prev).find(o => o.path === '/fields/System.AssignedTo').value, 'igor@datasystem.com.br');
   assert.deepEqual(A.buildStatePatch('Removed'), [{ op: 'add', path: '/fields/System.State', value: 'Removed' }]);
 
   // ---- Backoff ----
@@ -64,6 +65,7 @@ const A = require('./retroAzdo');
     const ok = (data) => ({ ok: true, status: 200, text: async () => JSON.stringify(data), headers: { get: () => null } });
     if (url.includes('/wiql')) return ok({ workItems: adoItems.map(w => ({ id: w.id })) });
     if (/workitems\/\d+\?\$expand=relations/.test(url)) return ok(adoItems.find(w => url.includes(`/workitems/${w.id}?`)));
+    if (opts.method === 'PATCH') return ok({ id: 1 });
     if (opts.method === 'POST' && url.includes('/workitems/$Melhoria')) {
       const wi = { id: 1000 + calls.length, fields: { 'System.Tags': 'Retro' }, _links: { html: { href: `https://ado/wi/${1000 + calls.length}` } },
         relations: JSON.parse(opts.body).filter(o => o.path === '/relations/-').map(o => o.value) };
@@ -115,6 +117,22 @@ const A = require('./retroAzdo');
   assert.equal(again.status, 'ok');
   assert.equal(posts(), before, 'reaproveitou o item existente');
   assert.equal(again.workItemId, adoItems[0].id);
+
+  // approved_at como Date (é assim que o pg devolve TIMESTAMPTZ) → WIQL com data ISO, não "Mon Nov 23".
+  db[action.id] = { ...action, approved_at: new Date('2026-11-23T15:00:00Z'), azdo_sync_status: 'erro', azdo_attempts: 1, azdo_work_item_id: null };
+  await A.syncAction({ actionId: action.id, repo, client, ctxFor, writeEnabled: true });
+  const wiql = calls.filter(c => c.url.includes('/wiql')).at(-1).body.query;
+  assert.ok(wiql.includes("[System.CreatedDate] >= '2026-11-23'"), wiql);
+
+  // Ação descartada/excluída enquanto o POST estava em andamento → quem criou tira o item do board.
+  adoItems = [];
+  db.race = { ...action, id: 'race', title: 'Outra ação', azdo_sync_status: 'pendente', azdo_attempts: 0, azdo_work_item_id: null };
+  const raceRepo = { ...repo, isLive: async () => false };
+  const race = await A.syncAction({ actionId: 'race', repo: raceRepo, client, ctxFor: async () => ({ ...ctx, url: 'https://x/?action=race' }), writeEnabled: true });
+  assert.equal(race.status, 'removido');
+  const removedPatch = calls.filter(c => c.method === 'PATCH').at(-1);
+  assert.ok(removedPatch.url.includes(`/workitems/${race.workItemId}?`));
+  assert.deepEqual(removedPatch.body, [{ op: 'add', path: '/fields/System.State', value: 'Removed' }]);
 
   // Falha da API: ação fica em erro com backoff, sem perder nada; mensagem sem o PAT.
   const failing = A.createAzdoClient({ org: 'o', project: 'p', pat: 'segredo', fetchImpl: async () => ({

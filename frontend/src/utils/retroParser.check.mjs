@@ -66,6 +66,9 @@ assert.equal(inferDate('Retro 15/03/2025', hoje), '2025-03-15');
 assert.equal(inferDate('Retro 20/12', hoje), '2025-12-20', 'sem ano e no futuro → ano anterior');
 assert.equal(inferDate('Condado', hoje), '');
 assert.equal(inferDate('Sprint 45/13', hoje), '', 'data inválida');
+assert.equal(inferDate('Retro 30/02', hoje), '', 'dia que não existe no mês');
+assert.equal(inferDate('Retro 31/04/2026', hoje), '');
+assert.equal(inferDate('Retro 29/02/2024', hoje), '2024-02-29', 'bissexto vale');
 
 // ---- Times ----
 const TIMES = [

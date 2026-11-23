@@ -48,7 +48,7 @@ function teamFeedbackPrompt({ teamLabel, today, retros, actions }) {
       return `${head}\n${r.insights.resumo}${temas ? `\nTemas: ${temas}` : ''}`;
     }
     return `${head}\n${retroText(r, 4000)}`;
-  }).join('\n\n').slice(0, 18000);
+  }).join('\n\n').slice(-18000); // retros vêm da mais antiga pra mais nova: corta o começo, nunca as recentes
   const acoesTxt = actions.map(a => [
     `- ${a.title}`, STATE_LABEL[a.state] || a.state, (a.typeNames || []).join(', ') || 'sem tipo', a.ownerName || 'sem responsável',
     a.recurring ? 'recorrente, sem data' : (fmtBr(a.due_date) || 'sem prazo'), ...(a.late ? ['ATRASADA'] : []), `atualizações: ${a.updatesCount || 0}`,

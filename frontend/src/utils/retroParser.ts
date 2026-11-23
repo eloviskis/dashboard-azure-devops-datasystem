@@ -5,13 +5,14 @@ import type { Workbook } from 'exceljs';
 
 export interface RetroCard { t: string; v: number; c: string[] }
 export interface RetroColumn { name: string; description: string; cards: RetroCard[] }
-export interface ParsedRetro { title: string; columns: RetroColumn[]; via?: 'planilha' | 'ia' | 'estimado' }
+export interface ParsedRetro { title: string; columns: RetroColumn[]; via?: 'planilha' | 'ia' | 'estimado'; truncated?: boolean }
+export const PDF_AI_MAX_CHARS = 30000; // o backend corta o texto do PDF nesse tamanho antes de mandar pra IA
 export interface RetroTeamOption { key: string; label: string; aliases?: string[] }
 
 export const norm = (s: unknown) =>
   String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
 
-const todayStr = (now = new Date()) =>
+export const todayStr = (now = new Date()) =>
   `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
 // Um card do EasyRetro numa célula: "texto (N votes)   Comments    - c1   - c2". Cards mesclados vêm com " --- ".
@@ -75,6 +76,9 @@ export function inferDate(str: unknown, now = new Date()): string {
   let y = m[3] ? (+m[3] < 100 ? 2000 + +m[3] : +m[3]) : now.getFullYear();
   const iso = (yy: number) => `${yy}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
   if (!m[3] && iso(y) > todayStr(now)) y--;
+  // 30/02, 31/04…: dia que não existe naquele mês não é data (o banco recusaria).
+  const dt = new Date(y, mo - 1, d);
+  if (dt.getMonth() !== mo - 1 || dt.getDate() !== d) return '';
   return iso(y);
 }
 
