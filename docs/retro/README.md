@@ -25,6 +25,7 @@ A aba existe nos dois backends, com o mesmo contrato HTTP (`/api/retro/*`):
 | `RETRO_AZDO_AREA_PATH` | `USE\Melhoria Continua - Kaizen` | Area Path dos itens |
 | `RETRO_AZDO_ITERATION_PATH` | `USE` | Iteração usada quando o time não tem sprint atual |
 | `GEMINI_API_KEY` | (sem padrão) | IA: leitura das retros, sugestões de ação, PDF e feedback para o time |
+| `GEMINI_MODEL` | `gemini-2.5-flash` | Chaves novas do AI Studio não acessam mais o `gemini-2.5-flash`. Com elas, use `gemini-flash-latest`. |
 | `FRONTEND_URL` | (já existente) | Base do link que vai do work item de volta para a ação |
 
 No .NET, as mesmas opções ficam nas seções `Retro:AzureDevOps:*` e `Gemini:*` do `appsettings.json`. A credencial é a do assistente de sincronização.

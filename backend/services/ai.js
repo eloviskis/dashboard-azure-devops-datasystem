@@ -4,7 +4,9 @@
 // Nunca lança — se a chave não estiver configurada ou a chamada falhar, o email segue sem a narrativa.
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_MODEL = 'gemini-2.5-flash';
+// Configurável: chaves novas do AI Studio não têm mais acesso ao gemini-2.5-flash (404 "no longer available to
+// new users"). Padrão mantido pra não mudar produção, que usa uma chave antiga.
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 
 if (!GEMINI_API_KEY) {
   console.warn('⚠️ GEMINI_API_KEY not set — os resumos por email não terão narrativa gerada por IA.');
