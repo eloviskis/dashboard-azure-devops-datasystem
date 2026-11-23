@@ -24,7 +24,7 @@ const TAB_GROUPS: { label: string; ids: string[] }[] = [
   { label: 'Operacional / Dados Brutos', ids: ['item-list'] },
   { label: 'Suporte e Governança', ids: ['documentation'] },
   { label: 'Gestão do Time', ids: ['devtracker'] },
-  { label: 'Governança Ágil', ids: ['rituals'] },
+  { label: 'Governança Ágil', ids: ['rituals', 'retro'] },
   { label: 'Qualidade', ids: ['qa-tracker'] },
   { label: 'Painel por Time', ids: ['painel-mensal'] },
 ];

@@ -74,6 +74,7 @@ import DevTrackerDashboard from './components/DevTrackerDashboard.tsx';
 import TeamEvolutionDashboard from './components/TeamEvolutionDashboard.tsx';
 import CeremoniesDashboard from './components/CeremoniesDashboard.tsx';
 import QATrackerDashboard from './components/QATrackerDashboard.tsx';
+import RetroDashboard from './components/retro/RetroDashboard.tsx';
 
 // Import Types
 import { WorkItem, WorkItemFilters } from './types.ts';
@@ -137,11 +138,11 @@ const ItemListModal: React.FC<{ data: ModalData | null; onClose: () => void }> =
   );
 };
 
-type Tab ='executive' | 'team-insights' | 'team-evolution' | 'cycle-analytics' | 'performance' | 'quality' | 'kanban' | 'detailed-throughput' | 'bottlenecks' | 'tags' | 'clients' | 'montecarlo' | 'item-list' | 'rootcause' | 'period-comparison' | 'backlog' | 'impedimentos' | 'po-analysis' | 'pull-requests' | 'scrum-ctc' | 'gantt' | 'dora' | 'sla' | 'metas' | 'documentation' | 'team-comparison' | 'devtracker' | 'rituals' | 'qa-tracker' | 'painel-mensal';
+type Tab ='executive' | 'team-insights' | 'team-evolution' | 'cycle-analytics' | 'performance' | 'quality' | 'kanban' | 'detailed-throughput' | 'bottlenecks' | 'tags' | 'clients' | 'montecarlo' | 'item-list' | 'rootcause' | 'period-comparison' | 'backlog' | 'impedimentos' | 'po-analysis' | 'pull-requests' | 'scrum-ctc' | 'gantt' | 'dora' | 'sla' | 'metas' | 'documentation' | 'team-comparison' | 'devtracker' | 'rituals' | 'qa-tracker' | 'painel-mensal' | 'retro';
 
 type QuickFilter = 'weekly' | 'biweekly' | 'monthly' | 'global';
 
-const QUICK_FILTER_EXCLUDED_TABS: Tab[] = ['period-comparison', 'team-comparison', 'pull-requests', 'documentation', 'devtracker', 'team-evolution', 'rituals', 'qa-tracker', 'painel-mensal', 'team-insights', 'cycle-analytics', 'scrum-ctc', 'gantt'];
+const QUICK_FILTER_EXCLUDED_TABS: Tab[] = ['period-comparison', 'team-comparison', 'pull-requests', 'documentation', 'devtracker', 'team-evolution', 'rituals', 'qa-tracker', 'painel-mensal', 'team-insights', 'cycle-analytics', 'scrum-ctc', 'gantt', 'retro'];
 
 const DEFAULT_TAB_CONFIG = [
   // 🧭 1. Camada Executiva
@@ -181,6 +182,7 @@ const DEFAULT_TAB_CONFIG = [
   { id: 'devtracker', label: '🗂️ DevTracker', visible: true },
   // 🏛️ 9. Governança Ágil
   { id: 'rituals', label: '🗓️ Ritos & Cerimônias', visible: true },
+  { id: 'retro', label: '🔁 Retrô', visible: true },
   // 🧪 10. Qualidade
   { id: 'qa-tracker', label: '🧪 QA Tracker', visible: true },
   // 📅 Painel por Time — aba própria, fora dos grupos
@@ -898,6 +900,8 @@ const App = () => {
         return <CeremoniesDashboard />;
       case 'qa-tracker':
         return <QATrackerDashboard />;
+      case 'retro':
+        return <RetroDashboard />;
       default:
         return null;
     }
@@ -983,7 +987,7 @@ const App = () => {
           onOpenTabsConfig={openTabsConfig}
         />
       <div className="flex-1 min-w-0 p-6 md:p-10">
-        {activeTab !== 'cycle-analytics' && activeTab !== 'team-insights' && activeTab !== 'pull-requests' && activeTab !== 'scrum-ctc' && activeTab !== 'gantt' && activeTab !== 'team-comparison' && activeTab !== 'period-comparison' && activeTab !== 'devtracker' && activeTab !== 'team-evolution' && activeTab !== 'rituals' && activeTab !== 'qa-tracker' && activeTab !== 'painel-mensal' && (
+        {activeTab !== 'cycle-analytics' && activeTab !== 'team-insights' && activeTab !== 'pull-requests' && activeTab !== 'scrum-ctc' && activeTab !== 'gantt' && activeTab !== 'team-comparison' && activeTab !== 'period-comparison' && activeTab !== 'devtracker' && activeTab !== 'team-evolution' && activeTab !== 'rituals' && activeTab !== 'qa-tracker' && activeTab !== 'painel-mensal' && activeTab !== 'retro' && (
         <div className="relative">
           <button
             onClick={() => setFilterBarCollapsed(!filterBarCollapsed)}
