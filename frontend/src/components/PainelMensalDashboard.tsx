@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import RetroPainelStrip from './retro/RetroPainelStrip.tsx';
 import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ReferenceArea, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { WorkItem } from '../types';
 import { CHART_COLORS } from '../constants';
@@ -420,6 +421,8 @@ const PainelMensalDashboard: React.FC<Props> = ({ data }) => {
       </div>
 
       {editando && isAdmin && editorMetas}
+
+      <RetroPainelStrip teams={[...timesEscolhidos]} />
 
       {intervaloInvalido ? (
         <EmptyState message="Escolha um intervalo válido (a data inicial não pode ser depois da final)." />

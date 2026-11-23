@@ -56,6 +56,20 @@ node backend/services/retroRules.check.js       # estados, permissões, tipos da
 node backend/services/retroAzdo.check.js        # JSON-Patch e idempotência, com HTTP simulado
 ```
 
+## Volta do Azure DevOps
+
+O sync de 30 minutos que já existe traz os itens da área Kaizen para a tabela `work_items`. A cada 5 minutos, a Retrô compara esses itens com as ações ligadas a eles. Não há webhook nem chamada extra à API.
+
+| Estado do item no Azure DevOps | O que acontece com a ação |
+|---|---|
+| Closed, Finished ou Pronto, com a ação em A fazer ou Em andamento | Vai para **Validar**. Quem fecha continua sendo a liderança. |
+| Active, code review, QA etc., com a ação em A fazer | Vai para **Em andamento** |
+| Removed ou Disapproved | Fica como está e ganha uma atualização. A liderança decide se descarta. |
+
+Toda mudança registra uma atualização assinada por "Azure DevOps". O último estado visto fica em `azdo_last_state`, então a mesma mudança não é aplicada nem anotada duas vezes. Para forçar a verificação na hora, use `POST /api/retro/azdo/reconcile` (só para a liderança).
+
+O Painel por Time mostra o bloco "Ações de melhoria (Retrô)" para os times escolhidos no painel.
+
 ## Permissões
 
 - **Liderança** (`admin` e `GESTOR`): aprova e descarta sugestões, fecha e reabre ações, exclui ações e retros e gerencia os tipos.

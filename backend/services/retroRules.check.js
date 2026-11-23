@@ -83,4 +83,19 @@ const txt = R.retroText({ columns: [{ name: 'Bem', description: 'd', cards: [{ t
 assert.equal(txt, '## Bem (d)\n- a / --- / b [2 votos]\n  ↳ comentário: x\n- c');
 assert.ok(R.retroText({ columns: [{ name: 'X', cards: [{ t: 'y'.repeat(200) }] }] }, 50).endsWith('[…cortado]'));
 
+// ---- Volta do Azure DevOps (fase 2)
+assert.deepEqual(['Closed', 'Finished', 'Pronto', 'Removed', 'New', 'Para desenvolver', 'Active', 'Testando QA', ''].map(R.adoCategory),
+  ['done', 'done', 'done', 'removed', 'todo', 'todo', 'doing', 'doing', null]);
+const wi = (state) => ({ state, azdo_work_item_id: 75001 });
+assert.equal(R.reconcileFromAdo(wi('andamento'), 'Closed').state, 'validacao', 'fechado lá → Validar aqui (não Fechada)');
+assert.equal(R.reconcileFromAdo(wi('aberta'), 'Pronto').state, 'validacao');
+assert.match(R.reconcileFromAdo(wi('aberta'), 'Closed').note, /#75001.*Validar/);
+assert.equal(R.reconcileFromAdo(wi('aberta'), 'Active').state, 'andamento');
+assert.equal(R.reconcileFromAdo(wi('andamento'), 'Active'), null, 'já está em andamento');
+assert.equal(R.reconcileFromAdo(wi('validacao'), 'Closed'), null, 'já esperando a liderança');
+assert.equal(R.reconcileFromAdo(wi('concluida'), 'Active'), null, 'fechada aqui não reabre sozinha');
+assert.deepEqual(R.reconcileFromAdo(wi('andamento'), 'Removed').state, null, 'removido lá só gera nota');
+assert.match(R.reconcileFromAdo(wi('andamento'), 'Removed').note, /removido/);
+assert.equal(R.reconcileFromAdo(wi('aberta'), 'New'), null);
+
 console.log('retroRules: ok');

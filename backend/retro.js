@@ -98,6 +98,8 @@ async function initRetroSchema(sql) {
       generated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       generated_by INTEGER REFERENCES users(id) ON DELETE SET NULL
     )`;
+  // Fase 2: último estado do work item visto na volta do ADO (evita repetir a mesma nota/movimento).
+  await sql`ALTER TABLE retro_action ADD COLUMN IF NOT EXISTS azdo_last_state TEXT`;
   // Cache da identidade do ADO de cada pessoa (System.AssignedTo). '' = procurado e não achado.
   await sql`ALTER TABLE devtracker_developers ADD COLUMN IF NOT EXISTS ado_unique_name TEXT`;
   console.log('✅ retro tables ready');
@@ -288,7 +290,7 @@ function registerRetro(app, { getSql, authenticateToken }) {
     markOk: (id, { workItemId, url, managedTags }) => db()`
       UPDATE retro_action SET azdo_sync_status = 'ok', azdo_work_item_id = ${workItemId}, azdo_url = ${url},
         azdo_managed_tags = ${JSON.stringify(managedTags)}::jsonb, azdo_sync_error = NULL, azdo_synced_at = NOW(),
-        azdo_next_attempt_at = NULL WHERE id = ${id}`,
+        azdo_next_attempt_at = NULL, azdo_last_state = 'New' WHERE id = ${id}`,
     markSimulated: (id) => db()`
       UPDATE retro_action SET azdo_sync_status = 'simulado', azdo_sync_error = NULL, azdo_synced_at = NOW() WHERE id = ${id}`,
     markError: (id, message, delayMs) => db()`
@@ -345,8 +347,33 @@ function registerRetro(app, { getSql, authenticateToken }) {
       for (const { id } of rows) {
         await AZ.syncAction({ actionId: id, repo, client: azdoClient(cfg), ctxFor, writeEnabled: cfg.writeEnabled, log: console.log });
       }
+      await reconcileFromWorkItems();
     } catch (e) { console.error('❌ retro job:', e.message); }
   });
+
+  // Fase 2 — volta do Azure DevOps: o sync de 30 min (syncData) já grava o estado de cada work item em
+  // work_items. Aqui comparamos com as ações ligadas e movemos/anotamos quando o estado mudou desde a última vez.
+  async function reconcileFromWorkItems() {
+    const sql = db();
+    const rows = await sql`
+      SELECT a.id, a.state, a.azdo_work_item_id, w.state AS ado_state
+      FROM retro_action a JOIN work_items w ON w.work_item_id = a.azdo_work_item_id
+      WHERE a.azdo_work_item_id IS NOT NULL AND w.state IS NOT NULL AND w.state IS DISTINCT FROM a.azdo_last_state`;
+    for (const r of rows) {
+      const change = R.reconcileFromAdo(r, r.ado_state);
+      // Mesmo sem mudança registra que esse estado já foi visto. "AND state = …": se alguém mexeu na ação no
+      // mesmo instante, não sobrescreve nem anota — a próxima rodada reavalia.
+      const done = await sql`UPDATE retro_action SET azdo_last_state = ${r.ado_state},
+        state = COALESCE(${change?.state ?? null}, state),
+        state_changed_at = CASE WHEN ${change?.state ?? null}::text IS NULL THEN state_changed_at ELSE NOW() END
+        WHERE id = ${r.id} AND state = ${r.state} RETURNING id`;
+      if (change && done.length) {
+        await sql`INSERT INTO retro_action_update (action_id, author_id, text) VALUES (${r.id}, NULL, ${change.note})`;
+        console.log(`[retro] ação ${r.id}: work item #${r.azdo_work_item_id} → "${r.ado_state}"${change.state ? ` (ação para ${change.state})` : ''}`);
+      }
+    }
+    return rows.length;
+  }
 
   // ---- IA
   async function askJson(prompt, timeoutMs = 60000) {
@@ -363,6 +390,11 @@ function registerRetro(app, { getSql, authenticateToken }) {
       teams: await getTeams(), isLeader: R.isLeader(req.user), aiAvailable: isAiConfigured(),
       azdo: { writeEnabled: cfg.writeEnabled, workItemType: cfg.workItemType, team: cfg.team },
     });
+  }));
+
+  // Força a volta do Azure DevOps agora (normalmente roda a cada 5 min, lendo o que o sync de 30 min trouxe).
+  router.post('/azdo/reconcile', leaderOnly, wrap(async (req, res) => {
+    res.json({ checked: await reconcileFromWorkItems() });
   }));
 
   router.post('/ai/structure-pdf', wrap(async (req, res) => {
@@ -534,7 +566,7 @@ function registerRetro(app, { getSql, authenticateToken }) {
     const a = await getAction(req.params.id);
     if (!a) throw fail(404, 'Ação não encontrada');
     const updates = await db()`
-      SELECT u.id, u.text, u.created_at, us.username AS author_name FROM retro_action_update u
+      SELECT u.id, u.text, u.created_at, COALESCE(us.username, 'Azure DevOps') AS author_name FROM retro_action_update u
       LEFT JOIN users us ON us.id = u.author_id WHERE u.action_id = ${a.id} ORDER BY u.created_at`;
     res.json({ ...toActionDto(a), updates: updates.map(u => ({ id: u.id, text: u.text, createdAt: u.created_at, authorName: u.author_name })) });
   }));

@@ -151,7 +151,38 @@ function retroText(retro, max = 16000) {
   return s.length > max ? `${s.slice(0, max)}\n[…cortado]` : s;
 }
 
+// ---- Volta do Azure DevOps (fase 2): o sync de 30 min já traz o work item pra work_items; aqui decidimos o que
+// muda na ação quando o estado do item mudou. Fechar continua sendo da liderança: item fechado lá → Validar aqui.
+const ADO_DONE = ['closed', 'finished', 'pronto', 'done', 'resolved'];
+const ADO_REMOVED = ['removed', 'disapproved'];
+const ADO_TODO = ['new', 'ux/ui', 'para desenvolver', 'proposed', 'to do'];
+function adoCategory(adoState) {
+  const s = norm(adoState);
+  if (!s) return null;
+  if (ADO_DONE.includes(s)) return 'done';
+  if (ADO_REMOVED.includes(s)) return 'removed';
+  if (ADO_TODO.includes(s)) return 'todo';
+  return 'doing';
+}
+
+// Retorna { state, note } (state null = não move) ou null se nada a fazer.
+function reconcileFromAdo(action, adoState) {
+  const cat = adoCategory(adoState);
+  const ref = `Item #${action.azdo_work_item_id} no Azure DevOps`;
+  if (cat === 'done' && ['aberta', 'andamento'].includes(action.state)) {
+    return { state: 'validacao', note: `${ref} foi para "${adoState}". Ação movida para Validar: a liderança confere e fecha.` };
+  }
+  if (cat === 'doing' && action.state === 'aberta') {
+    return { state: 'andamento', note: `${ref} entrou em andamento ("${adoState}").` };
+  }
+  if (cat === 'removed' && ['aberta', 'andamento', 'validacao'].includes(action.state)) {
+    return { state: null, note: `${ref} foi removido ("${adoState}"). A liderança decide se descarta a ação.` };
+  }
+  return null;
+}
+
 module.exports = {
+  adoCategory, reconcileFromAdo,
   STATES, LIVE, PRIORITIES, TONES, LEADER_ROLES, LEADER_ONLY_MSG,
   norm, slug, newId, isLeader, todayStr, moveError, approveError, isLate, sortActions, sortClosed,
   mapAiTags, sanitizeInsights, buildSuggestions, sanitizeFeedback, extractJson, splitOwners, matchOwner, retroText,
