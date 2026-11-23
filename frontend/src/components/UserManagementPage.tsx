@@ -51,6 +51,7 @@ const ALL_TABS = [
   { id: 'documentation',       label: '📖 Documentação' },
   { id: 'devtracker',          label: '🗂️ DevTracker' },
   { id: 'rituals',             label: '🗓️ Ritos & Cerimônias' },
+  { id: 'retro',               label: '🔁 Retrô' },
   { id: 'qa-tracker',         label: '🧪 QA Tracker' },
   { id: 'painel-mensal',       label: '📅 Painel por Time' },
 ];
