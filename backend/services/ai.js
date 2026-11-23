@@ -14,16 +14,20 @@ if (!GEMINI_API_KEY) {
 // (visto em produção durante rate limit do Gemini) prende pra sempre a fila de emails que depende dela.
 const GEMINI_TIMEOUT_MS = 20000;
 
-async function callGemini(prompt) {
+// opts.json pede resposta só em JSON (responseMimeType); opts.timeoutMs pra prompts longos (aba Retrô).
+async function callGemini(prompt, { timeoutMs = GEMINI_TIMEOUT_MS, json = false } = {}) {
   if (!GEMINI_API_KEY) return null;
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        ...(json ? { generationConfig: { responseMimeType: 'application/json' } } : {}),
+      }),
       signal: controller.signal,
     });
     if (!response.ok) {
@@ -35,7 +39,7 @@ async function callGemini(prompt) {
     const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
     return text ? text.trim() : null;
   } catch (error) {
-    console.error('❌ callGemini error:', error.name === 'AbortError' ? `timeout após ${GEMINI_TIMEOUT_MS}ms` : error.message);
+    console.error('❌ callGemini error:', error.name === 'AbortError' ? `timeout após ${timeoutMs}ms` : error.message);
     return null;
   } finally {
     clearTimeout(timeout);
@@ -115,4 +119,6 @@ async function generatePainelPorTimeInsight(contextData) {
   return callGemini(prompt);
 }
 
-module.exports = { generateWeeklyInsight, generateTeamNarrative, shortenTitles, generatePainelPorTimeInsight };
+const isAiConfigured = () => !!GEMINI_API_KEY;
+
+module.exports = { generateWeeklyInsight, generateTeamNarrative, shortenTitles, generatePainelPorTimeInsight, callGemini, isAiConfigured };

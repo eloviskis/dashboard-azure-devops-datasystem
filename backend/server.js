@@ -21,6 +21,7 @@ const { calcularDiasUteis, diaBRT } = require('./services/businessDays');
 const { sendTeamsMessage } = require('./services/teams');
 const { getDailyReviewRanking } = require('./services/reviewRanking');
 const { runPainelPorTimeDigest, runPainelPorTimeDigestIfDue } = require('./services/painelPorTimeDigest');
+const { initRetroSchema, registerRetro } = require('./retro');
 
 // Database driver: PostgreSQL (pg) with connection pooling
 const { Pool, types } = require('pg');
@@ -580,6 +581,9 @@ const initDatabase = async () => {
       await sql`INSERT INTO users (username, email, password, role) VALUES ('admin', 'admin@datasystem.com', ${hashedPassword}, 'admin')`;
       console.log('✅ Default admin user created');
     }
+
+    // Aba Retrô (depende de users e devtracker_developers, criadas acima)
+    await initRetroSchema(sql);
 
     console.log('✅ Database initialized');
   } catch (error) {
@@ -3946,6 +3950,9 @@ app.post('/api/ceremonies/calendar-import/confirm', authenticateToken, async (re
     res.status(500).json({ error: err.message });
   }
 });
+
+// Aba Retrô: /api/retro/* (retro.js). Precisa vir antes do 404 abaixo.
+registerRetro(app, { getSql: () => sql, authenticateToken });
 
 // 404 Handler
 app.use((req, res) => {
