@@ -1,0 +1,1919 @@
+{
+ "tags": [
+  {
+   "id": "banco-de-dados",
+   "name": "Banco de Dados",
+   "hue": 205,
+   "order": 0
+  },
+  {
+   "id": "ritos",
+   "name": "Ritos",
+   "hue": 275,
+   "order": 1
+  },
+  {
+   "id": "desenvolvimento",
+   "name": "Desenvolvimento",
+   "hue": 125,
+   "order": 2
+  },
+  {
+   "id": "testes",
+   "name": "Testes",
+   "hue": 30,
+   "order": 3
+  },
+  {
+   "id": "processo",
+   "name": "Processo",
+   "hue": 175,
+   "order": 4
+  },
+  {
+   "id": "comunicacao",
+   "name": "Comunicação",
+   "hue": 330,
+   "order": 5
+  },
+  {
+   "id": "infraestrutura",
+   "name": "Infraestrutura",
+   "hue": 235,
+   "order": 6
+  },
+  {
+   "id": "pessoas",
+   "name": "Pessoas",
+   "hue": 0,
+   "order": 7
+  },
+  {
+   "id": "conhecimento",
+   "name": "Conhecimento",
+   "hue": 48,
+   "order": 8
+  },
+  {
+   "id": "ia",
+   "name": "IA",
+   "hue": 290,
+   "order": 9
+  }
+ ],
+ "retros": [
+  {
+   "columns": [
+    {
+     "cards": [
+      {
+       "c": [],
+       "t": "Sandrinha ganhando prêmios e reconhecimento! Merece muito! 💙",
+       "v": 1
+      },
+      {
+       "c": [],
+       "t": "Note novo",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "Vou sair mais de férias kkk tudo de BOM aconteceu enquanto eu estava de férias  =)",
+       "v": 0
+      }
+     ],
+     "description": "O que eu gostei?",
+     "name": "Gostei"
+    },
+    {
+     "cards": [
+      {
+       "c": [],
+       "t": "Aprendi que nem sempre vou conseguir finalizar as tarefas com a rapidez que desejo.",
+       "v": 1
+      }
+     ],
+     "description": "O q eu aprendi?",
+     "name": "Aprendi"
+    },
+    {
+     "cards": [
+      {
+       "c": [],
+       "t": "Faltou a Sandrinha! Bem-vinda de volta! <3",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "Sandrinha sendo meu guia e me consolando na tarefa do Motor Fiscal. :)",
+       "v": 0
+      }
+     ],
+     "description": "O que faltou?",
+     "name": "Faltou"
+    },
+    {
+     "cards": [
+      {
+       "c": [],
+       "t": "Time lindo",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "PARABENSS SANDRINHAAAA <3",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "parabenssssss sandrinhaaa",
+       "v": 0
+      }
+     ],
+     "description": "",
+     "name": "Kudos - Elogios"
+    }
+   ],
+   "createdAt": "2026-11-23T12:00:00.000Z",
+   "createdBy": "claude",
+   "date": "",
+   "insights": {
+    "at": "2026-11-23T12:00:00.000Z",
+    "by": "claude",
+    "elogios": [
+     "Sandrinha pelos prêmios e reconhecimento",
+     "Sandrinha guiando a tarefa do Motor Fiscal"
+    ],
+    "resumo": "Retro leve e de celebração: reconhecimento à Sandrinha pelos prêmios e pelo apoio no Motor Fiscal, e boas-vindas no retorno dela. Fica um aprendizado sobre ritmo: nem toda tarefa sai na velocidade que se deseja.",
+    "temas": [
+     {
+      "detalhe": "Sandrinha premiada e celebrada pelo time.",
+      "tema": "Reconhecimento",
+      "tom": "positivo"
+     },
+     {
+      "detalhe": "Orientação na tarefa do Motor Fiscal.",
+      "tema": "Apoio entre colegas",
+      "tom": "positivo"
+     },
+     {
+      "detalhe": "Tarefas novas levando mais tempo que o esperado.",
+      "tema": "Ritmo e expectativas",
+      "tom": "atencao"
+     }
+    ]
+   },
+   "source": "EasyRetro_-_Condado.xlsx",
+   "stats": {
+    "cards": 9,
+    "comments": 0,
+    "votes": 2
+   },
+   "team": "Condado",
+   "title": "Condado",
+   "id": "condado-2026-11"
+  },
+  {
+   "columns": [
+    {
+     "cards": [
+      {
+       "c": [],
+       "t": "Maior participação do QA na análise das demandas, permitindo identificar riscos antes da implementação.",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "Comunicação do time funciona muito bem continuar assim",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "QAs como sempre testando tudo de ponta a ponta, cobrindo cenários até não listados na historia.",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "Cooperação do time é muito boa, um ajudando o outro sempre que precisa",
+       "v": 0
+      }
+     ],
+     "description": "",
+     "name": "O que foi bem"
+    },
+    {
+     "cards": [
+      {
+       "c": [],
+       "t": "Identificação de horas adicionais dentro da sprint.",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "Mais atenção ao SLA das sustentações",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "Realizar os ritos dentro do timebox esperado",
+       "v": 0
+      }
+     ],
+     "description": "",
+     "name": "O que podemos melhorar"
+    },
+    {
+     "cards": [
+      {
+       "c": [],
+       "t": "Apresentação dos testes para o DEV",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "Tirar um tempo pra organizar a apresentação da review",
+       "v": 0
+      }
+     ],
+     "description": "",
+     "name": "O que faltou"
+    },
+    {
+     "cards": [
+      {
+       "c": [],
+       "t": "Livro do Eloi pra equipe toda",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "Implementação das melhorias sugeridas pelo time que funcionem bem",
+       "v": 1
+      },
+      {
+       "c": [],
+       "t": "Planejar a proxima sprint com mais precisão e sem estourar horas",
+       "v": 0
+      },
+      {
+       "c": [
+        "Levantar do cliente o foco real da demanda."
+       ],
+       "t": "Mais foco na prevenção de defeitos, e não apenas na identificação durante os testes.+",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "colocar nas tasks uso de horas adicionais.",
+       "v": 0
+      },
+      {
+       "c": [
+        "https://dev.azure.com/datasystemsoftwares/USE/_dashboards/dashboard/b513a31a-8701-4b83-ac96-884668a3d1b0"
+       ],
+       "t": "Usar o painel de SLA do David",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "Sempre apresentar o planejamento do teste.",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "Deixar ou um dia antes ou uma hora antes as tarefas apresentadas na review",
+       "v": 0
+      }
+     ],
+     "description": "",
+     "name": "O que esperamos"
+    },
+    {
+     "cards": [
+      {
+       "c": [],
+       "t": "Joninha arrebentando nos testes do PDV Android.\nNosso herói!",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "Luiz segurando bem a barra quando estava sozinho como DEV.\nE argumentando e enriquecendo nas análises e refinamentos",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "DEVS e P.O sempre prestativos na correção dos bugs",
+       "v": 0
+      }
+     ],
+     "description": "",
+     "name": "Quem merece um elogio?"
+    }
+   ],
+   "createdAt": "2026-11-23T12:00:00.000Z",
+   "createdBy": "claude",
+   "date": "2026-11-09",
+   "insights": {
+    "at": "2026-11-23T12:00:00.000Z",
+    "by": "claude",
+    "elogios": [
+     "Joninha nos testes do PDV Android",
+     "Luiz segurando a barra como único dev e enriquecendo os refinamentos",
+     "Devs e P.O. prestativos na correção de bugs"
+    ],
+    "resumo": "Time entrosado, com QA participando cedo das análises e muita cooperação. Os ajustes pedidos são de disciplina de processo: horas adicionais dentro da sprint, SLA das sustentações, timebox dos ritos e preparação da review e do plano de teste.",
+    "temas": [
+     {
+      "detalhe": "Um ajudando o outro sempre que precisa.",
+      "tema": "Comunicação e cooperação",
+      "tom": "positivo"
+     },
+     {
+      "detalhe": "Riscos identificados antes da implementação.",
+      "tema": "QA presente desde a análise",
+      "tom": "positivo"
+     },
+     {
+      "detalhe": "Horas extras dentro da sprint não aparecem nas tasks.",
+      "tema": "Horas adicionais e planejamento",
+      "tom": "atencao"
+     },
+     {
+      "detalhe": "Pedido de mais atenção ao SLA, usando o painel do David.",
+      "tema": "SLA das sustentações",
+      "tom": "atencao"
+     },
+     {
+      "detalhe": "Timebox dos ritos e preparação da review.",
+      "tema": "Ritos e review",
+      "tom": "atencao"
+     },
+     {
+      "detalhe": "Apresentar o planejamento de teste ao dev.",
+      "tema": "Prevenção de defeitos",
+      "tom": "atencao"
+     }
+    ]
+   },
+   "source": "EasyRetro_-_CTC__0911.xlsx",
+   "stats": {
+    "cards": 20,
+    "comments": 2,
+    "votes": 1
+   },
+   "team": "CTC",
+   "title": "CTC 09/11",
+   "id": "ctc-2026-11-09"
+  },
+  {
+   "columns": [
+    {
+     "cards": [
+      {
+       "c": [],
+       "t": "O alinhamento e a colaboração entre QA e desenvolvimento funcionaram bem, facilitando as validações e a resolução de problemas.",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "Entregamos as demandas do PDV Android!\nJoninha e Carlos foram cruciais para tudo dar certo!",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "Vitao conduzindo as tarefas na daily",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "Esqueci de falar, mas meu computador que a empresa enviou agora está sendo muito positivo nas minhas entregas, máquina muito boa.\nAss. Luiz Felipe",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "Luiz sendo um ótimo braço direito técnico, nas reuniões que temos com Telos, DataFrete e cliente.\nDúvidas e análises pertinentes.",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "David atuando nas sustentações e compartilhando conhecimento",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "Ótima formação com a Larissa sobre os relatorios SPED e Sintegra, precisamos fazer mais reuniões nesse estilo sobre temas diversos.",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "Henrique como sempre muito rápido nas entregas e com qualidade!",
+       "v": 0
+      }
+     ],
+     "description": "O que funcionou muito bem nesse ciclo?",
+     "name": "Peças que encaixaram"
+    },
+    {
+     "cards": [
+      {
+       "c": [],
+       "t": "A atualização incorreta do banco na sprint anterior gerou retrabalho, exigindo reconfiguração da base e consumindo tempo do time.",
+       "v": 2
+      },
+      {
+       "c": [],
+       "t": "Como fazer uma Sprint perfeita, de entregar testado tudo o que foi planejado",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "parar teste para proxima sprint",
+       "v": 0
+      }
+     ],
+     "description": "O que ainda está nos causando dificuldade?",
+     "name": "Peças que ainda não encontramos"
+    },
+    {
+     "cards": [
+      {
+       "c": [
+        "como a pessoa do suporte chegou até o erro? ter essa informação na tarefa."
+       ],
+       "t": "Algo para ajudar a atender melhor as sustenções e deixar mais organizado",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "Melhorar o processo de atualização dos bancos, com conferência prévia e backup para evitar retrabalho e perda de tempo.",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "é uma idea para ter zona segura mais criar algo para gerar massa e ajustar parametro fora do banco caso seja atualizado por acidente",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "montar as necessidade em forma de plano para implantar teste de regresssão.",
+       "v": 0
+      }
+     ],
+     "description": "O que podemos melhorar juntos?",
+     "name": "Peças que podemos construir"
+    },
+    {
+     "cards": [
+      {
+       "c": [],
+       "t": "Saída do Rafa do Suporte.",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "Pequenas alterações podem gerar impactos inesperados em funcionalidades existentes, reforçando a importância dos testes de regressão.",
+       "v": 0
+      }
+     ],
+     "description": "Qual foi a maior surpresa deste Ciclo?",
+     "name": "Peça surpresa"
+    },
+    {
+     "cards": [
+      {
+       "c": [],
+       "t": "As entregas de codigo do carlão e ajuda luiz  e do vitão durante a entrega do pdv android",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "Reconheço a parceria e a disponibilidade dos colegas em ajudar, compartilhar conhecimento e contribuir para as entregas do time.",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "Agradecimentos a Larrissa do Fiscal que apresentou com maestria um treinamento sobre SPED",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "Cagnin sempre disposto e disponivel para ajudar quando precisamos",
+       "v": 0
+      }
+     ],
+     "description": "Aqui cada pessoa escreve uma peça que outro colega colocou no quebra-cabeça.",
+     "name": "Peças que alguém entregou"
+    }
+   ],
+   "createdAt": "2026-11-23T12:00:00.000Z",
+   "createdBy": "claude",
+   "date": "2026-11-18",
+   "insights": {
+    "at": "2026-11-23T12:00:00.000Z",
+    "by": "claude",
+    "elogios": [
+     "Joninha e Carlos no PDV Android",
+     "Luiz como braço direito técnico com Telos e DataFrete",
+     "Larissa na formação sobre SPED e Sintegra",
+     "Henrique rápido e com qualidade",
+     "Cagnin sempre disponível para ajudar"
+    ],
+    "resumo": "Ciclo marcado pela entrega do PDV Android, com destaque para Joninha, Carlos, Luiz e Vitão, e por uma boa formação sobre SPED e Sintegra com a Larissa. O ponto de dor foi a atualização incorreta do banco, que gerou retrabalho, e a necessidade de testes de regressão.",
+    "temas": [
+     {
+      "detalhe": "Esforço conjunto de dev e QA.",
+      "tema": "Entrega do PDV Android",
+      "tom": "positivo"
+     },
+     {
+      "detalhe": "Formação sobre SPED e Sintegra; David nas sustentações.",
+      "tema": "Compartilhamento de conhecimento",
+      "tom": "positivo"
+     },
+     {
+      "detalhe": "Base atualizada errado exigiu reconfiguração.",
+      "tema": "Atualização de banco e retrabalho",
+      "tom": "critico"
+     },
+     {
+      "detalhe": "Pequenas alterações gerando impactos inesperados.",
+      "tema": "Teste de regressão",
+      "tom": "atencao"
+     },
+     {
+      "detalhe": "Falta o passo a passo de como o suporte chegou ao erro.",
+      "tema": "Informação nas tarefas de sustentação",
+      "tom": "atencao"
+     },
+     {
+      "detalhe": "Risco de perda de conhecimento.",
+      "tema": "Saída do Rafa do Suporte",
+      "tom": "atencao"
+     }
+    ]
+   },
+   "source": "EasyRetro_-_CTC_18_11.pdf",
+   "stats": {
+    "cards": 21,
+    "comments": 1,
+    "votes": 2
+   },
+   "team": "CTC",
+   "title": "CTC 18/11",
+   "id": "ctc-2026-11-18"
+  },
+  {
+   "columns": [
+    {
+     "cards": [
+      {
+       "c": [],
+       "t": "Jarvis Saiu e começamos a mapear os cliente e suas versões",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "Se olharmos para 1 ano atrás, consegui ver um melhora no fluxo de entrega e qualidade do codigo muito boa",
+       "v": 0
+      }
+     ],
+     "description": "Ações e atitudes que nos deram segurança e que nos acalmaram por ver e saber que fizemos tal ação.",
+     "name": "Tia Calma"
+    },
+    {
+     "cards": [
+      {
+       "c": [],
+       "t": "Ver que a gestão deu importância no teste automatizado e controle de versão no time, após a gente vir falando que precisava.",
+       "v": 0
+      }
+     ],
+     "description": "Tia que celebra algo que fizemos tão bem, mas tão bem, que devemos exaltar.",
+     "name": "Tia Legra"
+    },
+    {
+     "cards": [
+      {
+       "c": [
+        "vrsão 193 era prioridade e mudou, antecipando pedido de publicar versão, planejamento caindo por terra(eloi) Falar com o P.O."
+       ],
+       "t": "Entregas de pastelaria, versões que sempre são urgentes",
+       "v": 0
+      }
+     ],
+     "description": "Essa Tia que nos faz pensar sobre coisas que não foram bem na sprint, coisas que nos entristeceram, coisas que não deveríamos repetir.",
+     "name": "Tia Flige"
+    },
+    {
+     "cards": [
+      {
+       "c": [],
+       "t": "Ver que a Equipe está sempre disposta a melhorar como um todo, isso anima e sempre continuar buscando soluções para o time",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "Abrir o board durante a daily e organizar. (eloi e igor)",
+       "v": 0
+      }
+     ],
+     "description": "Tia que nos ajuda a pensar em planos ação a respeito das coisas que as coisas que a Tia Flige relatou",
+     "name": "Tia Nima"
+    },
+    {
+     "cards": [
+      {
+       "c": [
+        "Focar em todos os requisitos de entregas e não deixar passar nada, deixar no esquecimento, ressalvas, mesmo rodando a tarefa. Débitos Técnicos\n(Eloi e Igor)"
+       ],
+       "t": "Entregas pseudo terminadas  😅\nPrecisamos evitar oq aconteceu com a entrega dos flavours e pipe, foi dado coom entregque, mas quando foi usar, nao estavam",
+       "v": 0
+      },
+      {
+       "c": [
+        "deixar mais transparente a real necessidade do cliente"
+       ],
+       "t": "Ausência da ponte do processo de comunicação \"cliente -> gerência -> time\"",
+       "v": 0
+      }
+     ],
+     "description": "Tia que fica de olho sobre coisas que são tão problemáticas que não devem mais acontecer!",
+     "name": "Tia Fasta"
+    }
+   ],
+   "createdAt": "2026-11-23T12:00:00.000Z",
+   "createdBy": "claude",
+   "date": "2026-11-05",
+   "insights": {
+    "at": "2026-11-23T12:00:00.000Z",
+    "by": "claude",
+    "elogios": [
+     "Gestão dando importância a teste automatizado e controle de versão",
+     "Equipe sempre disposta a melhorar como um todo"
+    ],
+    "resumo": "O time reconhece uma evolução real no último ano e o apoio da gestão a teste automatizado e controle de versão. Os pontos críticos são prioridades que mudam em cima da hora (versão 193), entregas dadas como prontas sem estarem (flavours e pipe) e a falta de uma ponte clara entre cliente, gerência e time.",
+    "temas": [
+     {
+      "detalhe": "A versão 193 mudou de prioridade e derrubou o planejamento.",
+      "tema": "Versões urgentes e prioridade que muda",
+      "tom": "critico"
+     },
+     {
+      "detalhe": "Flavours e pipe foram dados como entregues, mas não funcionavam no uso.",
+      "tema": "Definição de pronto",
+      "tom": "critico"
+     },
+     {
+      "detalhe": "A necessidade real do cliente não chega clara ao time.",
+      "tema": "Comunicação cliente, gerência e time",
+      "tom": "atencao"
+     },
+     {
+      "detalhe": "Melhora visível em relação a um ano atrás.",
+      "tema": "Evolução de fluxo e qualidade",
+      "tom": "positivo"
+     },
+     {
+      "detalhe": "Iniciado após a saída do Jarvis.",
+      "tema": "Mapeamento de clientes e versões",
+      "tom": "positivo"
+     }
+    ]
+   },
+   "source": "EasyRetro_-_Inovação_05_11_26.xlsx",
+   "stats": {
+    "cards": 8,
+    "comments": 3,
+    "votes": 0
+   },
+   "team": "Inovação",
+   "title": "Inovação 05/11",
+   "id": "inovacao-2026-11-05"
+  },
+  {
+   "columns": [
+    {
+     "cards": [
+      {
+       "c": [],
+       "t": "Skills de IA ajudando no entendimento de tarefas complexas e/ou como reproduzi-la",
+       "v": 1
+      },
+      {
+       "c": [],
+       "t": "Faz o L",
+       "v": 1
+      }
+     ],
+     "description": "Ações e atitudes que nos deram segurança e que nos acalmaram por ver e saber que fizemos tal ação.",
+     "name": "Tia Calma"
+    },
+    {
+     "cards": [
+      {
+       "c": [],
+       "t": "Musica decente hj",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "Trocas de conhecimento entre os membros do time",
+       "v": 0
+      },
+      {
+       "c": [
+        "mas ainda tendo alguns gargalos principalmente em fiscal(eloi)"
+       ],
+       "t": "Tasks vindo um pouco mais completas",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "Tasks sendo melhor analisadas, evitando falta de informacoes e entendimento",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "Metallica hj",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "Tocar \"The Sisters of Mercy\" na próxima retro",
+       "v": 0
+      }
+     ],
+     "description": "Tia que celebra algo que fizemos tão bem, mas tão bem, que devemos exaltar.",
+     "name": "Tia Legra"
+    },
+    {
+     "cards": [
+      {
+       "c": [
+        "ver se pode ter prioridades no pedido direto da query review-amarrado a task original(eloi)"
+       ],
+       "t": "Demora no retorno de Query Reviews",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "Não ter nosso líder participando da retro, vendo nossas dores",
+       "v": 0
+      },
+      {
+       "c": [
+        "DMA- depende da sla deles",
+        "sensação latente de empurrar responsabilidade sempre para outro time. (eloi)"
+       ],
+       "t": "Dependência de outros times em algumas tasks geram atraso\n---\nDMA acha que sempre esta certo",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "Code review com IA",
+       "v": 1
+      },
+      {
+       "c": [],
+       "t": "Falta de QA\n---\nNão deve dev testar tarefa, se demanda pro time esta grande, contratar qa.\n---\nfalta de QA e os DEVs tendo que fazer Testes",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "Ficar confuso com as ações da retro, não ter retorno nem transparência sobre o que vai ser levado e/ou quando será levado.",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "Pessoal aloca o nosso QA para tarefas que não tem relação com o time, gerando gargado... depois colocam nossas métricas nos slides do fechamento...",
+       "v": 0
+      },
+      {
+       "c": [
+        "Deveria ter uma pessoa responsável apenas por fechamento de versões e afins, para não ficar alocando QA dos outro"
+       ],
+       "t": "Desenvolvedores precisam testar as tarefas uns dos outros, pois o time de qualidade está sobrecarregado. Isso indica que o time de sustentação precisaria de mais um analista de qualidade, que poderia atuar de forma híbrida entre os times para atender ao que for necessário no momento, mas a liderança não está enxergando dessa forma.\n\nO QA precisar ficar até as 21h testando tarefas não é humano. É pior que a escala 6x1.\n---\nNAO SE DEVE EMPRESTAR QA PARA OUTRO TIME E NAO TRAZER NENHUM PARA ESSE",
+       "v": 0
+      }
+     ],
+     "description": "Essa Tia que nos faz pensar sobre coisas que não foram bem na sprint, coisas que nos entristeceram, coisas que não deveríamos repetir.",
+     "name": "Tia Flige"
+    },
+    {
+     "cards": [
+      {
+       "c": [],
+       "t": "Compartilhar conhecimento entre a galera do time",
+       "v": 0
+      },
+      {
+       "c": [
+        "Hoje as skills que foram disponibilizadas para a sustentação já tem um subagente de codereview que faz esse trabalho!!",
+        "https://dev.azure.com/datasystemsoftwares/USE/_wiki/wikis/USE.wiki/763/%F0%9F%AA%84Skills-compartilhadas"
+       ],
+       "t": "Seria interessante passarem as skills de code review com IA já direto para os devs, para evitar retornos desnecessários nos processos com IA, tendo em vista que a IA é sempre a mesma pra todo mundo, desde que sejam utilizadas a mesma instrução e modelo",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "Eloi esta nos trazendo poucos Feedbacks.\nsempre a coisa a fazer no time, mais nao sabemos se esta sendo feito quando levamos algo para fazer alguma ação",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "Acredito que decidir as ações da retrospectiva deveria caber à liderança ou a quem tem autonomia para isso. Hoje essa responsabilidade acaba ficando com o time, que já está focado nas demandas do dia a dia.",
+       "v": 0
+      }
+     ],
+     "description": "Tia que nos ajuda a pensar em planos ação a respeito das coisas que as coisas que a Tia Flige relatou",
+     "name": "Tia Nima"
+    },
+    {
+     "cards": [
+      {
+       "c": [],
+       "t": "Alterar prioridades sem avaliar o impacto nas entregas",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "TIme do DM&A se comportar como STF, só eles tem razão",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "Outros times nao ajudar nas demandas de testes sendo que a tarefa é da CTC por exemplo porem nao foi o time de CTC que fez a correção",
+       "v": 0
+      },
+      {
+       "c": [
+        "vale ressaltar o fluxo correto tá, por isso existe essa falha, script somente deveria ser lançado em versao mensal."
+       ],
+       "t": "Scripts que existem no código, mas não estão aplicados em todos os clientes",
+       "v": 0
+      }
+     ],
+     "description": "Tia que fica de olho sobre coisas que são tão problemáticas que não devem mais acontecer!",
+     "name": "Tia Fasta"
+    }
+   ],
+   "createdAt": "2026-11-23T12:00:00.000Z",
+   "createdBy": "claude",
+   "date": "2026-10-28",
+   "insights": {
+    "at": "2026-11-23T12:00:00.000Z",
+    "by": "claude",
+    "elogios": [
+     "Trocas de conhecimento entre os membros do time",
+     "Tasks melhor analisadas, evitando falta de informação"
+    ],
+    "resumo": "Retro dominada pela falta de QA: devs testando tarefas uns dos outros, QA emprestado para outros times e ficando até 21h. Também pesam a dependência do DM&A, a demora nas query reviews e a falta de retorno sobre as ações das retros anteriores. No lado bom, as tasks estão chegando mais completas e as skills de IA estão ajudando.",
+    "temas": [
+     {
+      "detalhe": "Devs testando, QA emprestado a outros times e jornadas até 21h.",
+      "tema": "Capacidade de QA",
+      "tom": "critico"
+     },
+     {
+      "detalhe": "Atrasos ligados ao SLA de outro time e sensação de responsabilidade empurrada.",
+      "tema": "Dependência do DM&A e de outros times",
+      "tom": "critico"
+     },
+     {
+      "detalhe": "O time não sabe o que foi levado adiante, nem quando.",
+      "tema": "Retorno sobre as ações da retro",
+      "tom": "atencao"
+     },
+     {
+      "detalhe": "Pedidos sem prioridade amarrada à task original.",
+      "tema": "Query reviews lentas",
+      "tom": "atencao"
+     },
+     {
+      "detalhe": "Scripts no código que não estão aplicados em todos os clientes.",
+      "tema": "Scripts fora da versão mensal",
+      "tom": "atencao"
+     },
+     {
+      "detalhe": "Skills e subagente de code review ajudando em tarefas complexas.",
+      "tema": "IA no fluxo de trabalho",
+      "tom": "positivo"
+     },
+     {
+      "detalhe": "Tasks mais completas e bem analisadas, ainda com gargalo no fiscal.",
+      "tema": "Qualidade das tasks",
+      "tom": "positivo"
+     }
+    ]
+   },
+   "source": "EasyRetro_-__TIAS_-_SUSTENTAÇÃO_28-10-26.pdf",
+   "stats": {
+    "cards": 24,
+    "comments": 8,
+    "votes": 3
+   },
+   "team": "Sustentação",
+   "title": "TIAS - Sustentação 28/10",
+   "id": "sustentacao-2026-10-28"
+  },
+  {
+   "columns": [
+    {
+     "cards": [
+      {
+       "c": [],
+       "t": "O time se entrosou rapidamente",
+       "v": 1
+      },
+      {
+       "c": [],
+       "t": "Entregamos nossas demandas sem atrasos",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "Time todo muito solícito e engajado, sempre se propõem a ajudar",
+       "v": 1
+      },
+      {
+       "c": [],
+       "t": "Demandas entregas dentro do prazo. Card com bastante detalhes das demandas",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "Muito aprendizado sobre novas tarefas e regras de integrações com parceiro.",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "O projeto de estagiário esta sendo finalizado antes do tempo e não atrapalhou nas demandas do time.",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "Equipe unida para realizar correções que estao afetando o cliente.",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "Conversa P.O + Dev para passar o que foi feito na tarefa, ajuda muito a pensar nos casos de testes e tambem o entendimento correto da tarefa",
+       "v": 0
+      }
+     ],
+     "description": "",
+     "name": "O que foi bem"
+    },
+    {
+     "cards": [
+      {
+       "c": [],
+       "t": "Nessa quinzena acabamos esquecendo de colocar alguns scripts de algumas tarefas no wolverine, o que impactou diretamente no tempo de finalização dos testes.",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "O Jenkins apresentou problemas para rodar o deploy em alguns dias",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "Talvez o Code review, dar uma acelerada, para chegar mais rapido para testes",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "Melhor analise para tempo de entrega das tarefas. Algumas complexas necessitam de mais tempo para validação do que desenvolvimento.",
+       "v": 0
+      }
+     ],
+     "description": "",
+     "name": "O que podemos melhorar"
+    },
+    {
+     "cards": [
+      {
+       "c": [],
+       "t": "Faltou o Ale por 1 semana!",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "Faltou cafés, retros e reviews\n---\nPrecisamos voltar com o rito do Cafe no nosso time, acho muito importante ter esse momento para descontrairmos e conhecermos um pouco melhor",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "Faltou sorteio de livros .",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "Criar diretrizes para uso de AI.\n---\nUm treinamento para o claudinho seria uma boa!!",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "QUE FALLLLLLTA FAZ NOSSO PO... algumas tarefas vieram abertas pelos devs sem critérios de aceite, comportamento esperado, etc... E ao buscar o dev da tarefa para saber do que se trata, as vezes demoramos a ter respostas por conta de que estava \"correria\" para todos.",
+       "v": 0
+      }
+     ],
+     "description": "",
+     "name": "O que faltou"
+    },
+    {
+     "cards": [
+      {
+       "c": [
+        "Colocar na agenda ai"
+       ],
+       "t": "Voltar com cafés, retros e reviews",
+       "v": 0
+      },
+      {
+       "c": [
+        "A CASA JÁ TEM!!!",
+        "chama!!!  so oferecer a casa"
+       ],
+       "t": "Descer todo mundo do time pra Santos fazer um final de semana juntos na praia",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "Lembrar de colocar os scripts no wolverine",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "Comunicar a infra sobre problemas no jenkins, avisar o coordenador.",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "ficar de olho no code no grupo e enviar no grupo para daniel, nath e o talles",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "pensar quem seria o braço direito do P.O. que esta sempre atualizado das demandas.",
+       "v": 0
+      }
+     ],
+     "description": "",
+     "name": "O que esperamos"
+    },
+    {
+     "cards": [
+      {
+       "c": [],
+       "t": "time lindo",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "Todos do time correram para entregar tudo o que foi pedido, isso merece um parabens enorme pois todos se entregaram a mais do horario quando foi pedido",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "QA´s trabalhando forte para entregas emergenciais, inclusive aos finais de semanas",
+       "v": 1
+      },
+      {
+       "c": [],
+       "t": "Samuel Castilho, pois ele está me ajudando quando eu preciso de alguma sobre o projeto",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "O time todo pelo comprometimento e engajamento",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "Time Todo Engajado nas tarefas da Democrata ! ( tarefas que nao eram simples) .",
+       "v": 0
+      },
+      {
+       "c": [],
+       "t": "Comprometimento de todos os integrantes do time, desde de devs ate QA.",
+       "v": 0
+      }
+     ],
+     "description": "",
+     "name": "Quem merece um elogio?"
+    }
+   ],
+   "createdAt": "2026-11-23T12:00:00.000Z",
+   "createdBy": "claude",
+   "date": "2026-11-10",
+   "insights": {
+    "at": "2026-11-23T12:00:00.000Z",
+    "by": "claude",
+    "elogios": [
+     "QAs nas entregas emergenciais, inclusive aos fins de semana",
+     "Samuel Castilho ajudando quem precisa no projeto",
+     "Time todo engajado nas tarefas da Democrata"
+    ],
+    "resumo": "Quinzena de entregas no prazo, com o time entrosado e muito engajado, e QAs cobrindo entregas emergenciais até no fim de semana. Os problemas foram operacionais: scripts esquecidos no Wolverine, Jenkins instável, code review lento e tarefas abertas sem critério de aceite na ausência do P.O. O time também sente falta dos rituais.",
+    "temas": [
+     {
+      "detalhe": "Demandas entregues sem atraso, com cards detalhados.",
+      "tema": "Entregas no prazo e engajamento",
+      "tom": "positivo"
+     },
+     {
+      "detalhe": "Scripts esquecidos atrasaram a finalização dos testes.",
+      "tema": "Scripts no Wolverine",
+      "tom": "critico"
+     },
+     {
+      "detalhe": "Tarefas abertas pelos devs sem comportamento esperado.",
+      "tema": "Ausência do P.O. e critérios de aceite",
+      "tom": "critico"
+     },
+     {
+      "detalhe": "Deploy falhando em alguns dias.",
+      "tema": "Jenkins instável",
+      "tom": "atencao"
+     },
+     {
+      "detalhe": "Atrasa a chegada das tarefas aos testes.",
+      "tema": "Code review lento",
+      "tom": "atencao"
+     },
+     {
+      "detalhe": "Falta de café, retro e review.",
+      "tema": "Rituais do time",
+      "tom": "atencao"
+     },
+     {
+      "detalhe": "QAs em fins de semana: reconhecer, mas evitar que vire rotina.",
+      "tema": "Esforço fora do horário",
+      "tom": "atencao"
+     }
+    ]
+   },
+   "source": "EasyRetro_-_Wakanda__1011.xlsx",
+   "stats": {
+    "cards": 30,
+    "comments": 3,
+    "votes": 3
+   },
+   "team": "Wakanda",
+   "title": "Wakanda 10/11",
+   "id": "wakanda-2026-11-10"
+  }
+ ],
+ "actions": [
+  {
+   "createdAt": "2026-11-23T12:00:00.000Z",
+   "createdBy": "claude",
+   "detail": "Transformar a orientação da Sandrinha na tarefa do Motor Fiscal em uma página curta na wiki.",
+   "due": "",
+   "origin": [
+    "Sandrinha sendo meu guia na tarefa do Motor Fiscal"
+   ],
+   "owner": "",
+   "priority": "baixa",
+   "retroId": "condado-2026-11",
+   "source": "ia",
+   "state": "sugerida",
+   "team": "Condado",
+   "title": "Registrar na wiki o conhecimento do Motor Fiscal",
+   "updates": [],
+   "id": "condado-2026-11-a1",
+   "tags": [
+    "conhecimento"
+   ]
+  },
+  {
+   "createdAt": "2026-11-23T12:00:00.000Z",
+   "createdBy": "claude",
+   "detail": "Na planning, considerar tempo de aprendizado em tarefas de assunto novo.",
+   "due": "",
+   "origin": [
+    "Aprendi que nem sempre vou conseguir finalizar as tarefas com a rapidez que desejo"
+   ],
+   "owner": "",
+   "priority": "baixa",
+   "retroId": "condado-2026-11",
+   "source": "ia",
+   "state": "sugerida",
+   "team": "Condado",
+   "title": "Reservar tempo de aprendizado nas estimativas de tarefas novas",
+   "updates": [],
+   "id": "condado-2026-11-a2",
+   "tags": [
+    "processo"
+   ]
+  },
+  {
+   "createdAt": "2026-11-23T12:00:00.000Z",
+   "createdBy": "claude",
+   "detail": "Lançar na própria task toda hora adicional da sprint, para o próximo planejamento usar dados reais.",
+   "due": "",
+   "origin": [
+    "Identificação de horas adicionais dentro da sprint",
+    "Colocar nas tasks uso de horas adicionais"
+   ],
+   "owner": "",
+   "priority": "alta",
+   "recurring": true,
+   "retroId": "ctc-2026-11-09",
+   "source": "ia",
+   "state": "sugerida",
+   "team": "CTC",
+   "title": "Registrar horas adicionais nas tasks",
+   "updates": [],
+   "id": "ctc-2026-11-09-a1",
+   "tags": [
+    "processo"
+   ]
+  },
+  {
+   "createdAt": "2026-11-23T12:00:00.000Z",
+   "createdBy": "claude",
+   "detail": "Olhar o painel na daily duas vezes por semana e sinalizar tarefas perto de estourar o SLA.",
+   "due": "",
+   "origin": [
+    "Mais atenção ao SLA das sustentações",
+    "Usar o painel de SLA do David"
+   ],
+   "owner": "",
+   "priority": "alta",
+   "recurring": true,
+   "retroId": "ctc-2026-11-09",
+   "source": "ia",
+   "state": "sugerida",
+   "team": "CTC",
+   "title": "Acompanhar o SLA das sustentações pelo painel do David",
+   "updates": [],
+   "id": "ctc-2026-11-09-a2",
+   "tags": [
+    "processo"
+   ]
+  },
+  {
+   "createdAt": "2026-11-23T12:00:00.000Z",
+   "createdBy": "claude",
+   "detail": "Separar e preparar a apresentação das tarefas na véspera da review.",
+   "due": "",
+   "origin": [
+    "Tirar um tempo pra organizar a apresentação da review"
+   ],
+   "owner": "",
+   "priority": "media",
+   "retroId": "ctc-2026-11-09",
+   "source": "ia",
+   "state": "sugerida",
+   "team": "CTC",
+   "title": "Deixar as tarefas da review prontas um dia antes",
+   "updates": [],
+   "id": "ctc-2026-11-09-a3",
+   "tags": [
+    "ritos"
+   ]
+  },
+  {
+   "createdAt": "2026-11-23T12:00:00.000Z",
+   "createdBy": "claude",
+   "detail": "QA mostra os cenários de teste ao dev antes da implementação, focando em prevenir defeitos.",
+   "due": "",
+   "origin": [
+    "Apresentação dos testes para o DEV",
+    "Mais foco na prevenção de defeitos"
+   ],
+   "owner": "",
+   "priority": "media",
+   "retroId": "ctc-2026-11-09",
+   "source": "ia",
+   "state": "sugerida",
+   "team": "CTC",
+   "title": "Apresentar o planejamento de teste ao dev no início da tarefa",
+   "updates": [],
+   "id": "ctc-2026-11-09-a4",
+   "tags": [
+    "testes"
+   ]
+  },
+  {
+   "createdAt": "2026-11-23T12:00:00.000Z",
+   "createdBy": "claude",
+   "detail": "Antes de refinar, confirmar com o cliente o problema que a demanda resolve.",
+   "due": "",
+   "origin": [
+    "Levantar do cliente o foco real da demanda"
+   ],
+   "owner": "",
+   "priority": "media",
+   "retroId": "ctc-2026-11-09",
+   "source": "ia",
+   "state": "sugerida",
+   "team": "CTC",
+   "title": "Levantar com o cliente o foco real das demandas",
+   "updates": [],
+   "id": "ctc-2026-11-09-a5",
+   "tags": [
+    "comunicacao"
+   ]
+  },
+  {
+   "createdAt": "2026-11-23T12:00:00.000Z",
+   "createdBy": "claude",
+   "detail": "Cronometrar as cerimônias e anotar o que ficar para depois.",
+   "due": "",
+   "origin": [
+    "Realizar os ritos dentro do timebox esperado"
+   ],
+   "owner": "",
+   "priority": "baixa",
+   "recurring": true,
+   "retroId": "ctc-2026-11-09",
+   "source": "ia",
+   "state": "sugerida",
+   "team": "CTC",
+   "title": "Usar timer visível para respeitar o timebox dos ritos",
+   "updates": [],
+   "id": "ctc-2026-11-09-a6",
+   "tags": [
+    "ritos"
+   ]
+  },
+  {
+   "createdAt": "2026-11-23T12:00:00.000Z",
+   "createdBy": "claude",
+   "detail": "Checklist com conferência prévia e backup antes de atualizar bases de teste.",
+   "due": "",
+   "origin": [
+    "A atualização incorreta do banco gerou retrabalho",
+    "Melhorar o processo de atualização dos bancos"
+   ],
+   "owner": "",
+   "priority": "alta",
+   "retroId": "ctc-2026-11-18",
+   "source": "ia",
+   "state": "sugerida",
+   "team": "CTC",
+   "title": "Criar procedimento de atualização de banco com conferência e backup",
+   "updates": [],
+   "id": "ctc-2026-11-18-a1",
+   "tags": [
+    "banco-de-dados"
+   ]
+  },
+  {
+   "createdAt": "2026-11-23T12:00:00.000Z",
+   "createdBy": "claude",
+   "detail": "Listar fluxos críticos, necessidades e esforço para uma primeira suíte de regressão.",
+   "due": "",
+   "origin": [
+    "Montar as necessidades em forma de plano para implantar teste de regressão",
+    "Pequenas alterações podem gerar impactos inesperados"
+   ],
+   "owner": "",
+   "priority": "alta",
+   "retroId": "ctc-2026-11-18",
+   "source": "ia",
+   "state": "sugerida",
+   "team": "CTC",
+   "title": "Montar o plano de implantação de teste de regressão",
+   "updates": [],
+   "id": "ctc-2026-11-18-a2",
+   "tags": [
+    "testes"
+   ]
+  },
+  {
+   "createdAt": "2026-11-23T12:00:00.000Z",
+   "createdBy": "claude",
+   "detail": "Combinar com o suporte um campo obrigatório com o caminho que levou ao erro.",
+   "due": "",
+   "origin": [
+    "Como a pessoa do suporte chegou até o erro? Ter essa informação na tarefa."
+   ],
+   "owner": "",
+   "priority": "media",
+   "retroId": "ctc-2026-11-18",
+   "source": "ia",
+   "state": "sugerida",
+   "team": "CTC",
+   "title": "Pedir ao suporte o passo a passo até o erro nas tarefas",
+   "updates": [],
+   "id": "ctc-2026-11-18-a3",
+   "tags": [
+    "processo",
+    "comunicacao"
+   ]
+  },
+  {
+   "createdAt": "2026-11-23T12:00:00.000Z",
+   "createdBy": "claude",
+   "detail": "Gerar massa e parâmetros por script para recompor a base se ela for atualizada por acidente.",
+   "due": "",
+   "origin": [
+    "Criar algo para gerar massa e ajustar parâmetro fora do banco"
+   ],
+   "owner": "",
+   "priority": "media",
+   "retroId": "ctc-2026-11-18",
+   "source": "ia",
+   "state": "sugerida",
+   "team": "CTC",
+   "title": "Criar massa de teste e parâmetros fora do banco",
+   "updates": [],
+   "id": "ctc-2026-11-18-a4",
+   "tags": [
+    "testes",
+    "banco-de-dados"
+   ]
+  },
+  {
+   "createdAt": "2026-11-23T12:00:00.000Z",
+   "createdBy": "claude",
+   "detail": "Mapear o que o Rafa atendia no suporte e quem assume cada tema.",
+   "due": "",
+   "origin": [
+    "Saída do Rafa do Suporte"
+   ],
+   "owner": "",
+   "priority": "media",
+   "retroId": "ctc-2026-11-18",
+   "source": "ia",
+   "state": "sugerida",
+   "team": "CTC",
+   "title": "Planejar a transição de conhecimento com a saída do Rafa",
+   "updates": [],
+   "id": "ctc-2026-11-18-a5",
+   "tags": [
+    "conhecimento",
+    "pessoas"
+   ]
+  },
+  {
+   "createdAt": "2026-11-23T12:00:00.000Z",
+   "createdBy": "claude",
+   "detail": "Repetir o formato da formação sobre SPED e Sintegra com outros temas.",
+   "due": "",
+   "origin": [
+    "Ótima formação com a Larissa, precisamos fazer mais reuniões nesse estilo"
+   ],
+   "owner": "",
+   "priority": "baixa",
+   "retroId": "ctc-2026-11-18",
+   "source": "ia",
+   "state": "sugerida",
+   "team": "CTC",
+   "title": "Agendar formações internas mensais",
+   "updates": [],
+   "id": "ctc-2026-11-18-a6",
+   "tags": [
+    "conhecimento"
+   ]
+  },
+  {
+   "createdAt": "2026-11-23T12:00:00.000Z",
+   "createdBy": "claude",
+   "detail": "Combinar quem pode antecipar versão e o que sai do planejamento quando isso acontece; registrar o impacto quando a prioridade mudar, como na versão 193.",
+   "due": "",
+   "origin": [
+    "Entregas de pastelaria, versões que sempre são urgentes",
+    "Falar com o P.O."
+   ],
+   "owner": "Eloi",
+   "priority": "alta",
+   "retroId": "inovacao-2026-11-05",
+   "source": "ia",
+   "state": "sugerida",
+   "team": "Inovação",
+   "title": "Alinhar com o P.O. um critério para versões urgentes",
+   "updates": [],
+   "id": "inovacao-2026-11-05-a1",
+   "tags": [
+    "processo",
+    "comunicacao"
+   ]
+  },
+  {
+   "createdAt": "2026-11-23T12:00:00.000Z",
+   "createdBy": "claude",
+   "detail": "Checklist curto (requisitos, ressalvas, teste em uso real) marcado antes de dar a entrega como concluída.",
+   "due": "",
+   "origin": [
+    "Entregas pseudo terminadas (flavours e pipe)"
+   ],
+   "owner": "Eloi e Igor",
+   "priority": "alta",
+   "retroId": "inovacao-2026-11-05",
+   "source": "ia",
+   "state": "sugerida",
+   "team": "Inovação",
+   "title": "Criar uma definição de pronto com checklist de requisitos",
+   "updates": [],
+   "id": "inovacao-2026-11-05-a2",
+   "tags": [
+    "desenvolvimento",
+    "testes"
+   ]
+  },
+  {
+   "createdAt": "2026-11-23T12:00:00.000Z",
+   "createdBy": "claude",
+   "detail": "Listar o que ficou pendente nessas entregas e planejar no backlog.",
+   "due": "",
+   "origin": [
+    "Débitos Técnicos (Eloi e Igor)"
+   ],
+   "owner": "Eloi e Igor",
+   "priority": "media",
+   "retroId": "inovacao-2026-11-05",
+   "source": "ia",
+   "state": "sugerida",
+   "team": "Inovação",
+   "title": "Levantar os débitos técnicos de flavours e pipe",
+   "updates": [],
+   "id": "inovacao-2026-11-05-a3",
+   "tags": [
+    "desenvolvimento"
+   ]
+  },
+  {
+   "createdAt": "2026-11-23T12:00:00.000Z",
+   "createdBy": "claude",
+   "detail": "Passar pelo board na daily e atualizar estados e responsáveis.",
+   "due": "",
+   "origin": [
+    "Abrir o board durante a daily e organizar. (eloi e igor)"
+   ],
+   "owner": "Eloi e Igor",
+   "priority": "media",
+   "recurring": true,
+   "retroId": "inovacao-2026-11-05",
+   "source": "ia",
+   "state": "sugerida",
+   "team": "Inovação",
+   "title": "Abrir o board durante a daily e organizar as tarefas",
+   "updates": [],
+   "id": "inovacao-2026-11-05-a4",
+   "tags": [
+    "ritos"
+   ]
+  },
+  {
+   "createdAt": "2026-11-23T12:00:00.000Z",
+   "createdBy": "claude",
+   "detail": "Incluir na abertura da demanda o problema do cliente e quem pediu, para dar transparência ao caminho cliente, gerência e time.",
+   "due": "",
+   "origin": [
+    "Ausência da ponte de comunicação cliente, gerência e time"
+   ],
+   "owner": "",
+   "priority": "media",
+   "retroId": "inovacao-2026-11-05",
+   "source": "ia",
+   "state": "sugerida",
+   "team": "Inovação",
+   "title": "Registrar a necessidade real do cliente em cada demanda",
+   "updates": [],
+   "id": "inovacao-2026-11-05-a5",
+   "tags": [
+    "comunicacao",
+    "processo"
+   ]
+  },
+  {
+   "createdAt": "2026-11-23T12:00:00.000Z",
+   "createdBy": "claude",
+   "detail": "Terminar o mapeamento iniciado após a saída do Jarvis e deixar em local acessível ao time.",
+   "due": "",
+   "origin": [
+    "Jarvis saiu e começamos a mapear os clientes e suas versões"
+   ],
+   "owner": "",
+   "priority": "baixa",
+   "retroId": "inovacao-2026-11-05",
+   "source": "ia",
+   "state": "sugerida",
+   "team": "Inovação",
+   "title": "Concluir o mapa de clientes e versões",
+   "updates": [],
+   "id": "inovacao-2026-11-05-a6",
+   "tags": [
+    "conhecimento"
+   ]
+  },
+  {
+   "createdAt": "2026-11-23T12:00:00.000Z",
+   "createdBy": "claude",
+   "detail": "Levantar horas de teste feitas por devs, horas extras do QA e empréstimos a outros times nas últimas 2 sprints, e apresentar com a proposta de um QA híbrido.",
+   "due": "",
+   "origin": [
+    "Falta de QA / Não deve dev testar tarefa",
+    "O QA precisar ficar até as 21h testando tarefas"
+   ],
+   "owner": "",
+   "priority": "alta",
+   "retroId": "sustentacao-2026-10-28",
+   "source": "ia",
+   "state": "sugerida",
+   "team": "Sustentação",
+   "title": "Levar à liderança a proposta de reforço de QA na sustentação",
+   "updates": [],
+   "id": "sustentacao-2026-10-28-a1",
+   "tags": [
+    "testes",
+    "pessoas"
+   ]
+  },
+  {
+   "createdAt": "2026-11-23T12:00:00.000Z",
+   "createdBy": "claude",
+   "detail": "Definir quando o QA pode ser cedido, por quanto tempo e quem cobre os testes da sustentação nesse período. Registrar a regra na wiki.",
+   "due": "",
+   "origin": [
+    "NÃO SE DEVE EMPRESTAR QA PARA OUTRO TIME",
+    "Pessoal aloca o nosso QA para tarefas que não têm relação com o time"
+   ],
+   "owner": "",
+   "priority": "alta",
+   "retroId": "sustentacao-2026-10-28",
+   "source": "ia",
+   "state": "sugerida",
+   "team": "Sustentação",
+   "title": "Combinar regra para empréstimo do QA a outros times",
+   "updates": [],
+   "id": "sustentacao-2026-10-28-a2",
+   "tags": [
+    "testes",
+    "processo"
+   ]
+  },
+  {
+   "createdAt": "2026-11-23T12:00:00.000Z",
+   "createdBy": "claude",
+   "detail": "Abrir a retro com esta lista: o que foi feito, o que está em andamento e o que foi descartado, com o motivo.",
+   "due": "",
+   "origin": [
+    "Ficar confuso com as ações da retro, sem retorno nem transparência",
+    "Eloi está nos trazendo poucos feedbacks"
+   ],
+   "owner": "Eloi",
+   "priority": "alta",
+   "recurring": true,
+   "retroId": "sustentacao-2026-10-28",
+   "source": "ia",
+   "state": "sugerida",
+   "team": "Sustentação",
+   "title": "Revisar o status das ações no início de cada retro",
+   "updates": [],
+   "id": "sustentacao-2026-10-28-a3",
+   "tags": [
+    "ritos",
+    "comunicacao"
+   ]
+  },
+  {
+   "createdAt": "2026-11-23T12:00:00.000Z",
+   "createdBy": "claude",
+   "detail": "Propor ao DM&A um prazo de retorno e um campo de prioridade amarrado à task original; medir o tempo de retorno por 2 sprints.",
+   "due": "",
+   "origin": [
+    "Demora no retorno de Query Reviews",
+    "DMA depende da SLA deles"
+   ],
+   "owner": "",
+   "priority": "media",
+   "retroId": "sustentacao-2026-10-28",
+   "source": "ia",
+   "state": "sugerida",
+   "team": "Sustentação",
+   "title": "Acordar SLA e prioridade das query reviews com o DM&A",
+   "updates": [],
+   "id": "sustentacao-2026-10-28-a4",
+   "tags": [
+    "banco-de-dados",
+    "processo"
+   ]
+  },
+  {
+   "createdAt": "2026-11-23T12:00:00.000Z",
+   "createdBy": "claude",
+   "detail": "Apresentar em 15 minutos a página de skills compartilhadas da wiki e combinar que todos usem a mesma instrução e modelo antes do PR.",
+   "due": "",
+   "origin": [
+    "Passarem as skills de code review com IA direto para os devs"
+   ],
+   "owner": "",
+   "priority": "media",
+   "retroId": "sustentacao-2026-10-28",
+   "source": "ia",
+   "state": "sugerida",
+   "team": "Sustentação",
+   "title": "Divulgar as skills de IA e o subagente de code review para todos os devs",
+   "updates": [],
+   "id": "sustentacao-2026-10-28-a5",
+   "tags": [
+    "ia",
+    "conhecimento"
+   ]
+  },
+  {
+   "createdAt": "2026-11-23T12:00:00.000Z",
+   "createdBy": "claude",
+   "detail": "Reforçar que script só sai em versão mensal e conferir no fechamento se está aplicado em todos os clientes.",
+   "due": "",
+   "origin": [
+    "Scripts que existem no código, mas não estão aplicados em todos os clientes"
+   ],
+   "owner": "",
+   "priority": "media",
+   "retroId": "sustentacao-2026-10-28",
+   "source": "ia",
+   "state": "sugerida",
+   "team": "Sustentação",
+   "title": "Incluir conferência de scripts no checklist de fechamento de versão",
+   "updates": [],
+   "id": "sustentacao-2026-10-28-a6",
+   "tags": [
+    "banco-de-dados",
+    "processo"
+   ]
+  },
+  {
+   "createdAt": "2026-11-23T12:00:00.000Z",
+   "createdBy": "claude",
+   "detail": "Garantir a presença de quem decide sobre QA e prioridades para ouvir as dores direto do time.",
+   "due": "",
+   "origin": [
+    "Não ter nosso líder participando da retro, vendo nossas dores"
+   ],
+   "owner": "",
+   "priority": "media",
+   "retroId": "sustentacao-2026-10-28",
+   "source": "ia",
+   "state": "sugerida",
+   "team": "Sustentação",
+   "title": "Convidar a liderança para a próxima retro",
+   "updates": [],
+   "id": "sustentacao-2026-10-28-a7",
+   "tags": [
+    "ritos",
+    "comunicacao"
+   ]
+  },
+  {
+   "createdAt": "2026-11-23T12:00:00.000Z",
+   "createdBy": "claude",
+   "detail": "Antes de mandar para teste, confirmar que os scripts da tarefa estão no Wolverine.",
+   "due": "",
+   "origin": [
+    "Esquecemos de colocar alguns scripts no Wolverine",
+    "Lembrar de colocar os scripts no Wolverine"
+   ],
+   "owner": "",
+   "priority": "alta",
+   "retroId": "wakanda-2026-11-10",
+   "source": "ia",
+   "state": "sugerida",
+   "team": "Wakanda",
+   "title": "Incluir conferência de scripts do Wolverine no checklist da tarefa",
+   "updates": [],
+   "id": "wakanda-2026-11-10-a1",
+   "tags": [
+    "banco-de-dados",
+    "testes"
+   ]
+  },
+  {
+   "createdAt": "2026-11-23T12:00:00.000Z",
+   "createdBy": "claude",
+   "detail": "Tarefa aberta por dev só entra com comportamento esperado e critério de aceite descritos.",
+   "due": "",
+   "origin": [
+    "Tarefas vieram abertas pelos devs sem critérios de aceite"
+   ],
+   "owner": "",
+   "priority": "alta",
+   "retroId": "wakanda-2026-11-10",
+   "source": "ia",
+   "state": "sugerida",
+   "team": "Wakanda",
+   "title": "Exigir critério de aceite antes de a tarefa entrar na sprint",
+   "updates": [],
+   "id": "wakanda-2026-11-10-a2",
+   "tags": [
+    "processo",
+    "desenvolvimento"
+   ]
+  },
+  {
+   "createdAt": "2026-11-23T12:00:00.000Z",
+   "createdBy": "claude",
+   "detail": "Escolher quem fica atualizado das demandas e responde dúvidas na ausência do P.O.",
+   "due": "",
+   "origin": [
+    "Pensar quem seria o braço direito do P.O."
+   ],
+   "owner": "",
+   "priority": "media",
+   "retroId": "wakanda-2026-11-10",
+   "source": "ia",
+   "state": "sugerida",
+   "team": "Wakanda",
+   "title": "Definir o braço direito do P.O.",
+   "updates": [],
+   "id": "wakanda-2026-11-10-a3",
+   "tags": [
+    "pessoas",
+    "processo"
+   ]
+  },
+  {
+   "createdAt": "2026-11-23T12:00:00.000Z",
+   "createdBy": "claude",
+   "detail": "Registrar as falhas de deploy com data e avisar o coordenador.",
+   "due": "",
+   "origin": [
+    "O Jenkins apresentou problemas para rodar o deploy",
+    "Comunicar a infra sobre problemas no Jenkins"
+   ],
+   "owner": "",
+   "priority": "media",
+   "retroId": "wakanda-2026-11-10",
+   "source": "ia",
+   "state": "sugerida",
+   "team": "Wakanda",
+   "title": "Reportar à infra os problemas do Jenkins",
+   "updates": [],
+   "id": "wakanda-2026-11-10-a4",
+   "tags": [
+    "infraestrutura"
+   ]
+  },
+  {
+   "createdAt": "2026-11-23T12:00:00.000Z",
+   "createdBy": "claude",
+   "detail": "Definir um prazo (por exemplo, meio período) e avisar no grupo Daniel, Nath e Talles quando houver PR esperando.",
+   "due": "",
+   "origin": [
+    "Talvez o code review, dar uma acelerada",
+    "Ficar de olho no code no grupo"
+   ],
+   "owner": "",
+   "priority": "media",
+   "retroId": "wakanda-2026-11-10",
+   "source": "ia",
+   "state": "sugerida",
+   "team": "Wakanda",
+   "title": "Combinar um prazo para o code review",
+   "updates": [],
+   "id": "wakanda-2026-11-10-a5",
+   "tags": [
+    "desenvolvimento"
+   ]
+  },
+  {
+   "createdAt": "2026-11-23T12:00:00.000Z",
+   "createdBy": "claude",
+   "detail": "Marcar os rituais recorrentes no calendário do time.",
+   "due": "",
+   "origin": [
+    "Voltar com cafés, retros e reviews — Colocar na agenda"
+   ],
+   "owner": "",
+   "priority": "media",
+   "retroId": "wakanda-2026-11-10",
+   "source": "ia",
+   "state": "sugerida",
+   "team": "Wakanda",
+   "title": "Voltar com café, retro e review na agenda",
+   "updates": [],
+   "id": "wakanda-2026-11-10-a6",
+   "tags": [
+    "ritos"
+   ]
+  },
+  {
+   "createdAt": "2026-11-23T12:00:00.000Z",
+   "createdBy": "claude",
+   "detail": "Escrever um guia curto de uso de IA e marcar um treinamento.",
+   "due": "",
+   "origin": [
+    "Criar diretrizes para uso de AI",
+    "Um treinamento para o claudinho"
+   ],
+   "owner": "",
+   "priority": "baixa",
+   "retroId": "wakanda-2026-11-10",
+   "source": "ia",
+   "state": "sugerida",
+   "team": "Wakanda",
+   "title": "Criar diretrizes de uso de IA para o time",
+   "updates": [],
+   "id": "wakanda-2026-11-10-a7",
+   "tags": [
+    "ia"
+   ]
+  }
+ ]
+}

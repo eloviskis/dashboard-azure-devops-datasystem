@@ -1,0 +1,1220 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Retro em ação</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Exo+2:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#EEF3F7; --surface:#FFFFFF; --surface-2:#F4F8FB; --ink:#002C4D; --muted:#4C6880; --line:#D2DEE8;
+  --accent:#0078AA; --on-accent:#FFFFFF; --primary:#5ABC36; --on-primary:#002C4D; --navy:#002C4D;
+  --ok:#2E8A1E; --warn:#A75A06; --bad:#B3261E;
+  --n0:#FFE38A; --n1:#C6EBB4; --n2:#B8E2F4; --n3:#BDEBE5; --n4:#F7CBA9; --note-ink:#14273A;
+  --ts:65%; --tl:90%; --tk:24%;
+  --shadow:0 1px 0 rgba(0,44,77,.06), 0 8px 18px -12px rgba(0,44,77,.4);
+  color-scheme:light;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#002C4D; --surface:#06375C; --surface-2:#033154; --ink:#EAF2F8; --muted:#9DB8CC; --line:#1B4A6E;
+    --accent:#4FB6E6; --on-accent:#00213B; --primary:#5ABC36; --on-primary:#002C4D; --navy:#00223D;
+    --ok:#7AD45A; --warn:#F2A541; --bad:#FF8A80;
+    --n0:#E8CB6A; --n1:#A6D893; --n2:#94CBE4; --n3:#9ED6CF; --n4:#E3AE86;
+    --ts:28%; --tl:24%; --tk:86%;
+    --shadow:0 1px 0 rgba(0,0,0,.3), 0 10px 20px -12px rgba(0,0,0,.7);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#002C4D; --surface:#06375C; --surface-2:#033154; --ink:#EAF2F8; --muted:#9DB8CC; --line:#1B4A6E;
+  --accent:#4FB6E6; --on-accent:#00213B; --primary:#5ABC36; --on-primary:#002C4D; --navy:#00223D;
+  --ok:#7AD45A; --warn:#F2A541; --bad:#FF8A80;
+  --n0:#E8CB6A; --n1:#A6D893; --n2:#94CBE4; --n3:#9ED6CF; --n4:#E3AE86;
+  --ts:28%; --tl:24%; --tk:86%;
+  --shadow:0 1px 0 rgba(0,0,0,.3), 0 10px 20px -12px rgba(0,0,0,.7);
+  color-scheme:dark;
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--navy)}
+h1,h2,h3{font-family:"Exo 2","Atkinson Hyperlegible",system-ui,sans-serif;line-height:1.15;margin:0}
+h1{font-size:clamp(1.7rem,3.2vw,2.3rem);font-weight:800;letter-spacing:-.01em}
+h2{font-size:1.25rem;font-weight:800}
+h3{font-size:1.02rem;font-weight:600}
+p{margin:0}
+a{color:var(--accent)}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.wrap{max-width:1260px;margin:0 auto;padding:0 20px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* header */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--navy);color:#fff;border-bottom:3px solid var(--primary);overflow:hidden}
+.waves{position:absolute;right:-30px;top:-20px;width:min(620px,60vw);height:120px;pointer-events:none;opacity:.5}
+.top-in{position:relative;z-index:1;display:flex;align-items:center;gap:20px;min-height:68px;flex-wrap:wrap;padding-top:10px;padding-bottom:10px}
+.brand{font-family:"Exo 2",system-ui,sans-serif;font-weight:800;font-size:1.15rem;color:#fff;text-decoration:none;display:flex;align-items:center;gap:14px}
+.brand img{height:40px;width:auto;display:block}
+.brand-sep{width:1px;height:30px;background:rgba(255,255,255,.35)}
+#nav{display:flex;gap:4px;flex:1;overflow-x:auto}
+#nav a{padding:8px 14px;border-radius:999px;color:rgba(255,255,255,.75);text-decoration:none;font-weight:700;white-space:nowrap}
+#nav a:hover{color:#fff;background:rgba(255,255,255,.1)}
+#nav a[aria-current="page"]{background:var(--primary);color:var(--on-primary)}
+#nav a:focus-visible,.top .btn:focus-visible{outline-color:#fff}
+.badge{display:inline-grid;place-items:center;min-width:20px;height:20px;padding:0 6px;margin-left:6px;border-radius:999px;background:var(--primary);color:var(--on-primary);font-size:.75rem}
+#nav a[aria-current="page"] .badge{background:var(--navy);color:#fff}
+
+/* buttons & fields */
+.btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--surface);padding:8px 14px;border-radius:8px;font-weight:700;cursor:pointer;white-space:nowrap}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.ghost{background:transparent}
+.btn.danger{color:var(--bad);border-color:transparent;background:transparent}
+.btn.danger:hover{border-color:var(--bad)}
+.btn[disabled]{opacity:.55;cursor:default}
+.fld{display:flex;flex-direction:column;gap:4px;font-size:.85rem;color:var(--muted);min-width:0}
+.fld > span{font-weight:700}
+input[type=text],input[type=date],input:not([type]),select,textarea{width:100%;border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:8px 10px;color:var(--ink);font-size:.95rem}
+textarea{resize:vertical;line-height:1.45}
+input::placeholder,textarea::placeholder{color:var(--muted);opacity:.8}
+
+/* bar */
+#bar{padding-top:18px}
+.filters{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:5px 12px;cursor:pointer;font-weight:700;font-size:.9rem;color:var(--muted)}
+.chip[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--surface)}
+.filters .grow{flex:1}
+.filters select,.filters input{width:auto;min-width:180px}
+
+main{padding-top:22px;padding-bottom:64px}
+.head{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:22px}
+.head > div{flex:1;min-width:240px}
+.sub{color:var(--muted);margin-top:6px}
+.count{display:inline-block;margin-left:8px;font-family:"Atkinson Hyperlegible",system-ui,sans-serif;font-size:.85rem;font-weight:700;color:var(--muted)}
+.hint{color:var(--muted);font-size:.93rem}
+.notice{border:1px solid var(--line);background:var(--surface);border-left:4px solid var(--warn);padding:10px 14px;border-radius:8px;margin-bottom:16px}
+.empty{border:2px dashed var(--line);border-radius:12px;padding:36px 24px;text-align:center;color:var(--muted)}
+.empty strong{display:block;color:var(--ink);font-size:1.1rem;margin-bottom:6px}
+.empty .btn{margin-top:14px}
+
+/* tags */
+.tag{--h:220;display:inline-block;padding:1px 9px;border-radius:999px;font-size:.78rem;font-weight:700;background:hsl(var(--h) var(--ts) var(--tl));color:hsl(var(--h) 45% var(--tk));white-space:nowrap}
+.rlink{font-size:.82rem;color:var(--muted)}
+.by{font-size:.78rem;color:var(--muted)}
+
+/* validation queue */
+.validate{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px;margin-bottom:28px}
+.sec-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.sec-head h2{margin-right:auto}
+.sec-head .hint{flex-basis:100%}
+.sug-list{display:grid;gap:14px}
+.sug{border:1px solid var(--line);border-radius:12px;padding:14px 16px;background:var(--surface-2);display:grid;gap:10px;border-left:5px solid var(--line)}
+.sug.pri-alta{border-left-color:var(--bad)} .sug.pri-media{border-left-color:var(--warn)}
+.sug-meta{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.sug-title{font-weight:700;font-size:1.05rem}
+.sug-row{display:grid;grid-template-columns:minmax(160px,1.3fr) minmax(230px,1.3fr) minmax(110px,.7fr) auto;gap:10px;align-items:end}
+.sug-btns{display:flex;gap:8px}
+.sug-ro h3{font-size:1.05rem}
+.origins{display:flex;flex-wrap:wrap;gap:8px}
+.mini-note{background:var(--n0);color:var(--note-ink);font-size:.85rem;padding:6px 10px;border-radius:2px 2px 8px 2px;max-width:100%;box-shadow:var(--shadow);white-space:pre-line}
+
+/* kanban */
+.board{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;align-items:stretch}
+.lane{background:var(--surface-2);border:1px solid var(--line);border-radius:14px;padding:14px;min-height:220px;transition:border-color .15s,background .15s}
+.lane.over{border:2px dashed var(--accent);padding:13px}
+.lane-hint{font-size:.82rem;color:var(--muted);margin:-6px 0 12px}
+.items li{display:flex;flex-direction:column}
+.items li[draggable="true"]{cursor:grab}
+.items li.dragging{opacity:.45}
+.item-acts{display:flex;gap:6px;justify-content:flex-end;margin-top:6px}
+.btn.sm{padding:4px 10px;font-size:.82rem;border-radius:6px}
+.due-wrap{display:flex;gap:6px}
+.due-wrap input{flex:1;min-width:0}
+.due-wrap input:disabled{opacity:.45}
+.rec{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:0 10px;font-weight:700;font-size:.82rem;color:var(--muted);cursor:pointer;white-space:nowrap}
+.rec:hover{border-color:var(--muted)}
+.rec[aria-pressed="true"]{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.recur{font-weight:700;color:var(--accent)}
+.ttag{--h:200;display:inline-flex;align-items:center;gap:5px;padding:1px 8px;border-radius:4px;font-size:.76rem;font-weight:700;border:1px solid hsl(var(--h) 55% 45% / .6);color:hsl(var(--h) 55% var(--tk));background:transparent;white-space:nowrap}
+.ttag::before{content:"";width:7px;height:7px;border-radius:2px;background:hsl(var(--h) 62% 50%)}
+.tpick{display:flex;flex-wrap:wrap;gap:6px}
+button.ttag{cursor:pointer;font:inherit;font-size:.8rem;font-weight:700;padding:3px 9px;border-style:dashed;color:var(--muted)}
+button.ttag[aria-pressed="true"]{border-style:solid;color:hsl(var(--h) 55% var(--tk));background:hsl(var(--h) var(--ts) var(--tl))}
+.tag-rows{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.tag-rows li{display:grid;grid-template-columns:1fr 160px auto;gap:8px;align-items:center}
+.tbars{display:grid;gap:6px}
+.tbar{display:grid;grid-template-columns:130px 1fr 28px;gap:8px;align-items:center;font-size:.85rem}
+.tbar .bar{height:8px;border-radius:999px;background:var(--surface-2);overflow:hidden;border:1px solid var(--line)}
+.tbar .bar i{display:block;height:100%;background:hsl(var(--h) 62% 50%)}
+.tbar b{text-align:right}
+.lane-h{display:flex;align-items:center;gap:8px;font-size:1.05rem;margin-bottom:12px}
+.lane-h::before{content:"";width:10px;height:10px;border-radius:50%;background:var(--muted)}
+.lane-andamento .lane-h::before{background:var(--warn)}
+.lane-validacao .lane-h::before{background:var(--accent)}
+.lane-concluida .lane-h::before{background:var(--ok)}
+.items{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.item{width:100%;text-align:left;display:grid;gap:8px;background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--line);border-radius:10px;padding:11px 12px;cursor:pointer}
+.item:hover{border-color:var(--muted)}
+.item.pri-alta{border-left-color:var(--bad)} .item.pri-media{border-left-color:var(--warn)}
+.item-title{font-weight:700;line-height:1.3}
+.lane-concluida .item-title{text-decoration:line-through;text-decoration-color:var(--muted);color:var(--muted)}
+.item-meta{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;font-size:.83rem;color:var(--muted)}
+.owner{display:inline-flex;align-items:center;gap:6px;color:var(--ink);font-weight:700}
+.owner.none{color:var(--warn)}
+.ini{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;font-size:.68rem;font-weight:700;background:hsl(var(--h,220) var(--ts) var(--tl));color:hsl(var(--h,220) 45% var(--tk))}
+.late .due{color:var(--bad);font-weight:700}
+.lane-empty{color:var(--muted);font-size:.9rem;padding:8px 2px}
+.more{margin-top:10px}
+details.disc{margin-top:28px}
+details.disc summary{cursor:pointer;color:var(--muted);font-weight:700}
+.disc ul{list-style:none;padding:0;margin:12px 0 0;display:grid;gap:8px}
+.disc li{display:flex;gap:12px;align-items:center;justify-content:space-between;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px 12px;color:var(--muted)}
+
+/* retros list */
+.team-group{margin-bottom:28px}
+.team-group > h2{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.rrows{list-style:none;margin:0;padding:0;border:1px solid var(--line);border-radius:12px;background:var(--surface);overflow:hidden}
+.rrows li + li{border-top:1px solid var(--line)}
+.rrow{display:grid;grid-template-columns:90px minmax(0,1fr) auto;gap:16px;align-items:center;padding:14px 16px;text-decoration:none;color:var(--ink)}
+.rrow:hover{background:var(--surface-2)}
+.rdate{font-family:"Exo 2",system-ui,sans-serif;font-weight:800;font-size:1.15rem}
+.rdate.none{font-size:.85rem;color:var(--muted);font-family:inherit;font-weight:700}
+.rtitle{font-weight:700}
+.rsub{display:block;font-weight:400;color:var(--muted);font-size:.86rem}
+.rstat{font-size:.86rem;color:var(--muted);text-align:right}
+.rstat b{color:var(--ink)}
+
+/* retro detail */
+.back{display:inline-block;margin-bottom:14px;font-weight:700;text-decoration:none}
+.meta-line{display:flex;gap:10px 16px;flex-wrap:wrap;align-items:center;color:var(--muted);margin-top:8px}
+.meta-edit{display:grid;grid-template-columns:1fr 2fr 160px auto;gap:10px;align-items:end;margin:14px 0;background:var(--surface);padding:14px;border:1px solid var(--line);border-radius:12px}
+.insights{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px;margin:22px 0}
+.resumo{font-size:1.06rem;max-width:75ch;margin-bottom:16px}
+.ins-grid{display:grid;grid-template-columns:2fr 1fr;gap:24px}
+.ins-grid h3{margin-bottom:8px}
+.themes,.kudos{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.themes li{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;align-items:baseline}
+.tone{font-size:.74rem;font-weight:700;padding:1px 8px;border-radius:999px;border:1px solid currentColor}
+.tone.positivo{color:var(--ok)} .tone.atencao{color:var(--warn)} .tone.critico{color:var(--bad)}
+.themes .tdet{grid-column:2;color:var(--muted);font-size:.9rem}
+.kudos li{padding-left:14px;position:relative}
+.kudos li::before{content:"";position:absolute;left:0;top:.6em;width:6px;height:6px;border-radius:50%;background:var(--n2)}
+.busy{margin-top:12px;color:var(--accent);font-weight:700}
+.retro-board{display:flex;gap:18px;overflow-x:auto;padding:6px 2px 18px;scroll-snap-type:x proximity}
+.rcol{flex:0 0 280px;scroll-snap-align:start}
+.rcol-h{display:flex;align-items:center;gap:8px}
+.swatch{width:14px;height:14px;border-radius:2px 2px 5px 2px;flex:none}
+.rcol-d{color:var(--muted);font-size:.85rem;margin:6px 0 12px;min-height:2.4em}
+.notes{list-style:none;margin:0;padding:0;display:grid;gap:14px}
+.note{color:var(--note-ink);padding:12px 13px 10px;border-radius:2px 2px 14px 2px;box-shadow:var(--shadow);transform:rotate(var(--r,0deg))}
+.n0{background:var(--n0)} .n1{background:var(--n1)} .n2{background:var(--n2)} .n3{background:var(--n3)} .n4{background:var(--n4)}
+.note-t{white-space:pre-line;overflow-wrap:anywhere;font-size:.95rem}
+.note hr{border:0;border-top:1px dashed rgba(42,36,25,.35);margin:8px 0}
+.note-c{list-style:none;margin:8px 0 0;padding:8px 0 0;border-top:1px solid rgba(42,36,25,.18);font-size:.84rem;display:grid;gap:4px;overflow-wrap:anywhere}
+.note-c li::before{content:"↳ "}
+.note-f{display:flex;justify-content:space-between;align-items:center;margin-top:8px;gap:8px}
+.votes{font-size:.78rem;font-weight:700;background:rgba(42,36,25,.12);padding:1px 8px;border-radius:999px}
+.note-btn{border:0;background:rgba(42,36,25,.1);color:var(--note-ink);font-weight:700;font-size:.8rem;padding:4px 9px;border-radius:6px;cursor:pointer}
+.note-btn:hover{background:rgba(42,36,25,.2)}
+.ract{list-style:none;padding:0;margin:0;display:grid;gap:8px}
+.ract li button{width:100%;text-align:left;display:flex;gap:12px;justify-content:space-between;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px;cursor:pointer}
+.st{font-size:.78rem;font-weight:700;color:var(--muted);white-space:nowrap}
+.st.concluida{color:var(--ok)} .st.andamento{color:var(--warn)} .st.sugerida{color:var(--accent)} .st.validacao{color:var(--accent)}
+.danger-zone{margin-top:36px;padding-top:18px;border-top:1px solid var(--line)}
+
+/* teams */
+.teams{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:18px}
+.tcard{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px;display:grid;gap:16px;align-content:start}
+.tcard-h{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.tcard-h h2{font-size:1.5rem}
+.nums{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
+.num{background:var(--surface-2);border-radius:10px;padding:8px;min-width:0}
+.num b{display:block;font-family:"Exo 2",system-ui,sans-serif;font-size:1.5rem;line-height:1.1}
+.num span{display:block;font-size:.74rem;line-height:1.2;color:var(--muted)}
+.num.bad b{color:var(--bad)}
+.progress{height:8px;border-radius:999px;background:var(--surface-2);overflow:hidden;border:1px solid var(--line)}
+.progress i{display:block;height:100%;background:var(--ok)}
+.fb{border-top:1px solid var(--line);padding-top:14px;display:grid;gap:10px}
+.fb-msg{font-size:1rem;max-width:70ch}
+.fb ul{margin:0;padding-left:18px}
+.fb h3{font-size:.95rem}
+.fb-cols{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+
+/* dialogs */
+dialog{border:1px solid var(--line);border-radius:16px;background:var(--surface);color:var(--ink);padding:0;width:min(720px,calc(100vw - 24px));max-height:calc(100dvh - 40px);box-shadow:0 30px 80px -20px rgba(0,0,0,.5)}
+dialog::backdrop{background:rgba(12,16,24,.55)}
+.dlg{display:grid;gap:16px;padding:22px;overflow:auto;max-height:calc(100dvh - 42px)}
+.dlg-h{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.dlg-row{display:grid;grid-template-columns:1fr 1fr 1.5fr .9fr;gap:10px}
+.dlg-f{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;align-items:center;border-top:1px solid var(--line);padding-top:14px}
+.dlg-f .left{margin-right:auto}
+.seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;width:fit-content;flex-wrap:wrap}
+.seg button{border:0;background:var(--surface);padding:8px 14px;font-weight:700;cursor:pointer;color:var(--muted)}
+.seg button + button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--surface)}
+.log{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.log li{border-left:3px solid var(--line);padding:2px 0 2px 12px}
+.log .who{font-size:.8rem;color:var(--muted)}
+.drop{display:block;border:2px dashed var(--line);border-radius:12px;padding:28px;text-align:center;cursor:pointer;background:var(--surface-2)}
+.drop:hover,.drop.over{border-color:var(--accent)}
+.drop strong{color:var(--accent)}
+.imp-list{list-style:none;margin:0;padding:0;display:grid;gap:12px}
+.imp{border:1px solid var(--line);border-radius:12px;padding:14px;display:grid;gap:10px}
+.imp-row{display:grid;grid-template-columns:1fr 1.6fr 150px auto;gap:10px;align-items:end}
+.imp .cols{display:flex;flex-wrap:wrap;gap:6px}
+.imp .err{color:var(--bad)}
+.imp .warn{color:var(--warn);font-size:.88rem}
+.check{display:flex;gap:8px;align-items:center;font-size:.92rem}
+
+#toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--surface);padding:10px 16px;border-radius:10px;font-weight:700;max-width:min(560px,calc(100vw - 32px));opacity:0;pointer-events:none;transition:opacity .2s;z-index:50}
+#toast.on{opacity:1}
+
+@media (max-width:900px){
+  .board{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .ins-grid,.fb-cols{grid-template-columns:1fr}
+  .sug-row{grid-template-columns:1fr 1fr}
+  .sug-btns{grid-column:1/-1;justify-content:flex-end}
+  .dlg-row{grid-template-columns:1fr 1fr}
+  .meta-edit,.imp-row{grid-template-columns:1fr 1fr}
+  .teams{grid-template-columns:1fr}
+}
+@media (max-width:560px){
+  .brand img{height:32px}
+  .brand-sep{display:none}
+  .wrap{padding:0 14px}
+  .rrow{grid-template-columns:64px 1fr}
+  .rstat{grid-column:2;text-align:left}
+  .filters select,.filters input{min-width:0;width:100%}
+  .nums{grid-template-columns:repeat(3,1fr)}
+  .board{grid-template-columns:1fr}
+  #btnImport{width:100%;justify-content:center}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}.note{transform:none}}
+</style>
+</head>
+<body>
+<header class="top">
+  <svg class="waves" viewBox="0 0 600 140" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="wg" x1="0" x2="1"><stop offset="0" stop-color="#5ABC36"/><stop offset=".5" stop-color="#14A39A"/><stop offset="1" stop-color="#0078AA"/></linearGradient></defs><g fill="none" stroke="url(#wg)" stroke-width="1"><path d="M0,70.0 L20,79.2 L40,87.4 L60,93.7 L80,97.6 L100,99.0 L120,98.2 L140,95.9 L160,92.9 L180,89.7 L200,87.0 L220,84.9 L240,83.2 L260,81.4 L280,79.1 L300,75.7 L320,70.9 L340,64.7 L360,57.4 L380,49.9 L400,43.1 L420,37.9 L440,35.1 L460,35.2 L480,38.2 L500,43.5 L520,50.6 L540,58.3 L560,65.8 L580,72.2 L600,77.2"/><path d="M0,70.0 L20,79.8 L40,88.5 L60,95.2 L80,99.3 L100,100.6 L120,99.4 L140,96.3 L160,92.2 L180,87.9 L200,84.1 L220,81.1 L240,78.9 L260,77.0 L280,74.9 L300,71.9 L320,67.6 L340,61.9 L360,55.0 L380,47.7 L400,40.9 L420,35.6 L440,32.7 L460,32.8 L480,35.9 L500,41.8 L520,49.5 L540,58.2 L560,66.6 L580,73.9 L600,79.5"/><path d="M0,70.0 L20,80.1 L40,89.3 L60,96.5 L80,100.9 L100,102.1 L120,100.5 L140,96.6 L160,91.5 L180,86.0 L200,81.0 L220,77.1 L240,74.3 L260,72.2 L280,70.2 L300,67.7 L320,64.1 L340,59.0 L360,52.8 L380,45.8 L400,39.1 L420,33.8 L440,30.7 L460,30.7 L480,33.9 L500,40.1 L520,48.5 L540,58.0 L560,67.3 L580,75.5 L600,81.8"/><path d="M0,69.9 L20,80.2 L40,89.8 L60,97.4 L80,102.1 L100,103.4 L120,101.5 L140,97.0 L160,90.8 L180,84.1 L200,78.0 L220,73.0 L240,69.4 L260,67.0 L280,65.2 L300,63.2 L320,60.3 L340,56.1 L360,50.5 L380,44.1 L400,37.7 L420,32.4 L440,29.2 L460,29.1 L480,32.3 L500,38.7 L520,47.5 L540,57.7 L560,68.0 L580,77.0 L600,84.0"/><path d="M0,69.7 L20,80.2 L40,90.0 L60,98.0 L80,103.0 L100,104.5 L120,102.4 L140,97.2 L160,90.1 L180,82.3 L200,74.9 L220,68.8 L240,64.4 L260,61.6 L280,59.9 L300,58.4 L320,56.3 L340,53.0 L360,48.4 L380,42.6 L400,36.7 L420,31.5 L440,28.2 L460,27.9 L480,31.0 L500,37.5 L520,46.6 L540,57.5 L560,68.5 L580,78.4 L600,86.1"/><path d="M0,69.5 L20,79.9 L40,89.9 L60,98.2 L80,103.6 L100,105.2 L120,103.0 L140,97.4 L160,89.4 L180,80.5 L200,71.8 L220,64.5 L240,59.2 L260,56.0 L280,54.3 L300,53.3 L320,52.0 L340,49.8 L360,46.2 L380,41.4 L400,36.0 L420,31.0 L440,27.8 L460,27.2 L480,30.1 L500,36.5 L520,45.9 L540,57.1 L560,68.9 L580,79.6 L600,88.0"/><path d="M0,69.3 L20,79.4 L40,89.4 L60,98.0 L80,103.6 L100,105.5 L120,103.3 L140,97.4 L160,88.7 L180,78.7 L200,68.8 L220,60.3 L240,54.0 L260,50.2 L280,48.4 L300,47.9 L320,47.5 L340,46.4 L360,44.0 L380,40.3 L400,35.6 L420,31.1 L440,27.9 L460,27.1 L480,29.7 L500,35.9 L520,45.2 L540,56.8 L560,69.1 L580,80.5 L600,89.6"/><path d="M0,69.1 L20,78.7 L40,88.6 L60,97.2 L80,103.2 L100,105.4 L120,103.3 L140,97.1 L160,87.9 L180,76.9 L200,65.9 L220,56.2 L240,48.9 L260,44.4 L280,42.4 L300,42.3 L320,42.8 L340,42.9 L360,41.8 L380,39.3 L400,35.6 L420,31.6 L440,28.5 L460,27.6 L480,29.8 L500,35.6 L520,44.8 L540,56.4 L560,69.1 L580,81.2 L600,91.0"/><path d="M0,69.0 L20,77.9 L40,87.4 L60,96.0 L80,102.2 L100,104.7 L120,102.8 L140,96.6 L160,87.0 L180,75.2 L200,63.1 L220,52.2 L240,43.8 L260,38.5 L280,36.3 L300,36.5 L320,37.9 L340,39.2 L360,39.6 L380,38.4 L400,35.8 L420,32.5 L440,29.7 L460,28.6 L480,30.4 L500,35.7 L520,44.5 L540,56.1 L560,69.0 L580,81.5 L600,92.0"/><path d="M0,68.9 L20,76.9 L40,85.9 L60,94.3 L80,100.7 L100,103.5 L120,101.9 L140,95.8 L160,85.9 L180,73.5 L200,60.3 L220,48.3 L240,38.8 L260,32.8 L280,30.2 L300,30.6 L320,32.8 L340,35.4 L360,37.3 L380,37.6 L400,36.3 L420,33.8 L440,31.3 L460,30.2 L480,31.5 L500,36.3 L520,44.5 L540,55.8 L560,68.7 L580,81.6 L600,92.6"/><path d="M0,68.9 L20,75.8 L40,84.0 L60,92.2 L80,98.5 L100,101.7 L120,100.4 L140,94.6 L160,84.6 L180,71.7 L200,57.8 L220,44.7 L240,34.1 L260,27.2 L280,24.2 L300,24.7 L320,27.6 L340,31.5 L360,34.9 L380,36.8 L400,36.9 L420,35.5 L440,33.5 L460,32.3 L480,33.2 L500,37.3 L520,44.8 L540,55.6 L560,68.3 L580,81.3 L600,92.7"/><path d="M0,69.0 L20,74.6 L40,81.9 L60,89.5 L80,95.8 L100,99.2 L120,98.4 L140,92.9 L160,83.0 L180,69.9 L200,55.3 L220,41.3 L240,29.7 L260,21.8 L280,18.3 L300,18.9 L320,22.4 L340,27.4 L360,32.4 L380,36.0 L400,37.7 L420,37.4 L440,36.1 L460,35.0 L480,35.4 L500,38.7 L520,45.4 L540,55.4 L560,67.7 L580,80.7 L600,92.4"/><path d="M0,69.3 L20,73.5 L40,79.5 L60,86.4 L80,92.5 L100,96.1 L120,95.8 L140,90.8 L160,81.2 L180,68.0 L200,53.0 L220,38.1 L240,25.6 L260,16.8 L280,12.7 L300,13.1 L320,17.2 L340,23.3 L360,29.8 L380,35.2 L400,38.5 L420,39.6 L440,39.1 L460,38.1 L480,38.2 L500,40.7 L520,46.4 L540,55.4 L560,67.0 L580,79.7 L600,91.6"/><path d="M0,69.7 L20,72.2 L40,76.9 L60,82.9 L80,88.6 L100,92.4 L120,92.5 L140,88.1 L160,79.0 L180,66.0 L200,50.7 L220,35.3 L240,21.8 L260,12.2 L280,7.4 L300,7.6 L320,12.0 L340,19.1 L360,27.1 L380,34.3 L400,39.4 L420,42.0 L440,42.4 L460,41.7 L480,41.5 L500,43.1 L520,47.7 L540,55.6 L560,66.3 L580,78.5 L600,90.3"/><path d="M0,70.3 L20,71.1 L40,74.2 L60,79.0 L80,84.2 L100,88.0 L120,88.6 L140,84.9 L160,76.5 L180,63.9 L200,48.6 L220,32.7 L240,18.5 L260,8.0 L280,2.5 L300,2.3 L320,7.0 L340,15.0 L360,24.4 L380,33.4 L400,40.3 L420,44.5 L440,46.0 L460,45.7 L480,45.2 L500,46.0 L520,49.4 L540,56.0 L560,65.6 L580,77.0 L600,88.6"/><path d="M0,71.1 L20,69.9 L40,71.3 L60,74.9 L80,79.3 L100,83.0 L120,84.0 L140,81.1 L160,73.5 L180,61.5 L200,46.5 L220,30.4 L240,15.6 L260,4.3 L280,-2.0 L300,-2.5 L320,2.2 L340,10.9 L360,21.6 L380,32.3 L400,41.1 L420,47.0 L440,49.7 L460,50.1 L480,49.4 L500,49.3 L520,51.4 L540,56.6 L560,64.8 L580,75.3 L600,86.3"/></g></svg>
+  <div class="wrap top-in">
+    <a class="brand" href="#acoes"><img src="data:image/png;base64,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" alt="Data System" width="128" height="40"><span class="brand-sep" aria-hidden="true"></span>Retro em ação</a>
+    <nav id="nav" aria-label="Seções"></nav>
+    <button class="btn primary" id="btnImport" type="button" hidden>Importar retro</button>
+  </div>
+</header>
+<div class="wrap" id="bar"></div>
+<main class="wrap" id="main"><p class="hint">Carregando o painel…</p></main>
+<div id="lists" hidden></div>
+<dialog id="dlg" aria-labelledby="dlg-title"></dialog>
+<dialog id="cfm" aria-labelledby="cfm-title"></dialog>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+"use strict";
+/* ---------- constants ---------- */
+const XLSX_SRC = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+const PDF_SRC = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+const PDFW_SRC = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+const PRI = {alta:"Alta", media:"Média", baixa:"Baixa"};
+const PRI_ORDER = {alta:0, media:1, baixa:2};
+const STATE = {sugerida:"Sugestão", aberta:"A fazer", andamento:"Em andamento", validacao:"Validar", concluida:"Fechada", descartada:"Descartada"};
+const LIVE = ["aberta","andamento","validacao","concluida"];
+const TONE = {positivo:"Positivo", atencao:"Atenção", critico:"Crítico"};
+const ROT = [-1.1, .7, -.4, 1, -.7, .3, -.2, .9];
+
+/* ---------- state ---------- */
+const S = {
+  view:"acoes", openRetro:null, team:"all", owner:"all", q:"",
+  retros:[], actions:[], teams:{}, ready:{}, loading:true, stale:false, noDb:false,
+  canWrite:true, canValidate:false, myId:null, names:{}, asked:new Set(),
+  tags:[], tagF:"all",
+  drafts:{}, busy:{}, showAllDone:false, editMeta:null, dirty:false, barSig:"", imp:null
+};
+let db=null, user=null, sample=null;
+const chains = {};
+
+/* ---------- helpers ---------- */
+const $ = (s, el=document) => el.querySelector(s);
+function h(tag, props, ...kids){
+  const el = document.createElement(tag); let val;
+  if(props) for(const k in props){
+    const v = props[k];
+    if(v==null || v===false) continue;
+    if(k==="class") el.className = v;
+    else if(k==="value") val = v;
+    else if(k==="checked"||k==="selected"||k==="disabled"||k==="open"||k==="hidden") el[k] = !!v;
+    else if(k.startsWith("on") && typeof v==="function") el.addEventListener(k.slice(2).toLowerCase(), v);
+    else el.setAttribute(k, v===true ? "" : String(v));
+  }
+  for(const c of kids.flat(Infinity)){
+    if(c==null || c===false || c==="") continue;
+    el.append(c instanceof Node ? c : String(c));
+  }
+  if(val!==undefined) el.value = val;
+  return el;
+}
+const norm = s => String(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().trim();
+const slug = s => norm(s).replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"") || "x";
+const nowIso = () => new Date().toISOString();
+function todayStr(){ const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; }
+function newId(base){ return `${slug(base).slice(0,40)}-${Date.now().toString(36)}${Math.random().toString(36).slice(2,6)}`; }
+function hue(s){ let x=0; for(const ch of norm(s)) x=(x*31+ch.charCodeAt(0))>>>0; return x%360; }
+function fmtDate(d, long){
+  if(!d) return ""; const [y,m,dd]=d.split("-");
+  if(!m) return d;
+  return (long || y!==String(new Date().getFullYear())) ? `${dd}/${m}/${y}` : `${dd}/${m}`;
+}
+const arr = x => Array.isArray(x) ? x : [];
+const isLate = a => !a.recurring && a.due && a.due < todayStr() && (a.state==="aberta"||a.state==="andamento");
+const initials = n => String(n||"?").split(/\s+|,|\be\b/).filter(Boolean).slice(0,2).map(w=>w[0].toUpperCase()).join("") || "?";
+function teamTag(name){ return name ? h("span",{class:"tag",style:`--h:${hue(name)}`}, name) : null; }
+function retroOf(id){ return S.retros.find(r=>r.id===id); }
+function retroLink(id){ const r=retroOf(id); return r ? h("a",{class:"rlink",href:"#retro-"+r.id}, `Retro ${r.title}`) : null; }
+function personName(id){ if(id==="claude") return "Claude"; return S.names[id] || "Alguém"; }
+function statsOf(cols){ let cards=0,votes=0,comments=0; for(const c of arr(cols)) for(const k of arr(c.cards)){ cards++; votes+=k.v||0; comments+=arr(k.c).length; } return {cards,votes,comments}; }
+function field(label, input){ return h("label",{class:"fld"}, h("span",null,label), input); }
+function dueField(d, ro){
+  const date = h("input",{type:"date",value:d.recurring ? "" : d.due,disabled:ro||d.recurring,"aria-label":"Prazo",oninput:e=>d.due=e.target.value});
+  const btn = h("button",{type:"button",class:"rec",disabled:ro,"aria-pressed":String(!!d.recurring),title:"Ação que sempre tem que ser feita, sem data",
+    onclick:()=>{ d.recurring=!d.recurring; if(d.recurring){ d.due=""; date.value=""; } date.disabled = ro || d.recurring; btn.setAttribute("aria-pressed", String(d.recurring)); }}, "↻ Recorrente");
+  return h("div",{class:"fld"}, h("span",null,"Prazo"), h("div",{class:"due-wrap"}, date, btn));
+}
+function select(map, value, onChange, attrs={}){
+  return h("select",{...attrs, onchange:e=>onChange(e.target.value)}, Object.entries(map).map(([k,v])=>h("option",{value:k, selected:k===value}, v)));
+}
+let toastT;
+function toast(msg){ const t=$("#toast"); t.textContent=msg; t.classList.add("on"); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove("on"), 3800); }
+function loadScript(src){
+  return new Promise((res,rej)=>{
+    if(document.querySelector(`script[src="${src}"]`)?.dataset.ok) return res();
+    const s=document.createElement("script"); s.src=src; s.onload=()=>{s.dataset.ok="1";res();}; s.onerror=()=>rej(new Error("Não foi possível carregar o leitor de arquivos.")); document.head.append(s);
+  });
+}
+function write(path, fn){
+  const p = (chains[path]||Promise.resolve()).then(fn).then(()=>true, e=>{ writeErr(e); return false; });
+  chains[path] = p; return p;
+}
+function writeErr(e){
+  const c = e && e.code;
+  if(c==="invalid_argument"){ toast("Não foi possível salvar. Seu acesso a este painel pode ser só de leitura."); }
+  else if(c==="quota_exceeded") toast("O espaço de dados do painel está cheio. Exclua retros antigas para liberar espaço.");
+  else if(c==="resource_exhausted") toast("Muitas alterações seguidas. Aguarde alguns segundos e tente de novo.");
+  else toast("Não foi possível salvar agora. Tente de novo em instantes.");
+}
+function sampleErr(e){
+  const c = e && e.code;
+  if(c==="not_granted") return "A IA não foi autorizada nesta visita. Recarregue a página para autorizar.";
+  if(c==="rate_limited") return "Muitas chamadas à IA seguidas. Tente de novo em um minuto.";
+  if(c==="invalid_json") return "A resposta da IA veio incompleta. Tente de novo.";
+  return "A IA não respondeu agora. Tente de novo em instantes.";
+}
+
+/* ---------- derived ---------- */
+function teamList(){
+  const m = new Map();
+  for(const r of [...S.retros].sort((a,b)=>String(a.createdAt).localeCompare(String(b.createdAt)))) if(r.team) m.set(slug(r.team), r.team);
+  for(const a of S.actions) if(a.team && !m.has(slug(a.team))) m.set(slug(a.team), a.team);
+  return [...m.entries()].sort((a,b)=>a[1].localeCompare(b[1],"pt-BR"));
+}
+function splitOwners(s){ return String(s||"").split(/,|\/|;|\s+e\s+|\s*&\s*/).map(x=>x.trim()).filter(Boolean); }
+function ownerList(){
+  const m = new Map();
+  for(const a of S.actions) for(const n of splitOwners(a.owner)) if(!m.has(norm(n))) m.set(norm(n), n);
+  return [...m.values()].sort((a,b)=>a.localeCompare(b,"pt-BR"));
+}
+const passTeam = x => S.team==="all" || slug(x.team)===S.team;
+function passOwner(a){
+  if(S.owner==="all") return true;
+  if(S.owner==="__none") return !String(a.owner||"").trim();
+  return splitOwners(a.owner).some(n=>norm(n)===S.owner);
+}
+function passQuery(a){
+  if(!S.q.trim()) return true; const q=norm(S.q);
+  return [a.title,a.detail,a.owner,a.team,...arr(a.origin),...arr(a.tags).map(id=>(tagOf(id)||{}).name)].some(t=>norm(t).includes(q));
+}
+function tagList(){ return [...S.tags].sort((a,b)=>(a.order??99)-(b.order??99) || String(a.name).localeCompare(String(b.name),"pt-BR")); }
+function tagOf(id){ return S.tags.find(t=>t.id===id); }
+function tagChips(ids){ return arr(ids).map(tagOf).filter(Boolean).map(t=>h("span",{class:"ttag",style:`--h:${t.hue??200}`}, t.name)); }
+function tagPicker(d, ro){
+  const box = h("div",{class:"tpick",role:"group","aria-label":"Tipo da ação"});
+  const draw = () => box.replaceChildren(...(S.tags.length ? tagList().map(t=>h("button",{type:"button",class:"ttag",style:`--h:${t.hue??200}`,disabled:ro,"aria-pressed":String(arr(d.tags).includes(t.id)),
+    onclick:()=>{ d.tags = arr(d.tags).includes(t.id) ? d.tags.filter(x=>x!==t.id) : [...arr(d.tags), t.id]; draw(); }}, t.name)) : [h("span",{class:"hint"},"Nenhuma tag cadastrada.")]));
+  draw();
+  return h("div",{class:"fld"}, h("span",null,"Tipo"), box);
+}
+const passTag = a => S.tagF==="all" || (S.tagF==="__none" ? !arr(a.tags).filter(tagOf).length : arr(a.tags).includes(S.tagF));
+function openTags(){
+  const dlg = $("#dlg");
+  const HUES = [["Azul",205],["Verde",125],["Roxo",275],["Laranja",30],["Teal",175],["Rosa",330],["Amarelo",48],["Vermelho",0],["Índigo",235]];
+  const rows = tagList().map((t,i)=>({id:t.id, name:t.name, hue:t.hue??200, order:t.order??i, orig:t}));
+  const list = h("ul",{class:"tag-rows"});
+  const draw = () => list.replaceChildren(...rows.filter(r=>!r.del).map(r=>h("li",null,
+    h("input",{type:"text",value:r.name,placeholder:"Nome do tipo","aria-label":"Nome da tag",oninput:e=>r.name=e.target.value}),
+    h("select",{"aria-label":"Cor da tag",onchange:e=>r.hue=+e.target.value}, HUES.map(([n,v])=>h("option",{value:v,selected:v===r.hue}, n))),
+    h("button",{class:"btn danger",type:"button",onclick:()=>{ r.del=true; draw(); }},"Remover"))));
+  draw();
+  async function save(){
+    const jobs=[];
+    for(const r of rows){
+      const name = r.name.trim();
+      if(r.del){ if(r.orig) jobs.push(write("tags/"+r.id, ()=>db.doc("tags/"+r.id).delete())); continue; }
+      if(!name) continue;
+      if(!r.orig){ const id = slug(name)+"-"+Date.now().toString(36).slice(-4); jobs.push(write("tags/"+id, ()=>db.doc("tags/"+id).set({name, hue:r.hue, order:r.order}))); }
+      else if(name!==r.orig.name || r.hue!==(r.orig.hue??200)) jobs.push(write("tags/"+r.id, ()=>db.doc("tags/"+r.id).update({name, hue:r.hue})));
+    }
+    const res = await Promise.all(jobs);
+    if(res.every(Boolean)){ dlg.close(); toast("Tipos de ação atualizados."); }
+  }
+  dlg.replaceChildren(h("div",{class:"dlg"},
+    h("div",{class:"dlg-h"}, h("h2",{id:"dlg-title"},"Tipos de ação"), h("button",{class:"btn ghost",type:"button","aria-label":"Fechar",onclick:()=>dlg.close()},"✕")),
+    h("p",{class:"hint"},"As tags dizem para o que cada ação é voltada. Elas aparecem nos cards, no filtro do quadro e no acompanhamento dos times. Remover uma tag tira ela de todas as ações."),
+    list,
+    h("div",null, h("button",{class:"btn",type:"button",onclick:()=>{ rows.push({id:null,name:"",hue:205,order:rows.length}); draw(); const ins=list.querySelectorAll("input"); ins[ins.length-1].focus(); }},"Adicionar tipo")),
+    h("div",{class:"dlg-f"}, h("button",{class:"btn",type:"button",onclick:()=>dlg.close()},"Cancelar"), h("button",{class:"btn primary",type:"button",onclick:save},"Salvar"))));
+  dlg.showModal();
+}
+function sortActions(a,b){
+  const la=isLate(a)?0:1, lb=isLate(b)?0:1; if(la!==lb) return la-lb;
+  const da=a.due||"9999", dbb=b.due||"9999"; if(da!==dbb) return da.localeCompare(dbb);
+  return (PRI_ORDER[a.priority]??1)-(PRI_ORDER[b.priority]??1);
+}
+
+/* ---------- render core ---------- */
+function editingInMain(){ const ae=document.activeElement; return ae && $("#main").contains(ae) && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName); }
+let raf=0;
+function schedule(){
+  if(raf) return;
+  raf = requestAnimationFrame(()=>{ raf=0; if(editingInMain()){ S.dirty=true; return; } render(); });
+}
+document.addEventListener("focusout", ()=>{ if(S.dirty) setTimeout(()=>{ if(!editingInMain()){ S.dirty=false; render(); } }, 0); });
+
+function render(){
+  renderNav(); renderBar(); renderLists();
+  let node;
+  if(S.noDb) node = viewNoDb();
+  else if(S.view==="retros") node = viewRetros();
+  else if(S.view==="retro") node = viewRetro(S.openRetro);
+  else if(S.view==="times") node = viewTimes();
+  else node = viewAcoes();
+  $("#main").replaceChildren(...banners(), node);
+  $("#btnImport").hidden = S.noDb || !S.canWrite;
+  resolveNames();
+}
+function banners(){
+  const out=[];
+  if(S.stale) out.push(h("p",{class:"notice"},"Os dados ainda não chegaram. Confira sua conexão; o painel atualiza sozinho quando a conexão voltar."));
+  if(!S.noDb && !S.canWrite) out.push(h("p",{class:"notice"},"Você está vendo este painel em modo leitura."));
+  return out;
+}
+function renderNav(){
+  const sug = S.actions.filter(a=>a.state==="sugerida" || (S.canValidate && a.state==="validacao")).length;
+  const items = [["acoes","Ações", sug], ["retros","Retros"], ["times","Times"]];
+  const cur = S.view==="retro" ? "retros" : S.view;
+  $("#nav").replaceChildren(...items.map(([k,l,n])=>h("a",{href:"#"+k,"aria-current":cur===k?"page":null}, l, n ? h("span",{class:"badge","aria-label":`${n} esperando você`}, n) : null)));
+}
+function renderLists(){
+  $("#lists").replaceChildren(
+    h("datalist",{id:"dl-teams"}, teamList().map(([,n])=>h("option",{value:n}))),
+    h("datalist",{id:"dl-owners"}, ownerList().map(n=>h("option",{value:n})))
+  );
+}
+function renderBar(){
+  const teams = teamList();
+  if(S.team!=="all" && !teams.some(([s])=>s===S.team) && S.retros.length) S.team="all";
+  const owners = ownerList();
+  const showOwner = S.view==="acoes";
+  const sig = [S.view==="retro"?"retro":S.view, S.team, S.owner, S.tagF, S.tags.map(t=>t.id+t.name).join(","), teams.map(t=>t.join(":")).join(","), showOwner?owners.join(","):""].join("|");
+  if(sig===S.barSig) return; S.barSig = sig;
+  const bar = $("#bar");
+  if(S.noDb || S.view==="retro" || !teams.length){ bar.replaceChildren(); return; }
+  const chip = (val,label) => h("button",{type:"button",class:"chip","aria-pressed":String(S.team===val),onclick:()=>{S.team=val; render();}}, label);
+  bar.replaceChildren(h("div",{class:"filters",role:"group","aria-label":"Filtros"},
+    h("div",{class:"chips"}, chip("all","Todos os times"), teams.map(([s,n])=>chip(s,n))),
+    h("span",{class:"grow"}),
+    showOwner ? h("select",{"aria-label":"Filtrar por responsável", onchange:e=>{S.owner=e.target.value; render();}},
+      h("option",{value:"all",selected:S.owner==="all"},"Todos os responsáveis"),
+      h("option",{value:"__none",selected:S.owner==="__none"},"Sem responsável"),
+      owners.map(n=>h("option",{value:norm(n),selected:S.owner===norm(n)}, n))) : null,
+    showOwner && S.tags.length ? h("select",{"aria-label":"Filtrar por tipo", onchange:e=>{S.tagF=e.target.value; render();}},
+      h("option",{value:"all",selected:S.tagF==="all"},"Todos os tipos"),
+      h("option",{value:"__none",selected:S.tagF==="__none"},"Sem tipo"),
+      tagList().map(t=>h("option",{value:t.id,selected:S.tagF===t.id}, t.name))) : null,
+    showOwner ? h("input",{type:"search","aria-label":"Buscar ações",placeholder:"Buscar ação",value:S.q,oninput:e=>{S.q=e.target.value; render();}}) : null
+  ));
+}
+function resolveNames(){
+  if(!user) return;
+  const ids=new Set();
+  for(const a of S.actions){ for(const u of arr(a.updates)) if(u.by) ids.add(u.by); if(a.validatedBy) ids.add(a.validatedBy); }
+  for(const t of Object.values(S.teams)) if(t.by) ids.add(t.by);
+  const missing=[...ids].filter(id=>id!=="claude" && !S.asked.has(id));
+  if(!missing.length) return;
+  missing.forEach(id=>S.asked.add(id));
+  user.profiles(missing).then(ps=>{ for(const id of missing) S.names[id]=(ps[id]&&ps[id].name)||""; schedule(); }).catch(()=>{});
+}
+
+/* ---------- view: no db ---------- */
+function viewNoDb(){
+  return h("div",{class:"empty"}, h("strong",null,"Abra este painel no Claude"), "Os dados do time ficam guardados no Claude. Abra o link do painel com sua conta para ver e atualizar as ações.");
+}
+
+/* ---------- view: ações ---------- */
+function viewAcoes(){
+  const all = S.actions.filter(passTeam).filter(passOwner).filter(passQuery).filter(passTag);
+  const sug = all.filter(a=>a.state==="sugerida").sort((a,b)=>(PRI_ORDER[a.priority]??1)-(PRI_ORDER[b.priority]??1));
+  const live = all.filter(a=>LIVE.includes(a.state));
+  const disc = all.filter(a=>a.state==="descartada");
+  const n = k => live.filter(a=>a.state===k).length;
+  const late = live.filter(isLate).length;
+  const parts = [`${n("aberta")} a fazer`, `${n("andamento")} em andamento`, `${n("validacao")} para validar`, `${n("concluida")} fechadas`];
+  if(late) parts.push(`${late} atrasadas`);
+  const wrap = h("div",null,
+    h("div",{class:"head"},
+      h("div",null, h("h1",null,"Ações dos times"), h("p",{class:"sub"}, parts.join(", ") + ".")),
+      S.canValidate ? h("button",{class:"btn ghost",type:"button",onclick:openTags},"Tipos de ação") : null,
+      S.canWrite ? h("button",{class:"btn",type:"button",onclick:()=>openAction(null,{team: S.team!=="all" ? (teamList().find(t=>t[0]===S.team)||[])[1] : ""})},"Nova ação") : null));
+  if(S.loading && !S.actions.length){ wrap.append(h("p",{class:"hint"},"Carregando ações…")); return wrap; }
+  if(!S.actions.length){
+    wrap.append(h("div",{class:"empty"}, h("strong",null,"Nenhuma ação ainda"), "Importe uma retro do EasyRetro e gere sugestões, ou crie uma ação manualmente.",
+      S.canWrite ? h("div",null, h("button",{class:"btn primary",type:"button",onclick:openImport},"Importar retro")) : null));
+    return wrap;
+  }
+  if(sug.length) wrap.append(sectionSug(sug));
+  wrap.append(kanban(live));
+  if(disc.length) wrap.append(h("details",{class:"disc"}, h("summary",null,`Descartadas (${disc.length})`),
+    h("ul",null, disc.map(a=>h("li",null, h("span",null,a.title), S.canValidate ? h("button",{class:"btn ghost",type:"button",onclick:()=>setState(a,"sugerida","Ação voltou para as sugestões.")},"Voltar para sugestões") : null)))));
+  return wrap;
+}
+function sectionSug(sug){
+  return h("section",{class:"validate","aria-labelledby":"vh"},
+    h("div",{class:"sec-head"}, h("h2",{id:"vh"},"Sugestões das retros", h("span",{class:"count"}, sug.length)),
+      h("p",{class:"hint"}, S.canValidate ? "Ajuste o texto, defina o responsável e o prazo, e aprove. Só ações aprovadas entram no quadro do time." : "Estas sugestões aguardam a aprovação da liderança antes de entrar no quadro do time.")),
+    h("div",{class:"sug-list"}, sug.map(sugCard)));
+}
+function sugCard(a){
+  const meta = h("div",{class:"sug-meta"}, teamTag(a.team), retroLink(a.retroId), h("span",{class:"by"}, a.source==="ia" ? "Sugerida pela IA" : "Sugerida pelo time"));
+  const origin = arr(a.origin).length ? h("div",{class:"origins"}, arr(a.origin).map(o=>h("span",{class:"mini-note"}, o))) : null;
+  if(!S.canValidate){
+    return h("article",{class:"sug sug-ro pri-"+(a.priority||"media")}, meta, h("h3",null,a.title), h("div",{class:"tpick"}, tagChips(a.tags)), a.detail ? h("p",{class:"hint"},a.detail) : null, origin);
+  }
+  const d = S.drafts[a.id] || (S.drafts[a.id] = {title:a.title||"", detail:a.detail||"", owner:a.owner||"", due:a.due||"", recurring:!!a.recurring, tags:arr(a.tags).slice(), priority:a.priority||"media"});
+  return h("article",{class:"sug pri-"+d.priority},
+    meta,
+    h("input",{type:"text",class:"sug-title",value:d.title,"aria-label":"Título da ação",oninput:e=>d.title=e.target.value}),
+    h("textarea",{rows:2,value:d.detail,"aria-label":"Detalhe da ação",placeholder:"Como saber que foi feito",oninput:e=>d.detail=e.target.value}),
+    origin,
+    tagPicker(d, false),
+    h("div",{class:"sug-row"},
+      field("Responsável", h("input",{type:"text",list:"dl-owners",value:d.owner,placeholder:"Nome de quem faz",oninput:e=>d.owner=e.target.value})),
+      dueField(d, false),
+      field("Prioridade", select(PRI, d.priority, v=>d.priority=v)),
+      h("div",{class:"sug-btns"},
+        h("button",{class:"btn ghost",type:"button",onclick:()=>setState(a,"descartada","Sugestão descartada.")},"Descartar"),
+        h("button",{class:"btn primary",type:"button",onclick:()=>validate(a, d)},"Aprovar"))));
+}
+async function validate(a, d){
+  if(!d.title.trim()) return toast("Escreva o título da ação.");
+  if(!d.owner.trim()) return toast("Defina um responsável antes de aprovar.");
+  const ok = await write("actions/"+a.id, ()=>db.doc("actions/"+a.id).update({
+    title:d.title.trim(), detail:d.detail.trim(), owner:d.owner.trim(), due:d.recurring ? "" : (d.due||""), recurring:!!d.recurring, priority:d.priority||"media", tags:arr(d.tags),
+    state:"aberta", validatedAt:nowIso(), validatedBy:S.myId||null }));
+  if(ok){ delete S.drafts[a.id]; toast("Ação aprovada e enviada para “A fazer”."); }
+  return ok;
+}
+async function setState(a, state, msg){
+  const ok = await write("actions/"+a.id, ()=>db.doc("actions/"+a.id).update({state, stateAt:nowIso()}));
+  if(ok && msg) toast(msg);
+  return ok;
+}
+async function moveTo(a, to){
+  if(a.state===to) return;
+  if(!S.canWrite) return toast("Você está em modo leitura.");
+  if((to==="concluida" || a.state==="concluida") && !S.canValidate) return toast("Só a liderança fecha ou reabre ações. Quando terminar, mova para “Validar”.");
+  const ok = await write("actions/"+a.id, ()=>db.doc("actions/"+a.id).update({state:to, stateAt:nowIso(), ...(to==="concluida" ? {closedAt:nowIso(), closedBy:S.myId||null} : {})}));
+  if(ok) toast(`Ação movida para “${STATE[to]}”.`);
+}
+function kanban(live){
+  const lanes = [["aberta","A fazer",""],["andamento","Em andamento",""],["validacao","Validar","Entregue pelo responsável, esperando a liderança conferir."],["concluida","Fechada",""]];
+  return h("section",{class:"board","aria-label":"Quadro de ações"}, lanes.map(([k,label,hint])=>{
+    let items = live.filter(a=>a.state===k).sort(k==="concluida" ? (a,b)=>String(b.stateAt||b.validatedAt||"").localeCompare(String(a.stateAt||a.validatedAt||"")) : sortActions);
+    const total = items.length;
+    if(k==="concluida" && !S.showAllDone) items = items.slice(0,10);
+    const empty = {aberta:"Nada a fazer por aqui.", andamento:"Nenhuma ação em andamento.", validacao:"Nada esperando validação.", concluida:"Nenhuma ação fechada ainda."}[k];
+    const lane = h("div",{class:"lane lane-"+k,
+        ondragover:e=>{ if(!S.drag) return; e.preventDefault(); e.dataTransfer.dropEffect="move"; lane.classList.add("over"); },
+        ondragleave:e=>{ if(!lane.contains(e.relatedTarget)) lane.classList.remove("over"); },
+        ondrop:e=>{ e.preventDefault(); lane.classList.remove("over"); const a=S.actions.find(x=>x.id===S.drag); S.drag=null; if(a) moveTo(a,k); }},
+      h("h2",{class:"lane-h"}, label, h("span",{class:"count"}, total)),
+      hint ? h("p",{class:"lane-hint"}, hint) : null,
+      total ? h("ul",{class:"items"}, items.map(itemCard)) : h("p",{class:"lane-empty"}, empty),
+      (k==="concluida" && total>10) ? h("button",{class:"btn ghost more",type:"button",onclick:()=>{S.showAllDone=!S.showAllDone; render();}}, S.showAllDone ? "Mostrar menos" : `Mostrar todas (${total})`) : null);
+    return lane;
+  }));
+}
+function itemCard(a){
+  const late = isLate(a);
+  const canDrag = S.canWrite && (a.state!=="concluida" || S.canValidate);
+  return h("li",{draggable:canDrag ? "true" : null,
+      ondragstart:e=>{ S.drag=a.id; e.dataTransfer.effectAllowed="move"; e.dataTransfer.setData("text/plain", a.id); e.currentTarget.classList.add("dragging"); },
+      ondragend:e=>{ S.drag=null; e.currentTarget.classList.remove("dragging"); document.querySelectorAll(".lane.over").forEach(l=>l.classList.remove("over")); }},
+    (a.state==="validacao" && S.canValidate) ? h("div",{class:"item-acts",style:"order:2"}, h("button",{class:"btn sm",type:"button",onclick:()=>moveTo(a,"andamento")},"Devolver"), h("button",{class:"btn sm primary",type:"button",onclick:()=>moveTo(a,"concluida")},"Fechar")) : null,
+    h("button",{type:"button",class:`item pri-${a.priority||"media"}${late?" late":""}`,onclick:()=>openAction(a)},
+    h("span",{class:"item-title"}, a.title),
+    h("span",{class:"item-meta"},
+      a.owner ? h("span",{class:"owner"}, h("span",{class:"ini",style:`--h:${hue(a.owner)}`,"aria-hidden":"true"}, initials(a.owner)), a.owner) : h("span",{class:"owner none"},"Sem responsável"),
+      a.recurring ? h("span",{class:"recur"},"↻ Recorrente") : a.due ? h("span",{class:"due"}, late ? `Venceu em ${fmtDate(a.due)}` : `Até ${fmtDate(a.due)}`) : null,
+      tagChips(a.tags),
+      S.team==="all" ? teamTag(a.team) : null,
+      arr(a.updates).length ? h("span",null, `${arr(a.updates).length} ${arr(a.updates).length>1?"atualizações":"atualização"}`) : null)));
+}
+
+/* ---------- action dialog ---------- */
+function openAction(a, preset={}){
+  const isNew = !a;
+  const d = isNew
+    ? {title:preset.title||"", detail:"", origin:preset.origin||[], team:preset.team||"", retroId:preset.retroId||"", priority:"media", owner:"", due:"", recurring:false, tags:[], state: S.canValidate ? "aberta" : "sugerida"}
+    : {title:a.title||"", detail:a.detail||"", origin:arr(a.origin), team:a.team||"", retroId:a.retroId||"", priority:a.priority||"media", owner:a.owner||"", due:a.due||"", recurring:!!a.recurring, tags:arr(a.tags).slice(), state:a.state};
+  const ro = !S.canWrite;
+  const dlg = $("#dlg");
+  const segStates = LIVE;
+  let seg;
+  const drawSeg = () => seg.replaceChildren(...segStates.map(s=>h("button",{type:"button","aria-pressed":String(d.state===s),disabled:ro || (!S.canValidate && (s==="concluida" || (!!a && a.state==="concluida"))),onclick:()=>{d.state=s; drawSeg();}}, STATE[s])));
+  let stateBlock;
+  if(!isNew && a.state==="sugerida") stateBlock = h("p",{class:"hint"}, S.canValidate ? "Sugestão aguardando aprovação. Defina o responsável e aprove." : "Sugestão aguardando aprovação da liderança.");
+  else if(!isNew && a.state==="descartada") stateBlock = h("p",{class:"hint"},"Esta ação foi descartada.");
+  else if(isNew && !S.canValidate) stateBlock = h("p",{class:"hint"},"Sua ação entra como sugestão e aparece para aprovação.");
+  else { seg = h("div",{class:"seg",role:"group","aria-label":"Estado"}); drawSeg(); stateBlock = field("Estado", seg); }
+
+  const log = h("ul",{class:"log"});
+  const drawLog = (list) => log.replaceChildren(...(list.length ? list.slice().reverse().map(u=>h("li",null, h("div",{class:"who"}, `${personName(u.by)}, ${new Date(u.at).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}`), h("div",null,u.text))) : [h("li",{class:"hint"},"Nenhuma atualização registrada.")]));
+  let localUpdates = isNew ? [] : arr(a.updates).slice();
+  if(!isNew) drawLog(localUpdates);
+  const upd = h("textarea",{rows:2,placeholder:"O que avançou, o que está travando…","aria-label":"Registrar andamento"});
+
+  const close = () => dlg.close();
+  async function save(){
+    if(!d.title.trim()) return toast("Escreva o título da ação.");
+    if(isNew){
+      let state = d.state;
+      if(state!=="sugerida" && !d.owner.trim()) return toast("Defina um responsável.");
+      const id = newId(d.title);
+      const ok = await write("actions/"+id, ()=>db.doc("actions/"+id).set({
+        title:d.title.trim(), detail:d.detail.trim(), origin:d.origin, team:d.team.trim(), retroId:d.retroId||"",
+        priority:d.priority, owner:d.owner.trim(), due:d.recurring ? "" : (d.due||""), recurring:!!d.recurring, tags:arr(d.tags), state, source:"manual",
+        createdAt:nowIso(), createdBy:S.myId||null, updates:[],
+        ...(state!=="sugerida" ? {validatedAt:nowIso(), validatedBy:S.myId||null} : {}) }));
+      if(ok){ close(); toast(state==="sugerida" ? "Sugestão enviada para validação." : "Ação criada."); }
+      return;
+    }
+    const cur = S.actions.find(x=>x.id===a.id) || a;
+    const patch = {};
+    for(const k of ["title","detail","team","owner","due","priority"]){ const v = k==="due"||k==="priority" ? d[k] : d[k].trim(); if(v!==(cur[k]||"")) patch[k]=v; }
+    if(JSON.stringify(arr(d.tags))!==JSON.stringify(arr(cur.tags))) patch.tags = arr(d.tags);
+    if(!!d.recurring !== !!cur.recurring){ patch.recurring = !!d.recurring; if(d.recurring) patch.due = ""; }
+    if(LIVE.includes(cur.state) && d.state!==cur.state){ patch.state=d.state; patch.stateAt=nowIso(); if(d.state==="concluida"){ patch.closedAt=nowIso(); patch.closedBy=S.myId||null; } }
+    if(!Object.keys(patch).length){ close(); return; }
+    const ok = await write("actions/"+a.id, ()=>db.doc("actions/"+a.id).update(patch));
+    if(ok){ close(); toast("Alterações salvas."); }
+  }
+  async function addUpdate(){
+    const text = upd.value.trim(); if(!text) return;
+    const cur = S.actions.find(x=>x.id===a.id) || a;
+    const next = [...arr(cur.updates), {by:S.myId||null, at:nowIso(), text}];
+    const ok = await write("actions/"+a.id, ()=>db.doc("actions/"+a.id).update({updates:next}));
+    if(ok){ upd.value=""; localUpdates=next; drawLog(next); toast("Atualização registrada."); }
+  }
+  async function doValidate(){
+    const ok = await validate(a, d);
+    if(ok) close();
+  }
+  async function del(){
+    if(!(await confirmAsk("Excluir esta ação?","Ela some da lista para todo o time. Para guardar o histórico, prefira descartar.","Excluir"))) return;
+    const ok = await write("actions/"+a.id, ()=>db.doc("actions/"+a.id).delete());
+    if(ok){ close(); toast("Ação excluída."); }
+  }
+
+  const footer = h("div",{class:"dlg-f"},
+    (!isNew && S.canValidate) ? h("button",{class:"btn danger left",type:"button",onclick:del},"Excluir") : h("span",{class:"left"}),
+    (!isNew && S.canValidate && a.state==="sugerida") ? h("button",{class:"btn ghost",type:"button",onclick:async()=>{ if(await setState(a,"descartada","Sugestão descartada.")) close(); }},"Descartar") : null,
+    (!isNew && S.canValidate && a.state==="descartada") ? h("button",{class:"btn ghost",type:"button",onclick:async()=>{ if(await setState(a,"sugerida","Ação voltou para as sugestões.")) close(); }},"Voltar para sugestões") : null,
+    (!isNew && LIVE.includes(a.state) && S.canValidate) ? h("button",{class:"btn ghost",type:"button",onclick:async()=>{ if(await setState(a,"descartada","Ação descartada.")) close(); }},"Descartar") : null,
+    h("button",{class:"btn",type:"button",onclick:close}, ro ? "Fechar" : "Cancelar"),
+    (!isNew && S.canValidate && a.state==="sugerida") ? h("button",{class:"btn primary",type:"button",onclick:doValidate},"Aprovar")
+      : ro ? null : h("button",{class:"btn primary",type:"button",onclick:save}, isNew ? (S.canValidate ? "Criar ação" : "Enviar sugestão") : "Salvar alterações"));
+
+  dlg.replaceChildren(h("div",{class:"dlg"},
+    h("div",{class:"dlg-h"}, h("h2",{id:"dlg-title"}, isNew ? "Nova ação" : "Ação"), h("button",{class:"btn ghost",type:"button",onclick:close,"aria-label":"Fechar"},"✕")),
+    (!isNew) ? h("div",{class:"sug-meta"}, teamTag(d.team), retroLink(d.retroId), a.source==="ia" ? h("span",{class:"by"},"Sugerida pela IA") : null, a.validatedBy ? h("span",{class:"by"}, `Aprovada por ${personName(a.validatedBy)}`) : null) : null,
+    field("Ação", h("input",{type:"text",value:d.title,disabled:ro,placeholder:"Comece com um verbo: Definir, Combinar, Criar…",oninput:e=>d.title=e.target.value})),
+    field("Detalhe", h("textarea",{rows:3,value:d.detail,disabled:ro,placeholder:"O que fazer e como saber que foi feito",oninput:e=>d.detail=e.target.value})),
+    h("div",{class:"dlg-row"},
+      field("Time", h("input",{type:"text",list:"dl-teams",value:d.team,disabled:ro,oninput:e=>d.team=e.target.value})),
+      field("Responsável", h("input",{type:"text",list:"dl-owners",value:d.owner,disabled:ro,placeholder:"Nome",oninput:e=>d.owner=e.target.value})),
+      dueField(d, ro),
+      field("Prioridade", select(PRI, d.priority, v=>d.priority=v, {disabled:ro}))),
+    tagPicker(d, ro),
+    stateBlock,
+    d.origin.length ? h("div",null, h("h3",{style:"margin-bottom:8px"},"Veio destes cards"), h("div",{class:"origins"}, d.origin.map(o=>h("span",{class:"mini-note"},o)))) : null,
+    !isNew ? h("div",null, h("h3",{style:"margin-bottom:8px"},"Acompanhamento"), log,
+      !ro ? h("div",{style:"display:grid;gap:8px;margin-top:10px"}, upd, h("div",null, h("button",{class:"btn",type:"button",onclick:addUpdate},"Registrar atualização"))) : null) : null,
+    footer));
+  dlg.showModal();
+}
+function confirmAsk(title, text, okLabel){
+  return new Promise(res=>{
+    const c = $("#cfm");
+    const done = v => { c.close(); res(v); };
+    c.replaceChildren(h("div",{class:"dlg"}, h("h2",{id:"cfm-title"}, title), h("p",{class:"hint"}, text),
+      h("div",{class:"dlg-f"}, h("button",{class:"btn",type:"button",onclick:()=>done(false)},"Cancelar"), h("button",{class:"btn primary",type:"button",onclick:()=>done(true)}, okLabel))));
+    c.onclose = () => res(false);
+    c.showModal();
+  });
+}
+
+/* ---------- view: retros ---------- */
+function retroActs(id){ const acts=S.actions.filter(a=>a.retroId===id); return {val:acts.filter(a=>LIVE.includes(a.state)).length, sug:acts.filter(a=>a.state==="sugerida").length, done:acts.filter(a=>a.state==="concluida").length}; }
+function viewRetros(){
+  const list = S.retros.filter(passTeam).sort((a,b)=>String(b.date||"").localeCompare(String(a.date||"")) || String(b.createdAt).localeCompare(String(a.createdAt)));
+  const wrap = h("div",null, h("div",{class:"head"},
+    h("div",null, h("h1",null,"Retrospectivas"), h("p",{class:"sub"}, `${list.length} ${list.length===1?"retro importada":"retros importadas"}.`)),
+    S.canWrite ? h("button",{class:"btn",type:"button",onclick:openImport},"Importar retro") : null));
+  if(S.loading && !S.retros.length){ wrap.append(h("p",{class:"hint"},"Carregando retros…")); return wrap; }
+  if(!list.length){ wrap.append(h("div",{class:"empty"}, h("strong",null,"Nenhuma retro por aqui"), "No EasyRetro, exporte o quadro em Excel (.xlsx) ou PDF e importe aqui.", S.canWrite ? h("div",null,h("button",{class:"btn primary",type:"button",onclick:openImport},"Importar retro")) : null)); return wrap; }
+  const groups = new Map();
+  for(const r of list){ const k=slug(r.team); if(!groups.has(k)) groups.set(k,{name:r.team,items:[]}); groups.get(k).items.push(r); }
+  for(const g of [...groups.values()].sort((a,b)=>a.name.localeCompare(b.name,"pt-BR"))){
+    wrap.append(h("section",{class:"team-group"}, h("h2",null, teamTag(g.name)),
+      h("ul",{class:"rrows"}, g.items.map(r=>{
+        const st = r.stats || statsOf(r.columns); const ra = retroActs(r.id);
+        return h("li",null, h("a",{class:"rrow",href:"#retro-"+r.id},
+          h("span",{class:"rdate"+(r.date?"":" none")}, r.date ? fmtDate(r.date) : "Sem data"),
+          h("span",{class:"rtitle"}, r.title, h("span",{class:"rsub"}, `${st.cards} cards, ${st.votes} votos${r.insights ? ", leitura pronta" : ""}`)),
+          h("span",{class:"rstat"}, h("b",null, ra.val), ` ${ra.val===1?"ação aprovada":"ações aprovadas"}`, ra.sug ? h("span",{class:"rsub"}, `${ra.sug} ${ra.sug===1?"sugestão":"sugestões"} para aprovar`) : null)));
+      }))));
+  }
+  return wrap;
+}
+
+/* ---------- view: retro detail ---------- */
+function splitMerged(t){ const parts = String(t||"").split(/\n?\s*-{3}\s*\n?/); return parts.flatMap((p,i)=> i ? [h("hr"), p.trim()] : [p.trim()]); }
+function viewRetro(id){
+  const r = retroOf(id);
+  if(!r) return h("div",null, h("a",{class:"back",href:"#retros"},"Voltar para retros"), h("p",{class:"hint"}, S.loading ? "Carregando retro…" : "Esta retro não existe mais."));
+  const st = r.stats || statsOf(r.columns);
+  const acts = S.actions.filter(a=>a.retroId===r.id && a.state!=="descartada").sort((a,b)=>["sugerida",...LIVE].indexOf(a.state)-["sugerida",...LIVE].indexOf(b.state));
+  const wrap = h("div",null, h("a",{class:"back",href:"#retros"},"Voltar para retros"));
+  wrap.append(h("div",{class:"head"}, h("div",null, h("h1",null, r.title),
+    h("div",{class:"meta-line"}, teamTag(r.team), h("span",null, r.date ? fmtDate(r.date,true) : "Sem data"), h("span",null, `${st.cards} cards, ${st.votes} votos, ${st.comments} comentários`), r.source ? h("span",null, r.source) : null)),
+    S.canWrite ? h("button",{class:"btn ghost",type:"button",onclick:()=>{S.editMeta = S.editMeta===r.id ? null : r.id; render();}}, S.editMeta===r.id ? "Fechar edição" : "Editar dados") : null));
+  if(S.editMeta===r.id){
+    const m = {team:r.team||"", title:r.title||"", date:r.date||""};
+    wrap.append(h("div",{class:"meta-edit"},
+      field("Time", h("input",{type:"text",list:"dl-teams",value:m.team,oninput:e=>m.team=e.target.value})),
+      field("Título", h("input",{type:"text",value:m.title,oninput:e=>m.title=e.target.value})),
+      field("Data", h("input",{type:"date",value:m.date,oninput:e=>m.date=e.target.value})),
+      h("button",{class:"btn primary",type:"button",onclick:async()=>{
+        const team = m.team.trim()||r.team;
+        const ok = await write("retros/"+r.id, ()=>db.doc("retros/"+r.id).update({team, title:m.title.trim()||r.title, date:m.date}));
+        if(ok && team!==r.team){ for(const a of S.actions.filter(x=>x.retroId===r.id)) await write("actions/"+a.id, ()=>db.doc("actions/"+a.id).update({team})); }
+        if(ok){ S.editMeta=null; toast("Dados da retro salvos."); render(); }
+      }},"Salvar")));
+  }
+  // insights
+  const busy = S.busy[r.id];
+  const ins = r.insights;
+  wrap.append(h("section",{class:"insights","aria-labelledby":"ih"},
+    h("div",{class:"sec-head"}, h("h2",{id:"ih"},"Leitura da retro"),
+      (sample && S.canWrite) ? h("button",{class:"btn "+(ins?"":"primary"),type:"button",disabled:!!busy,onclick:()=>analyzeRetro(r)}, ins ? "Gerar de novo" : "Gerar leitura e sugestões") : null),
+    ins ? [
+      h("p",{class:"resumo"}, ins.resumo),
+      h("div",{class:"ins-grid"},
+        h("div",null, h("h3",null,"Temas"), h("ul",{class:"themes"}, arr(ins.temas).map(t=>h("li",null, h("span",{class:"tone "+t.tom}, TONE[t.tom]||"Atenção"), h("strong",null,t.tema), t.detalhe ? h("span",{class:"tdet"},t.detalhe) : null)))),
+        arr(ins.elogios).length ? h("div",null, h("h3",null,"Elogios"), h("ul",{class:"kudos"}, arr(ins.elogios).map(e=>h("li",null,e)))) : null)
+    ] : h("p",{class:"hint"}, sample ? "Gere uma leitura com temas, elogios e sugestões de ação a partir dos cards. As sugestões aparecem em Ações para você aprovar." : "A leitura por IA não está disponível nesta visita. Você ainda pode criar ações a partir de cada card."),
+    busy ? h("p",{class:"busy",role:"status"}, busy) : null));
+  // board
+  wrap.append(h("h2",{style:"margin:6px 0 12px"},"Cards"));
+  wrap.append(h("section",{class:"retro-board","aria-label":"Cards da retro"}, arr(r.columns).map((col,ci)=>h("div",{class:"rcol"},
+    h("h3",{class:"rcol-h"}, h("span",{class:"swatch n"+(ci%5),"aria-hidden":"true"}), col.name, h("span",{class:"count"}, arr(col.cards).length)),
+    h("p",{class:"rcol-d"}, col.description||""),
+    arr(col.cards).length ? h("ul",{class:"notes"}, arr(col.cards).map((c,i)=>h("li",{class:"note n"+(ci%5),style:`--r:${ROT[(ci*3+i)%ROT.length]}deg`},
+      h("p",{class:"note-t"}, splitMerged(c.t)),
+      arr(c.c).length ? h("ul",{class:"note-c"}, arr(c.c).map(x=>h("li",null,x))) : null,
+      h("div",{class:"note-f"}, c.v ? h("span",{class:"votes"}, `${c.v} ${c.v>1?"votos":"voto"}`) : h("span"),
+        S.canWrite ? h("button",{class:"note-btn",type:"button",onclick:()=>openAction(null,{origin:[String(c.t).slice(0,280)],team:r.team,retroId:r.id})},"Criar ação") : null)))) : h("p",{class:"hint"},"Sem cards.")))));
+  // actions
+  wrap.append(h("h2",{style:"margin:26px 0 12px"},"Ações desta retro", h("span",{class:"count"}, acts.length)));
+  wrap.append(acts.length ? h("ul",{class:"ract"}, acts.map(a=>h("li",null, h("button",{type:"button",onclick:()=>openAction(a)}, h("span",null, h("strong",null,a.title), a.owner ? h("span",{class:"rsub"}, a.owner) : null), h("span",{class:"st "+a.state}, STATE[a.state]))))) : h("p",{class:"hint"},"Nenhuma ação ligada a esta retro ainda."));
+  if(S.canValidate) wrap.append(h("div",{class:"danger-zone"}, h("button",{class:"btn danger",type:"button",onclick:()=>deleteRetro(r)},"Excluir retro")));
+  return wrap;
+}
+async function deleteRetro(r){
+  if(!(await confirmAsk("Excluir esta retro?","Os cards e as sugestões ainda não validadas desta retro serão apagados. Ações já validadas continuam na lista.","Excluir retro"))) return;
+  for(const a of S.actions.filter(x=>x.retroId===r.id && x.state==="sugerida")) await write("actions/"+a.id, ()=>db.doc("actions/"+a.id).delete());
+  const ok = await write("retros/"+r.id, ()=>db.doc("retros/"+r.id).delete());
+  if(ok){ toast("Retro excluída."); location.hash="#retros"; }
+}
+
+/* ---------- AI: retro analysis ---------- */
+function retroText(r, max=16000){
+  const lines=[];
+  for(const col of arr(r.columns)){
+    lines.push(`## ${col.name}${col.description ? ` (${col.description})` : ""}`);
+    for(const c of arr(col.cards)){
+      lines.push(`- ${String(c.t).replace(/\s*\n\s*/g," / ")}${c.v ? ` [${c.v} votos]` : ""}`);
+      for(const x of arr(c.c)) lines.push(`  ↳ comentário: ${x}`);
+    }
+  }
+  let t = lines.join("\n"); if(t.length>max) t = t.slice(0,max)+"\n[…cortado]"; return t;
+}
+async function analyzeRetro(r){
+  if(!sample || S.busy[r.id]) return;
+  S.busy[r.id] = "A IA está lendo os cards. Isso leva alguns segundos…"; render();
+  const existing = S.actions.filter(a=>slug(a.team)===slug(r.team) && a.state!=="descartada").map(a=>`- ${a.title} (${STATE[a.state]})`).slice(0,40).join("\n") || "(nenhuma)";
+  const prompt = `Você ajuda a liderança de times de desenvolvimento de software a transformar retrospectivas em ações concretas.
+
+Retro: ${r.title}
+Time: ${r.team}
+Data: ${r.date || "não informada"}
+
+Colunas e cards (votos entre colchetes; "↳" são comentários do time):
+${retroText(r)}
+
+Ações que este time já tem (não repita nem crie variações delas):
+${existing}
+
+Tipos de ação disponíveis (use 1 ou 2 por ação, escritos exatamente como abaixo):
+${tagList().map(t=>"- "+t.name).join("\n") || "(nenhum)"}
+
+Responda somente com JSON neste formato:
+{"resumo":"2 a 3 frases sobre o clima e os pontos centrais","temas":[{"tema":"rótulo curto","tom":"positivo|atencao|critico","detalhe":"1 frase"}],"elogios":["elogio curto com o nome de quem foi citado"],"acoes":[{"titulo":"começa com verbo no infinitivo, até 80 caracteres","detalhe":"o que fazer e como saber que foi feito, 1 a 2 frases","origem":["trecho curto do card que motivou"],"prioridade":"alta|media|baixa","responsavel":"nome citado nos cards como dono da ação, ou texto vazio","recorrente":false,"tags":["tipo da lista acima"]}]}
+(Use "recorrente": true quando a ação for um hábito que o time precisa manter sempre, sem data de fim, como olhar um painel na daily.)
+
+Regras: de 3 a 7 ações, pequenas o bastante para caber em duas semanas; dê prioridade a cards com votos, comentários e temas repetidos; não invente fatos nem nomes; ignore cards só de brincadeira; escreva em português do Brasil.`;
+  try{
+    const res = await sample.json(prompt, {modelTier:"default"});
+    if(!res || typeof res!=="object") throw {code:"invalid_json"};
+    const insights = {
+      resumo: String(res.resumo||"").slice(0,1200),
+      temas: arr(res.temas).slice(0,10).map(t=>({tema:String(t.tema||"").slice(0,80), tom:["positivo","atencao","critico"].includes(t.tom)?t.tom:"atencao", detalhe:String(t.detalhe||"").slice(0,240)})).filter(t=>t.tema),
+      elogios: arr(res.elogios).map(x=>String(x).slice(0,200)).filter(Boolean).slice(0,8),
+      at: nowIso(), by: S.myId||null };
+    await write("retros/"+r.id, ()=>db.doc("retros/"+r.id).update({insights}));
+    const seen = new Set(S.actions.filter(a=>slug(a.team)===slug(r.team)).map(a=>norm(a.title)));
+    let n=0;
+    for(const x of arr(res.acoes).slice(0,10)){
+      const title = String(x.titulo||"").trim().slice(0,140); if(!title || seen.has(norm(title))) continue; seen.add(norm(title));
+      const id = newId(r.team+"-"+title);
+      const ok = await write("actions/"+id, ()=>db.doc("actions/"+id).set({
+        title, detail:String(x.detalhe||"").slice(0,600), origin:arr(x.origem).map(o=>String(o).slice(0,280)).slice(0,3),
+        priority:["alta","media","baixa"].includes(x.prioridade)?x.prioridade:"media", owner:String(x.responsavel||"").slice(0,80),
+        due:"", recurring:x.recorrente===true || x.recorrente==="true", tags:arr(x.tags).map(n=>(S.tags.find(t=>norm(t.name)===norm(n))||{}).id).filter(Boolean).slice(0,3), state:"sugerida", source:"ia", team:r.team, retroId:r.id, createdAt:nowIso(), createdBy:S.myId||null, updates:[] }));
+      if(ok) n++;
+    }
+    toast(n ? `${n} ${n>1?"sugestões criadas":"sugestão criada"}. Revise em Ações.` : "Leitura pronta. Nenhuma sugestão nova além das que já existem.");
+  }catch(e){ toast(sampleErr(e)); }
+  finally{ delete S.busy[r.id]; render(); }
+}
+
+/* ---------- view: times ---------- */
+function viewTimes(){
+  const teams = teamList().filter(([s])=>S.team==="all"||s===S.team);
+  const wrap = h("div",null, h("div",{class:"head"}, h("div",null, h("h1",null,"Acompanhamento dos times"), h("p",{class:"sub"},"Como cada time está andando com as ações das retros, e o que vem se repetindo."))));
+  if(!teams.length){ wrap.append(h("div",{class:"empty"}, h("strong",null,"Nenhum time ainda"), "Os times aparecem aqui quando você importa a primeira retro.")); return wrap; }
+  wrap.append(h("div",{class:"teams"}, teams.map(([s,name])=>teamCard(s,name))));
+  return wrap;
+}
+function teamCard(s, name){
+  const retros = S.retros.filter(r=>slug(r.team)===s).sort((a,b)=>String(b.date||"").localeCompare(String(a.date||"")));
+  const acts = S.actions.filter(a=>slug(a.team)===s);
+  const val = acts.filter(a=>LIVE.includes(a.state));
+  const toVal = val.filter(a=>a.state==="validacao").length;
+  const done = val.filter(a=>a.state==="concluida").length;
+  const late = val.filter(isLate).length;
+  const prog = val.filter(a=>a.state==="andamento").length;
+  const open = val.filter(a=>a.state==="aberta").length;
+  const pct = val.length ? Math.round(done/val.length*100) : 0;
+  const themeMap = new Map();
+  for(const r of retros) for(const t of arr(r.insights && r.insights.temas)){ const k=norm(t.tema); const e=themeMap.get(k)||{tema:t.tema,tom:t.tom,n:0}; e.n++; themeMap.set(k,e); }
+  const themes = [...themeMap.values()].sort((a,b)=>b.n-a.n || (a.tom==="critico"?-1:1)).slice(0,6);
+  const kudos = retros.flatMap(r=>arr(r.insights && r.insights.elogios)).slice(0,4);
+  const byTag = tagList().map(t=>({t, n:acts.filter(a=>a.state!=="descartada" && arr(a.tags).includes(t.id)).length})).filter(x=>x.n).sort((a,b)=>b.n-a.n);
+  const maxTag = Math.max(1, ...byTag.map(x=>x.n));
+  const fb = S.teams[s];
+  const busy = S.busy["team:"+s];
+  const last = retros[0];
+  return h("article",{class:"tcard"},
+    h("div",{class:"tcard-h"}, h("h2",null,name), h("span",{class:"hint"}, `${retros.length} ${retros.length===1?"retro":"retros"}${last&&last.date?`, a última em ${fmtDate(last.date)}`:""}`)),
+    h("div",{class:"nums"},
+      h("div",{class:"num"}, h("b",null,open), h("span",null,"a fazer")),
+      h("div",{class:"num"}, h("b",null,prog), h("span",null,"em andamento")),
+      h("div",{class:"num"}, h("b",null,toVal), h("span",null,"para validar")),
+      h("div",{class:"num"}, h("b",null,done), h("span",null,"fechadas")),
+      h("div",{class:"num"+(late?" bad":"")}, h("b",null,late), h("span",null,"atrasadas"))),
+    h("div",null, h("div",{class:"progress",role:"img","aria-label":`${pct}% das ações aprovadas fechadas`}, h("i",{style:`width:${pct}%`})), h("p",{class:"hint",style:"margin-top:6px"}, val.length ? `${pct}% das ações aprovadas já fechadas.` : "Nenhuma ação aprovada ainda.")),
+    themes.length ? h("div",null, h("h3",{style:"margin-bottom:8px"},"Temas que aparecem nas retros"), h("ul",{class:"themes"}, themes.map(t=>h("li",null, h("span",{class:"tone "+t.tom}, TONE[t.tom]||"Atenção"), h("span",null, t.tema, t.n>1 ? h("span",{class:"count"}, `${t.n} retros`) : null))))) : null,
+    byTag.length ? h("div",null, h("h3",{style:"margin-bottom:8px"},"Ações por tipo"), h("div",{class:"tbars"}, byTag.map(({t,n})=>h("div",{class:"tbar",style:`--h:${t.hue??200}`}, h("span",null,t.name), h("div",{class:"bar","aria-hidden":"true"}, h("i",{style:`width:${Math.round(n/maxTag*100)}%`})), h("b",null,n))))) : null,
+    kudos.length ? h("div",null, h("h3",{style:"margin-bottom:8px"},"Elogios recentes"), h("ul",{class:"kudos"}, kudos.map(k=>h("li",null,k)))) : null,
+    h("div",{class:"fb"},
+      h("div",{class:"sec-head",style:"margin:0"}, h("h3",null,"Feedback para o time"),
+        (sample && S.canWrite) ? h("button",{class:"btn",type:"button",disabled:!!busy,onclick:()=>teamFeedback(s,name)}, fb ? "Atualizar feedback" : "Gerar feedback") : null),
+      fb && fb.feedback ? [
+        h("p",{class:"fb-msg"}, fb.feedback.mensagem),
+        h("div",{class:"fb-cols"},
+          arr(fb.feedback.manter).length ? h("div",null, h("h3",null,"Manter"), h("ul",null, arr(fb.feedback.manter).map(x=>h("li",null,x)))) : null,
+          arr(fb.feedback.melhorar).length ? h("div",null, h("h3",null,"Melhorar"), h("ul",null, arr(fb.feedback.melhorar).map(x=>h("li",null,x)))) : null),
+        fb.feedback.proximo_passo ? h("p",null, h("strong",null,"Próximo passo: "), fb.feedback.proximo_passo) : null,
+        h("p",{class:"by"}, `Gerado em ${new Date(fb.at).toLocaleDateString("pt-BR")}${fb.by?` por ${personName(fb.by)}`:""}`)
+      ] : h("p",{class:"hint"}, sample ? "Gere um feedback a partir das retros e do andamento das ações deste time." : "O feedback por IA não está disponível nesta visita."),
+      busy ? h("p",{class:"busy",role:"status"}, busy) : null));
+}
+async function teamFeedback(s, name){
+  if(!sample || S.busy["team:"+s]) return;
+  S.busy["team:"+s] = "A IA está preparando o feedback…"; render();
+  const retros = S.retros.filter(r=>slug(r.team)===s).sort((a,b)=>String(a.date||"").localeCompare(String(b.date||"")));
+  const acts = S.actions.filter(a=>slug(a.team)===s && a.state!=="descartada");
+  const rtxt = retros.map(r=>`### ${r.title} (${r.date||"sem data"})\n` + (r.insights && r.insights.resumo ? `Resumo: ${r.insights.resumo}\nTemas: ${arr(r.insights.temas).map(t=>`${t.tema} [${t.tom}]`).join("; ")}\n` : retroText(r, 4000))).join("\n\n").slice(0,18000);
+  const atxt = acts.map(a=>`- ${a.title} | estado: ${STATE[a.state]} | tipo: ${arr(a.tags).map(id=>(tagOf(id)||{}).name).filter(Boolean).join(", ")||"sem tipo"} | responsável: ${a.owner||"nenhum"} | prazo: ${a.recurring ? "recorrente, sem data" : (a.due||"sem prazo")}${isLate(a)?" | ATRASADA":""} | atualizações: ${arr(a.updates).length}`).join("\n") || "(nenhuma ação)";
+  const prompt = `Você é um agile coach escrevendo um feedback curto, honesto e respeitoso para o time "${name}", com base nas retrospectivas e no andamento das ações combinadas. Hoje é ${fmtDate(todayStr(),true)}.
+
+Retrospectivas:
+${rtxt}
+
+Ações do time:
+${atxt}
+
+Responda somente com JSON:
+{"mensagem":"um parágrafo de 3 a 5 frases dirigido ao time, reconhecendo o que vai bem e apontando o principal ponto de atenção","manter":["até 3 itens"],"melhorar":["até 3 itens"],"proximo_passo":"uma ação concreta para a próxima sprint"}
+
+Escreva em português do Brasil, sem expor críticas a pessoas específicas e sem inventar fatos.`;
+  try{
+    const res = await sample.json(prompt, {modelTier:"default"});
+    if(!res || typeof res!=="object") throw {code:"invalid_json"};
+    const feedback = {mensagem:String(res.mensagem||"").slice(0,1500), manter:arr(res.manter).map(String).slice(0,3), melhorar:arr(res.melhorar).map(String).slice(0,3), proximo_passo:String(res.proximo_passo||"").slice(0,300)};
+    const ok = await write("teams/"+s, ()=>db.doc("teams/"+s).set({name, feedback, at:nowIso(), by:S.myId||null}));
+    if(ok) toast("Feedback do time atualizado.");
+  }catch(e){ toast(sampleErr(e)); }
+  finally{ delete S.busy["team:"+s]; render(); }
+}
+
+/* ---------- import ---------- */
+function inferDate(str){
+  const m = String(str).match(/(?<!\d)(\d{2})[\/\-_. ]?(\d{2})(?:[\/\-_. ](\d{2,4}))?(?!\d)/);
+  if(!m) return "";
+  const d=+m[1], mo=+m[2]; if(d<1||d>31||mo<1||mo>12) return "";
+  let y = m[3] ? (+m[3] < 100 ? 2000 + +m[3] : +m[3]) : new Date().getFullYear();
+  let iso = `${y}-${String(mo).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+  if(!m[3] && iso > todayStr()){ y--; iso = `${y}-${String(mo).padStart(2,"0")}-${String(d).padStart(2,"0")}`; }
+  return iso;
+}
+function inferTeam(title){
+  const t = norm(title);
+  for(const [,n] of teamList()) if(t.includes(norm(n))) return n;
+  let s = String(title).replace(/(?<!\d)\d{2}[\/\-_. ]?\d{2}(?:[\/\-_. ]\d{2,4})?(?!\d)/,"").replace(/easyretro/i,"").replace(/[\s\-_–|:]+$/,"").replace(/^[\s\-_–|:]+/,"").trim();
+  return s || "Sem time";
+}
+function parseCard(raw){
+  let text = String(raw).replace(/\r/g,""); let comments=[]; let votes=0;
+  const ci = text.search(/\s+Comments\s+-\s/);
+  if(ci>=0){ const ctext = text.slice(ci).replace(/^\s+Comments\s+/,""); text = text.slice(0,ci); comments = ctext.split(/(?:^|\s{2,})-\s+/).map(s=>s.trim()).filter(Boolean); }
+  const vm = text.match(/\s*\((\d+) votes?\)\s*$/i); if(vm){ votes=+vm[1]; text=text.slice(0,vm.index); }
+  text = text.replace(/\s+---\s+/g,"\n---\n").trim();
+  return {t:text, v:votes, c:comments};
+}
+function parseRows(rows, filename){
+  rows = rows.map(r=>arr(r).map(c=>c==null?"":String(c)));
+  const title = ((rows[0]||[]).find(c=>c.trim()) || filename.replace(/\.[^.]+$/,"")).trim();
+  let hi = rows.findIndex((r,i)=>i>0 && r.filter(c=>c.trim()).length>=2);
+  if(hi<0) hi = rows.length>1 ? 1 : 0;
+  const headers = rows[hi] || [];
+  let start = hi+1, descs=[];
+  if(rows[start] && rows[start].some(c=>/^\s*Description:/i.test(c))){ descs = rows[start].map(c=>c.replace(/^\s*Description:\s*/i,"").trim()); start++; }
+  const width = Math.max(headers.length, ...rows.slice(start).map(r=>r.length));
+  const cols = Array.from({length:width},(_,i)=>({name:(headers[i]||"").trim(), description:descs[i]||"", cards:[]}));
+  for(const r of rows.slice(start)) r.forEach((cell,i)=>{ if(cell.trim()) cols[i].cards.push(parseCard(cell)); });
+  const columns = cols.filter(c=>c.name || c.cards.length).map((c,i)=>({...c, name:c.name||`Coluna ${i+1}`}));
+  return {title, columns};
+}
+async function parseSheet(file){
+  await loadScript(XLSX_SRC);
+  const wb = XLSX.read(await file.arrayBuffer(), {type:"array"});
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:"", raw:false, blankrows:true});
+  return parseRows(rows, file.name);
+}
+async function pdfLines(file){
+  await loadScript(PDF_SRC); await loadScript(PDFW_SRC);
+  const lib = window.pdfjsLib; lib.GlobalWorkerOptions.workerSrc = PDFW_SRC;
+  const pdf = await lib.getDocument({data:new Uint8Array(await file.arrayBuffer()), isEvalSupported:false}).promise;
+  const out=[];
+  for(let p=1;p<=pdf.numPages;p++){
+    const page = await pdf.getPage(p); const tc = await page.getTextContent();
+    const rows=[];
+    for(const it of tc.items){
+      if(!it.str || !it.str.trim()) continue;
+      const y=it.transform[5], x=it.transform[4], hh=Math.abs(it.transform[3])||it.height||0;
+      let row = rows.find(r=>Math.abs(r.y-y)<=2); if(!row){ row={y,items:[],h:0}; rows.push(row); }
+      row.items.push({x, w:it.width||0, s:it.str}); row.h=Math.max(row.h,hh);
+    }
+    rows.sort((a,b)=>b.y-a.y);
+    for(const r of rows){
+      r.items.sort((a,b)=>a.x-b.x); let t="", end=null;
+      for(const i of r.items){ if(end!==null && i.x-end>1 && !t.endsWith(" ") && !i.s.startsWith(" ")) t+=" "; t+=i.s; end=i.x+i.w; }
+      t=t.replace(/\s+/g," ").trim(); if(t) out.push({t, h:Math.round(r.h*10)/10});
+    }
+  }
+  return out;
+}
+function pdfHeuristic(lines, filename){
+  const L = lines.filter(l=>!/^Gerado\s/i.test(l.t) && !/^Easy\s?Retro$/i.test(l.t));
+  const title = (L[0] && L[0].t) || filename;
+  const ci = L.findIndex(l=>l.t==="Cards");
+  const body = L.slice(ci>=0 ? ci+1 : 1);
+  const hs = body.map(l=>l.h).sort((a,b)=>a-b); const med = hs[Math.floor(hs.length/2)] || 10;
+  const cols=[]; let cur=null, expectDesc=false;
+  for(const l of body){
+    if(l.h > med*1.18 && l.t.length<70){ cur={name:l.t.replace(/^[^\p{L}\p{N}]+/u,"").trim(), description:"", cards:[]}; cols.push(cur); expectDesc=true; continue; }
+    if(!cur){ cur={name:"Cards",description:"",cards:[]}; cols.push(cur); }
+    if(/^\d{1,3}$/.test(l.t)){ const last=cur.cards[cur.cards.length-1]; if(last) last.v=Math.max(last.v,+l.t); continue; }
+    if(expectDesc){ cur.description=l.t; expectDesc=false; continue; }
+    cur.cards.push({t:l.t, v:0, c:[]});
+  }
+  return {title, columns:cols.filter(c=>c.cards.length||c.name)};
+}
+async function parsePdf(file, item){
+  const lines = await pdfLines(file);
+  if(!lines.length) throw new Error("O PDF não tem texto legível (pode ser uma imagem escaneada).");
+  if(sample){
+    item.status="lendo"; item.note="Organizando o PDF com a IA…"; drawImport();
+    const text = lines.map(l=>l.t).join("\n").slice(0,30000);
+    const prompt = `Este é o texto extraído de um PDF exportado do EasyRetro (uma retrospectiva ágil). A ordem é: título do quadro, "Gerado <data>", "Sumário" com contadores (ignore), "Cards" e então cada coluna: o nome da coluna, uma linha de descrição da coluna e os cards dela, um por vez. Um número solto (como 1 ou 2) logo depois de um card é a contagem de votos ou de comentários daquele card. Quando há contagem de comentários, as linhas seguintes que respondem ao card são comentários dele. Linhas "---" juntam cards mesclados: mantenha tudo num único card, com "\\n---\\n" entre as partes. Um card pode ocupar várias linhas: junte as linhas de um mesmo card.
+
+Texto:
+${text}
+
+Responda somente com JSON: {"title":"título do quadro","columns":[{"name":"nome da coluna","description":"descrição da coluna","cards":[{"t":"texto do card","v":0,"c":["comentário"]}]}]}
+Em "v" ponha os votos (0 se não souber se o número era voto ou comentário e não houver comentário depois). Não invente nem resuma: copie o texto dos cards.`;
+    try{
+      const res = await sample.json(prompt, {modelTier:"default"});
+      if(res && Array.isArray(res.columns) && res.columns.length){
+        return {title:String(res.title||lines[0].t), columns:res.columns.map((c,i)=>({name:String(c.name||`Coluna ${i+1}`), description:String(c.description||""), cards:arr(c.cards).map(k=>({t:String(k.t||"").trim(), v:Math.max(0,parseInt(k.v)||0), c:arr(k.c).map(String).filter(Boolean)})).filter(k=>k.t)})), via:"ia"};
+      }
+    }catch(e){ item.note = sampleErr(e); }
+  }
+  const out = pdfHeuristic(lines, file.name); out.via="estimado"; return out;
+}
+function openImport(){
+  S.imp = {items:[], ai: !!sample, saving:false};
+  drawImport(); $("#dlg").showModal();
+}
+function drawImport(){
+  const I = S.imp; if(!I) return; const dlg=$("#dlg");
+  const okItems = I.items.filter(i=>i.status==="ok");
+  const input = h("input",{type:"file",multiple:true,accept:".xlsx,.xls,.csv,.pdf",class:"sr",onchange:e=>{handleFiles(e.target.files); e.target.value="";}});
+  const drop = h("label",{class:"drop",
+      ondragover:e=>{e.preventDefault(); drop.classList.add("over");}, ondragleave:()=>drop.classList.remove("over"),
+      ondrop:e=>{e.preventDefault(); drop.classList.remove("over"); handleFiles(e.dataTransfer.files);}},
+    input, h("strong",null,"Escolher arquivos"), " ou arraste para cá", h("div",{class:"hint",style:"margin-top:6px"},"Excel (.xlsx) ou PDF exportados do EasyRetro"));
+  dlg.replaceChildren(h("div",{class:"dlg"},
+    h("div",{class:"dlg-h"}, h("h2",{id:"dlg-title"},"Importar retrospectivas"), h("button",{class:"btn ghost",type:"button","aria-label":"Fechar",onclick:()=>dlg.close()},"✕")),
+    h("p",{class:"hint"},"No EasyRetro, abra o quadro e exporte em Excel (melhor) ou PDF. Confira o time e a data antes de salvar."),
+    drop,
+    I.items.length ? h("ul",{class:"imp-list"}, I.items.map(impItem)) : null,
+    h("div",{class:"dlg-f"},
+      sample ? h("label",{class:"check left"}, h("input",{type:"checkbox",checked:I.ai,onchange:e=>I.ai=e.target.checked}), "Gerar leitura e sugestões de ação com IA ao salvar") : h("span",{class:"left"}),
+      h("button",{class:"btn",type:"button",onclick:()=>dlg.close()},"Cancelar"),
+      h("button",{class:"btn primary",type:"button",disabled:!okItems.length||I.saving,onclick:saveImport}, I.saving ? "Salvando…" : okItems.length>1 ? `Salvar ${okItems.length} retros` : "Salvar retro"))));
+}
+function impItem(it){
+  const I=S.imp;
+  if(it.status==="lendo") return h("li",{class:"imp"}, h("strong",null,it.file), h("span",{class:"hint"}, it.note || "Lendo arquivo…"));
+  if(it.status==="erro") return h("li",{class:"imp"}, h("strong",null,it.file), h("span",{class:"err"}, `Não consegui ler este arquivo: ${it.err}`), h("div",null,h("button",{class:"btn ghost",type:"button",onclick:()=>{I.items=I.items.filter(x=>x!==it); drawImport();}},"Remover")));
+  const st = statsOf(it.columns);
+  const dup = S.retros.some(r=>slug(r.team)===slug(it.team) && (r.date===it.date && it.date || norm(r.title)===norm(it.title)));
+  return h("li",{class:"imp"},
+    h("div",{class:"sug-meta"}, h("strong",null,it.file), h("span",{class:"hint"}, `${it.columns.length} colunas, ${st.cards} cards, ${st.votes} votos`)),
+    h("div",{class:"imp-row"},
+      field("Time", h("input",{type:"text",list:"dl-teams",value:it.team,oninput:e=>it.team=e.target.value})),
+      field("Título", h("input",{type:"text",value:it.title,oninput:e=>it.title=e.target.value})),
+      field("Data", h("input",{type:"date",value:it.date,oninput:e=>it.date=e.target.value})),
+      h("button",{class:"btn ghost",type:"button",onclick:()=>{I.items=I.items.filter(x=>x!==it); drawImport();}},"Remover")),
+    h("div",{class:"cols"}, it.columns.map((c,i)=>h("span",{class:"mini-note",style:`background:var(--n${i%5})`}, `${c.name} (${c.cards.length})`))),
+    it.via==="estimado" ? h("p",{class:"warn"},"Colunas estimadas sem IA. Confira se os cards estão nas colunas certas; se possível, use a exportação em Excel.") : null,
+    it.note && it.via==="estimado" ? h("p",{class:"warn"}, it.note) : null,
+    dup ? h("p",{class:"warn"},"Já existe uma retro parecida deste time. Salvar cria outra cópia.") : null);
+}
+async function handleFiles(list){
+  const I=S.imp; if(!I) return;
+  for(const file of [...list]){
+    const it = {file:file.name, status:"lendo"}; I.items.push(it); drawImport();
+    try{
+      const ext = file.name.split(".").pop().toLowerCase();
+      let parsed;
+      if(["xlsx","xls","csv","xlsm"].includes(ext)) parsed = await parseSheet(file);
+      else if(ext==="pdf") parsed = await parsePdf(file, it);
+      else throw new Error("formato não suportado. Use .xlsx ou .pdf.");
+      if(!parsed.columns.length || !statsOf(parsed.columns).cards) throw new Error("não encontrei cards no arquivo.");
+      const base = `${parsed.title} ${file.name}`;
+      Object.assign(it, {status:"ok", title:parsed.title, columns:parsed.columns, via:parsed.via, team:inferTeam(parsed.title), date:inferDate(parsed.title) || inferDate(file.name)});
+    }catch(e){ it.status="erro"; it.err = (e && e.message) || "erro desconhecido"; }
+    drawImport();
+  }
+}
+async function saveImport(){
+  const I=S.imp; I.saving=true; drawImport();
+  const saved=[];
+  for(const it of I.items.filter(x=>x.status==="ok")){
+    const team = (it.team||"").trim() || "Sem time";
+    const id = newId(team+"-"+(it.date||"retro"));
+    const doc = {team, title:(it.title||"").trim()||it.file, date:it.date||"", source:it.file, columns:it.columns, stats:statsOf(it.columns), insights:null, createdAt:nowIso(), createdBy:S.myId||null};
+    const ok = await write("retros/"+id, ()=>db.doc("retros/"+id).set(doc));
+    if(ok) saved.push({id, ...doc});
+  }
+  const ai = I.ai; S.imp=null; $("#dlg").close();
+  if(!saved.length) return;
+  toast(saved.length>1 ? `${saved.length} retros importadas.` : "Retro importada.");
+  location.hash = saved.length===1 ? "#retro-"+saved[0].id : "#retros";
+  if(ai && sample) for(const r of saved) await analyzeRetro(r);
+}
+
+/* ---------- routing & boot ---------- */
+function route(){
+  const hs = decodeURIComponent(location.hash.slice(1));
+  if(hs.startsWith("retro-")){ S.view="retro"; S.openRetro=hs.slice(6); }
+  else { S.view = ["acoes","retros","times"].includes(hs) ? hs : "acoes"; }
+  render(); window.scrollTo(0,0);
+}
+window.addEventListener("hashchange", route);
+$("#btnImport").addEventListener("click", openImport);
+$("#dlg").addEventListener("close", ()=>{ S.imp=null; });
+
+async function boot(){
+  route();
+  if(!window.claude || typeof window.claude.use!=="function"){ S.noDb=true; S.loading=false; render(); return; }
+  const [d,u,s] = await Promise.all([claude.use("db"), claude.use("user"), claude.use("sample")]);
+  db=d; user=u; sample=s;
+  if(user){
+    try{ S.canValidate = await user.canEdit(); }catch(e){}
+    try{ const w = await user.can("data.write"); S.canWrite = w!==false; }catch(e){}
+    try{ S.myId = await user.id(); }catch(e){}
+  }
+  if(!db){ S.noDb=true; S.loading=false; render(); return; }
+  const timer = setTimeout(()=>{ if(S.loading){ S.stale=true; schedule(); } }, 10000);
+  const done = () => { if(S.ready.retros && S.ready.actions && S.ready.teams){ S.loading=false; S.stale=false; clearTimeout(timer); } };
+  db.collection("retros").onSnapshot(snap=>{ S.retros = snap.docs.map(x=>({id:x.id, ...x.data()})); if(!snap.metadata.fromCache) S.ready.retros=true; done(); schedule(); }, ()=>{ S.ready.retros=true; done(); schedule(); });
+  db.collection("actions").onSnapshot(snap=>{ S.actions = snap.docs.map(x=>({id:x.id, ...x.data()})); if(!snap.metadata.fromCache) S.ready.actions=true; done(); schedule(); }, ()=>{ S.ready.actions=true; done(); schedule(); });
+  db.collection("teams").onSnapshot(snap=>{ const m={}; for(const x of snap.docs) m[x.id]=x.data(); S.teams=m; if(!snap.metadata.fromCache) S.ready.teams=true; done(); schedule(); }, ()=>{ S.ready.teams=true; done(); schedule(); });
+  db.collection("tags").onSnapshot(snap=>{ S.tags = snap.docs.map(x=>({id:x.id, ...x.data()})); schedule(); }, ()=>{});
+  render();
+}
+boot();
+</script>
+</body>
+</html>

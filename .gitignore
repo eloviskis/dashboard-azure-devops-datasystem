@@ -36,6 +36,8 @@ dist-ssr
 .vercel
 *.xlsx
 *.xls
+# Exportações do EasyRetro usadas como fixtures do check do importador da Retrô
+!docs/retro/fixtures/*.xlsx
 
 # Backend credentials
 backend/.env
