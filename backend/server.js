@@ -22,6 +22,7 @@ const { sendTeamsMessage } = require('./services/teams');
 const { getDailyReviewRanking } = require('./services/reviewRanking');
 const { runPainelPorTimeDigest, runPainelPorTimeDigestIfDue } = require('./services/painelPorTimeDigest');
 const { initRetroSchema, registerRetro } = require('./retro');
+const { initRetroBoardSchema, registerRetroBoard } = require('./retroBoard');
 
 // Database driver: PostgreSQL (pg) with connection pooling
 const { Pool, types } = require('pg');
@@ -64,7 +65,7 @@ function setCorsHeaders(req, res) {
     res.setHeader('Access-Control-Allow-Origin', '*');
   }
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With, Content-Type, Authorization, Accept');
+  res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With, Content-Type, Authorization, Accept, X-Retro-Participant');
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Max-Age', '86400');
 }
@@ -586,6 +587,7 @@ const initDatabase = async () => {
 
     // Aba Retrô (depende de users e devtracker_developers, criadas acima)
     await initRetroSchema(sql);
+    await initRetroBoardSchema(sql);
 
     console.log('✅ Database initialized');
   } catch (error) {
@@ -3955,6 +3957,7 @@ app.post('/api/ceremonies/calendar-import/confirm', authenticateToken, async (re
 
 // Aba Retrô: /api/retro/* (retro.js). Precisa vir antes do 404 abaixo.
 registerRetro(app, { getSql: () => sql, authenticateToken });
+registerRetroBoard(app, { getSql: () => sql, authenticateToken });
 
 // 404 Handler
 app.use((req, res) => {

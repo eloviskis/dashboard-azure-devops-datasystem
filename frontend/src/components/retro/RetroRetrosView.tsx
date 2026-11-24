@@ -1,6 +1,6 @@
 // Aba Retrô → Retros: lista por time, importação do EasyRetro e tela da retro (post-its, leitura da IA, ações).
 import React, { useEffect, useMemo, useState } from 'react';
-import { retroApi } from './retroApi.ts';
+import { boardImg, retroApi } from './retroApi.ts';
 import type { RetroDetail, RetroSummary } from './retroApi.ts';
 import type { RetroCtx } from './RetroDashboard.tsx';
 import {
@@ -202,7 +202,9 @@ const RetroDetailView: React.FC<{ ctx: RetroCtx; id: string; onBack: () => void 
         </div>
         <p className="text-xs text-ds-text">
           {r.stats.cards} cards · {r.stats.votes} votos · {r.stats.comments} comentários
-          {r.sourceFile && ` · arquivo: ${r.sourceFile}`}{r.createdByName && ` · importada por ${r.createdByName}`}
+          {r.sourceFile === 'Retrô ao vivo (DSMetrics)'
+            ? ` · conduzida ao vivo no DSMetrics${r.createdByName ? ` por ${r.createdByName}` : ''}`
+            : <>{r.sourceFile && ` · arquivo: ${r.sourceFile}`}{r.createdByName && ` · importada por ${r.createdByName}`}</>}
         </p>
         <div className="flex flex-wrap gap-2">
           <Btn onClick={() => setEdit(true)}>Editar dados</Btn>
@@ -251,6 +253,7 @@ const RetroDetailView: React.FC<{ ctx: RetroCtx; id: string; onBack: () => void 
             {c.description && <p className="text-xs text-ds-text">{c.description}</p>}
             {c.cards.map((k, i) => (
               <PostIt key={i} text={k.t} votes={k.v} comments={k.c} color={NOTE_COLORS[ci % 5]} index={ci * 3 + i}>
+                {k.img?.map(src => <img key={src} src={boardImg(src)} alt="Imagem do card" loading="lazy" className="mt-2 max-h-40 max-w-full object-contain rounded" />)}
                 <button type="button" className="mt-2 text-[11px] font-semibold underline focus:outline-none focus-visible:ring-2 focus-visible:ring-ds-dark-blue rounded"
                   onClick={() => ctx.newAction({ teamKey: r.teamKey, retroId: r.id, origin: [k.t.slice(0, 280)] })}>Criar ação</button>
               </PostIt>

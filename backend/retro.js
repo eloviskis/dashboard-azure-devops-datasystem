@@ -8,6 +8,7 @@ const R = require('./services/retroRules');
 const AZ = require('./services/retroAzdo');
 const P = require('./services/retroPrompts');
 const { callGemini, isAiConfigured } = require('./services/ai');
+const { cleanImages } = require('./services/retroBoardRules');
 
 const DEFAULT_TEAMS = [
   { key: 'Sustentacao', label: 'Sustentação', aliases: [] },
@@ -158,10 +159,14 @@ function cleanColumns(cols) {
   const out = cols.slice(0, 20).map((c, i) => ({
     name: str(c?.name, 120) || `Coluna ${i + 1}`,
     description: str(c?.description, 500),
-    cards: (Array.isArray(c?.cards) ? c.cards : []).slice(0, 500).map(k => ({
-      t: str(k?.t, 4000), v: Math.max(0, parseInt(k?.v, 10) || 0),
-      c: (Array.isArray(k?.c) ? k.c : []).map(x => str(x, 2000)).filter(Boolean).slice(0, 100),
-    })).filter(k => k.t),
+    cards: (Array.isArray(c?.cards) ? c.cards : []).slice(0, 500).map(k => {
+      const img = cleanImages(k?.img, 20); // imagens/GIFs dos cards da Retrô ao vivo (retroBoard.js)
+      return {
+        t: str(k?.t, 4000), v: Math.max(0, parseInt(k?.v, 10) || 0),
+        c: (Array.isArray(k?.c) ? k.c : []).map(x => str(x, 2000)).filter(Boolean).slice(0, 100),
+        ...(img.length ? { img } : {}),
+      };
+    }).filter(k => k.t),
   }));
   if (!out.some(c => c.cards.length)) throw Object.assign(new Error('A retro não tem nenhum card'), { status: 400 });
   return out;
@@ -170,6 +175,14 @@ const statsOf = (cols) => {
   const cards = cols.flatMap(c => c.cards);
   return { cards: cards.length, votes: cards.reduce((s, c) => s + c.v, 0), comments: cards.reduce((s, c) => s + c.c.length, 0) };
 };
+
+// Times da Retrô: os escolhidos pela liderança (app_settings.retro_config) ou o padrão.
+async function loadTeams(sql) {
+  const rows = await sql`SELECT value FROM app_settings WHERE key = 'retro_config'`;
+  let teams = null;
+  try { teams = JSON.parse(rows[0]?.value || 'null')?.teams; } catch { /* config inválida: usa padrão */ }
+  return Array.isArray(teams) && teams.length ? teams : DEFAULT_TEAMS;
+}
 
 // ---------------------------------------------------------------- módulo
 function registerRetro(app, { getSql, authenticateToken }) {
@@ -201,13 +214,7 @@ function registerRetro(app, { getSql, authenticateToken }) {
   const fail = (status, message) => Object.assign(new Error(message), { status });
 
   // ---- helpers de dados
-  async function getTeams() {
-    const sql = db();
-    const rows = await sql`SELECT value FROM app_settings WHERE key = 'retro_config'`;
-    let teams = null;
-    try { teams = JSON.parse(rows[0]?.value || 'null')?.teams; } catch { /* config inválida: usa padrão */ }
-    return Array.isArray(teams) && teams.length ? teams : DEFAULT_TEAMS;
-  }
+  const getTeams = () => loadTeams(db());
   const teamLabel = (teams, key) => teams.find(t => t.key === key)?.label || key;
   const getTypes = async () => db()`SELECT id, name, hue, sort_order FROM retro_action_type WHERE active ORDER BY sort_order, name`;
   const getAction = async (id) => (await rawQuery(`${ACTION_SELECT} WHERE a.id = $1`, [id]))[0] || null;
@@ -877,4 +884,4 @@ async function seedRetro(sql, data, { teams = DEFAULT_TEAMS, log = console.log }
   return { types: (data.tags || []).length, retros, actions, missingTeams: [...missingTeams], unmatchedOwners: [...unmatchedOwners] };
 }
 
-module.exports = { initRetroSchema, registerRetro, seedRetro, DEFAULT_TEAMS };
+module.exports = { initRetroSchema, registerRetro, seedRetro, DEFAULT_TEAMS, loadTeams, cleanColumns, statsOf, str, isoDate };

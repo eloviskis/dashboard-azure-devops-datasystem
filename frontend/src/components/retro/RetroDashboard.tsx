@@ -6,10 +6,12 @@ import { useToast } from './retroUi.tsx';
 import RetroActionsView from './RetroActionsView.tsx';
 import RetroRetrosView from './RetroRetrosView.tsx';
 import RetroTeamsView from './RetroTeamsView.tsx';
+import RetroBoardsView from './RetroBoardsView.tsx';
 import { ActionDetailModal, NewActionModal } from './RetroActionModals.tsx';
 import type { NewActionPrefill } from './RetroActionModals.tsx';
 
-type SubView = 'acoes' | 'retros' | 'times';
+type SubView = 'acoes' | 'retros' | 'conduzir' | 'times';
+const VIEWS: SubView[] = ['acoes', 'retros', 'conduzir', 'times'];
 
 export interface RetroCtx {
   config: RetroConfig;
@@ -25,6 +27,7 @@ export interface RetroCtx {
   openAction: (id: string) => void;
   newAction: (prefill?: NewActionPrefill) => void;
   teamLabel: (key: string) => string;
+  openRetro: (id: string) => void;
 }
 
 const readParam = (k: string) => new URLSearchParams(window.location.search).get(k);
@@ -35,7 +38,7 @@ const writeParam = (k: string, v: string | null) => {
 };
 
 const RetroDashboard: React.FC = () => {
-  const [view, setView] = useState<SubView>(() => (['acoes', 'retros', 'times'].includes(readParam('retroView') || '') ? readParam('retroView') as SubView : 'acoes'));
+  const [view, setView] = useState<SubView>(() => (VIEWS.includes(readParam('retroView') as SubView) ? readParam('retroView') as SubView : 'acoes'));
   const [config, setConfig] = useState<RetroConfig | null>(null);
   const [types, setTypes] = useState<ActionType[]>([]);
   const [people, setPeople] = useState<{ people: Person[]; byTeam: Record<string, number[]> }>({ people: [], byTeam: {} });
@@ -79,6 +82,7 @@ const RetroDashboard: React.FC = () => {
     config, types, people: people.people, byTeam: people.byTeam, actions, retros, reload, setTypes, toast,
     setTeams: (teams: RetroTeam[]) => setConfig(c => c && { ...c, teams }),
     openAction, newAction: (p?: NewActionPrefill) => setNewPrefill(p || {}), teamLabel,
+    openRetro: (id: string) => { writeParam('board', null); writeParam('retro', id); setView('retros'); writeParam('retroView', 'retros'); },
   }, [config, types, people, actions, retros, reload, toast, openAction, teamLabel]);
 
   // Contador do menu: sugestões pendentes + (pra liderança) itens esperando validação.
@@ -86,6 +90,7 @@ const RetroDashboard: React.FC = () => {
   const NAV: { id: SubView; label: string; count?: number }[] = [
     { id: 'acoes', label: '✅ Ações', count: pending || undefined },
     { id: 'retros', label: '🗒️ Retros', count: retros.length || undefined },
+    { id: 'conduzir', label: '🎯 Conduzir' },
     { id: 'times', label: '👥 Times' },
   ];
 
@@ -127,6 +132,7 @@ const RetroDashboard: React.FC = () => {
         <>
           {view === 'acoes' && <RetroActionsView ctx={ctx} />}
           {view === 'retros' && <RetroRetrosView ctx={ctx} />}
+          {view === 'conduzir' && <RetroBoardsView ctx={ctx} />}
           {view === 'times' && <RetroTeamsView ctx={ctx} />}
           {openId && <ActionDetailModal ctx={ctx} id={openId} onClose={closeAction} />}
           {newPrefill && <NewActionModal ctx={ctx} prefill={newPrefill} onClose={() => setNewPrefill(null)} />}

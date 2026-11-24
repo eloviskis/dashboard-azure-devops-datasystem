@@ -3,7 +3,7 @@
 // Funções puras — o check (retroParser.check.mjs) roda em Node contra as exportações reais em docs/retro/fixtures.
 import type { Workbook } from 'exceljs';
 
-export interface RetroCard { t: string; v: number; c: string[] }
+export interface RetroCard { t: string; v: number; c: string[]; img?: string[] }
 export interface RetroColumn { name: string; description: string; cards: RetroCard[] }
 export interface ParsedRetro { title: string; columns: RetroColumn[]; via?: 'planilha' | 'ia' | 'estimado'; truncated?: boolean }
 export const PDF_AI_MAX_CHARS = 30000; // o backend corta o texto do PDF nesse tamanho antes de mandar pra IA
