@@ -17,6 +17,9 @@ const items = [
   item('Sustentacao', { timeInStatusDays: { Active: 3, 'Aguardando QA': 3 }, cycleTimeBusinessDays: 40 }),
   // Boltz, março: fluxo 1/4 = 25 (abaixo da faixa 45–50 = vermelho); CT 30 (dentro da faixa 20–34 = verde)
   item('Boltz', { timeInStatusDays: { Active: 1, 'Aguardando QA': 3 }, cycleTimeBusinessDays: 30, baseVersion: '3.71.0.5' }),
+  // Bugs internos de março (Índice Retrabalho): 1 da Boltz, 2 da Sustentação. Fora do escopo de Fluxo/CT.
+  item('Boltz', { type: 'Bug', createdDate: MAR(5) }),
+  item('Sustentacao', { type: 'Bug', createdDate: MAR(6) }), item('Sustentacao', { type: 'Bug', createdDate: MAR(7) }),
 ];
 const meses = getPeriodBuckets(new Date(2026, 0, 1), new Date(2026, 2, 31), 'monthly');
 const p = buildPainelMensal(items, meses);
@@ -57,7 +60,13 @@ assert.equal(ws.getCell(topBoltz + 3, xBoltz + 1 + MAR_IDX).value, 30, 'CT Boltz
 // Bugs Produção com versão: linha logo abaixo de Bugs Produção (fluxo, cycle, bugs, com versão)
 assert.equal(ws.getCell(topBoltz + 5, xBoltz).value, 'Bugs Produção com versão', 'rótulo da linha nova');
 assert.equal(ws.getCell(topBoltz + 5, xBoltz + 1 + MAR_IDX).value, 1, 'a Issue da Boltz com Base Version');
-assert.equal(ws.getCell(topBoltz + 6, xBoltz).value, 'Quantidade de P0', 'P0 desce uma linha');
+// Índice Retrabalho: logo abaixo de "com versão" (Boltz) e logo abaixo de Cycle Time na Sustentação (sem Bugs Produção)
+assert.equal(ws.getCell(topBoltz + 6, xBoltz).value, 'Índice Retrabalho');
+assert.equal(ws.getCell(topBoltz + 6, xBoltz + 1 + MAR_IDX).value, 1, 'o Bug da Boltz de março');
+assert.equal(ws.getCell(topBoltz + 6, xBoltz + P + 2).value, 'sem meta');
+assert.equal(ws.getCell(topSust + 4, xSust).value, 'Índice Retrabalho');
+assert.equal(ws.getCell(topSust + 4, xSust + 1 + MAR_IDX).value, 2, 'os 2 Bugs da Sustentação de março');
+assert.equal(ws.getCell(topBoltz + 7, xBoltz).value, 'Quantidade de P0', 'P0 desce mais uma linha');
 
 // Cores pela meta: fora = vermelho, dentro = verde
 assert.equal(cor(topSust + 2, xSust + 1 + MAR_IDX), 'FFC00000', 'fluxo 62,5 está acima da faixa 50–55: vermelho');
