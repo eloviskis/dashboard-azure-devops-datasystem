@@ -69,6 +69,7 @@ const METRICAS_BLOCO: { key: MetricKey; rotulo: string; formato: string; unidade
   { key: 'fluxo', rotulo: 'Fluxo Eficiência (%)', formato: '0.00', unidade: ' %' },
   { key: 'cycle', rotulo: 'Cycle Time (Dias)', formato: '0', unidade: '' },
   { key: 'bugs', rotulo: 'Bugs Produção', formato: '0', unidade: '' },
+  { key: 'bugsVersao', rotulo: 'Bugs Produção com versão', formato: '0', unidade: '' },
   { key: 'qtdP0', rotulo: 'Quantidade de P0', formato: '0', unidade: '' },
 ];
 // Cada par de blocos ocupa: título + cabeçalho + uma linha por métrica + uma de folga

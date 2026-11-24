@@ -24,6 +24,7 @@ const METAS_PADRAO = {
   fluxo: { label: 'Fluxo de Eficiência', unidade: '%', min: 45, max: 50, porTime: { sustentacao: { min: 50, max: 55 } } },
   cycle: { label: 'Cycle Time (P85, dias úteis)', unidade: 'd', min: 20, max: 34, porTime: { sustentacao: { min: 10, max: 12 } } },
   bugs: { label: 'Bugs Produção', unidade: '', min: 80, max: 100, porTime: { franquia: { min: 80, max: 100 } } },
+  bugsVersao: { label: 'Bugs Produção com versão', unidade: '', min: null, max: null },
   retrabalho: { label: 'Índice de Retrabalho', unidade: '%', min: null, max: 31, porTime: { franquia: { min: null, max: 31 } } },
   qtdP0: { label: 'Quantidade de P0', unidade: '', min: null, max: null },
   // Só a Sustentação acompanha SLA P0 (ver PERFIS_TIME) — o geral fica igual ao override só pra não aparecer
@@ -55,8 +56,8 @@ const isSustentacao = (team) => normalizarTime(team) === 'sustentacao';
 // Quais métricas cada time acompanha, igual aos blocos da planilha de gestão. qtdP0 não está em nenhum bloco da
 // planilha (é só da ferramenta), por isso entra nos 3 perfis sem distinção.
 const METRICAS_SUSTENTACAO = ['fluxo', 'cycle', 'slaP0', 'retrabalho', 'qtdP0'];
-const METRICAS_FRANQUIA = ['bugs', 'retrabalho', 'qtdP0'];
-const METRICAS_PADRAO_TIME = ['fluxo', 'cycle', 'bugs', 'retrabalho', 'qtdP0'];
+const METRICAS_FRANQUIA = ['bugs', 'bugsVersao', 'retrabalho', 'qtdP0'];
+const METRICAS_PADRAO_TIME = ['fluxo', 'cycle', 'bugs', 'bugsVersao', 'retrabalho', 'qtdP0'];
 const PERFIS_TIME = { sustentacao: METRICAS_SUSTENTACAO, franquia: METRICAS_FRANQUIA };
 function metricasDoTime(team) {
   return PERFIS_TIME[normalizarTime(team)] ?? METRICAS_PADRAO_TIME;
@@ -80,6 +81,14 @@ const isP0 = (item) => {
   const n = Number.parseFloat(String(p));
   return Number.isNaN(n) ? true : Math.floor(n) === 0;
 };
+
+// Bug em produção = Issue. "Com versão" = número de versão (ex.: 3.71.0.5) em Base Version, Delivered Version,
+// root cause version ou numa tag. Em nov/2026 nenhum item do tipo Bug tinha versão no Azure DevOps, só Issues.
+// Exige 3 partes porque o Delivered Version às vezes traz texto ("ANALISE", "PR Completo").
+const VERSAO = /\d+\.\d+\.\d+/;
+const temVersao = (item) =>
+  [item.baseVersion, item.deliveredVersion, item.rootCauseVersion, [item.tags ?? ''].flat().join(';')]
+    .some(v => VERSAO.test(v ?? ''));
 
 const dentroDoPeriodo = (data, b) => {
   if (!data) return false;
@@ -128,7 +137,7 @@ function buildPainelMensal(items, buckets, timesFiltro) {
   );
   const times = [...new Set(validos.map(i => i.team))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
 
-  const porTime = { fluxo: {}, cycle: {}, bugs: {}, retrabalho: {}, qtdP0: {}, slaP0: {} };
+  const porTime = { fluxo: {}, cycle: {}, bugs: {}, bugsVersao: {}, retrabalho: {}, qtdP0: {}, slaP0: {} };
 
   for (const team of times) {
     const doTime = validos.filter(i => i.team === team);
@@ -138,6 +147,7 @@ function buildPainelMensal(items, buckets, timesFiltro) {
     const fluxo = [];
     const cycle = [];
     const bugs = [];
+    const bugsVersao = [];
     const retrabalho = [];
     const qtdP0 = [];
     const slaP0 = [];
@@ -153,7 +163,9 @@ function buildPainelMensal(items, buckets, timesFiltro) {
       cycle.push(p85(noPeriodo.map(i => i.cycleTimeBusinessDays).filter((v) => typeof v === 'number')));
 
       // Bugs Produção: Issues criadas no período (mesmo critério da série de Qualidade)
-      bugs.push(issuesTime.filter(i => dentroDoPeriodo(i.createdDate, b)).length);
+      const issuesPeriodo = issuesTime.filter(i => dentroDoPeriodo(i.createdDate, b));
+      bugs.push(issuesPeriodo.length);
+      bugsVersao.push(issuesPeriodo.filter(temVersao).length);
 
       // Índice de Retrabalho: % das entregas concluídas no período que são Bug ou Issue
       retrabalho.push(pct(noPeriodo.filter(i => TIPOS_RETRABALHO.includes(i.type)).length, noPeriodo.length));
@@ -167,6 +179,7 @@ function buildPainelMensal(items, buckets, timesFiltro) {
     porTime.fluxo[team] = fluxo;
     porTime.cycle[team] = cycle;
     porTime.bugs[team] = bugs;
+    porTime.bugsVersao[team] = bugsVersao;
     porTime.retrabalho[team] = retrabalho;
     porTime.qtdP0[team] = qtdP0;
     porTime.slaP0[team] = slaP0;

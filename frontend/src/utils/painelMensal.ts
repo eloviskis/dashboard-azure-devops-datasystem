@@ -5,7 +5,7 @@ import type { WorkItem } from '../types.ts';
 import { COMPLETED_STATES, getPercentile } from './metrics.ts';
 import type { PeriodBucket } from './periodGrouping.ts';
 
-export type MetricKey = 'fluxo' | 'cycle' | 'bugs' | 'bugsVersao' | 'retrabalho' | 'qtdP0' | 'slaP0';
+export type MetricKey = 'fluxo' | 'cycle' | 'bugs' | 'bugsVersao' | 'bugsSemVersao' | 'retrabalho' | 'qtdP0' | 'slaP0';
 
 export interface Faixa { min: number | null; max: number | null; }
 
@@ -24,6 +24,7 @@ export const METAS_PADRAO: MetasPainel = {
   cycle: { label: 'Cycle Time (P85, dias úteis)', unidade: 'd', min: 20, max: 34, porTime: { sustentacao: { min: 10, max: 12 } } },
   bugs: { label: 'Bugs Produção', unidade: '', min: 80, max: 100, porTime: { franquia: { min: 80, max: 100 } } },
   bugsVersao: { label: 'Bugs Produção com versão', unidade: '', min: null, max: null },
+  bugsSemVersao: { label: 'Bugs Produção sem versão', unidade: '', min: null, max: null },
   retrabalho: { label: 'Índice de Retrabalho', unidade: '%', min: null, max: 31, porTime: { franquia: { min: null, max: 31 } } },
   qtdP0: { label: 'Quantidade de P0', unidade: '', min: null, max: null },
   // Só a Sustentação acompanha SLA P0 (ver PERFIS_TIME) — o geral fica igual ao override só pra não aparecer
@@ -61,6 +62,9 @@ const PERFIS_TIME: Record<string, MetricKey[]> = { sustentacao: METRICAS_SUSTENT
 export function metricasDoTime(team: string): MetricKey[] {
   return PERFIS_TIME[normalizarTime(team)] ?? METRICAS_PADRAO_TIME;
 }
+// "Sem versão" é o filtro da seção "com versão" na tela (não é bloco próprio): vale pros mesmos times.
+export const acompanha = (team: string, key: MetricKey) =>
+  metricasDoTime(team).includes(key === 'bugsSemVersao' ? 'bugsVersao' : key);
 
 // Escopo por tipo, igual ao export da GetNaves: Issue, User Story e Eventuality. Confirmado com o CSV real de
 // cada um dos 5 times da planilha (Bug, QA, Task e os demais tipos ficam de fora).
@@ -144,7 +148,7 @@ export function buildPainelMensal(items: WorkItem[], buckets: PeriodBucket[], ti
   );
   const times = [...new Set(validos.map(i => i.team as string))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
 
-  const porTime = { fluxo: {}, cycle: {}, bugs: {}, bugsVersao: {}, retrabalho: {}, qtdP0: {}, slaP0: {} } as PainelMensal['porTime'];
+  const porTime = { fluxo: {}, cycle: {}, bugs: {}, bugsVersao: {}, bugsSemVersao: {}, retrabalho: {}, qtdP0: {}, slaP0: {} } as PainelMensal['porTime'];
 
   for (const team of times) {
     const doTime = validos.filter(i => i.team === team);
@@ -155,6 +159,7 @@ export function buildPainelMensal(items: WorkItem[], buckets: PeriodBucket[], ti
     const cycle: (number | null)[] = [];
     const bugs: (number | null)[] = [];
     const bugsVersao: (number | null)[] = [];
+    const bugsSemVersao: (number | null)[] = [];
     const retrabalho: (number | null)[] = [];
     const qtdP0: (number | null)[] = [];
     const slaP0: (number | null)[] = [];
@@ -172,7 +177,9 @@ export function buildPainelMensal(items: WorkItem[], buckets: PeriodBucket[], ti
       // Bugs Produção: Issues criadas no período (mesmo critério da série de Qualidade)
       const issuesPeriodo = issuesTime.filter(i => dentroDoPeriodo(i.createdDate, b));
       bugs.push(issuesPeriodo.length);
-      bugsVersao.push(issuesPeriodo.filter(temVersao).length);
+      const comVersao = issuesPeriodo.filter(temVersao).length;
+      bugsVersao.push(comVersao);
+      bugsSemVersao.push(issuesPeriodo.length - comVersao);
 
       // Índice de Retrabalho: % das entregas concluídas no período que são Bug ou Issue
       retrabalho.push(pct(noPeriodo.filter(i => TIPOS_RETRABALHO.includes(i.type)).length, noPeriodo.length));
@@ -187,6 +194,7 @@ export function buildPainelMensal(items: WorkItem[], buckets: PeriodBucket[], ti
     porTime.cycle[team] = cycle;
     porTime.bugs[team] = bugs;
     porTime.bugsVersao[team] = bugsVersao;
+    porTime.bugsSemVersao[team] = bugsSemVersao;
     porTime.retrabalho[team] = retrabalho;
     porTime.qtdP0[team] = qtdP0;
     porTime.slaP0[team] = slaP0;
@@ -196,7 +204,7 @@ export function buildPainelMensal(items: WorkItem[], buckets: PeriodBucket[], ti
   const consolidar = (filtro: (t: string) => boolean) => {
     const out = {} as Record<MetricKey, (number | null)[]>;
     for (const key of Object.keys(porTime) as MetricKey[]) {
-      const timesDaMetrica = times.filter(t => filtro(t) && metricasDoTime(t).includes(key));
+      const timesDaMetrica = times.filter(t => filtro(t) && acompanha(t, key));
       out[key] = buckets.map((_, idx) => media(
         timesDaMetrica.map(t => porTime[key][t][idx]).filter((v): v is number => typeof v === 'number')
       ));
@@ -224,6 +232,7 @@ export const itensDoTime = (items: WorkItem[], team: string): WorkItem[] =>
 export function itensDaMetrica(doTime: WorkItem[], bucket: PeriodBucket, key: MetricKey): WorkItem[] {
   if (key === 'bugs') return doTime.filter(i => i.type === 'Issue' && dentroDoPeriodo(i.createdDate, bucket));
   if (key === 'bugsVersao') return itensDaMetrica(doTime, bucket, 'bugs').filter(temVersao);
+  if (key === 'bugsSemVersao') return itensDaMetrica(doTime, bucket, 'bugs').filter(i => !temVersao(i));
   const concluidos = doTime.filter(i => COMPLETED_STATES.includes(i.state) && dentroDoPeriodo(i.closedDate, bucket));
   if (key === 'fluxo') return concluidos.filter(i => eficienciaItem(i) !== null);
   if (key === 'cycle') return concluidos.filter(i => typeof i.cycleTimeBusinessDays === 'number');

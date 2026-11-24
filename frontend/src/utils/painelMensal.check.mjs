@@ -104,6 +104,10 @@ const pv = buildPainelMensal(comVersao, meses);
 assert.equal(pv.porTime.bugs.Zeta[MAR_IDX], 7, 'Bugs Produção: as 7 Issues de março');
 assert.equal(pv.porTime.bugsVersao.Zeta[MAR_IDX], 5, 'com versão: 5 (base, delivered, root cause, tag texto, tag lista)');
 assert.equal(itensDaMetrica(comVersao, meses[MAR_IDX], 'bugsVersao').length, 5, 'lista do gráfico = número da tabela');
+// Filtro "sem versão": o resto das Issues do período (a sem nada e a com texto no lugar da versão)
+assert.equal(pv.porTime.bugsSemVersao.Zeta[MAR_IDX], 2, 'sem versão: 7 − 5');
+assert.equal(pv.mediaTodos.bugsSemVersao[MAR_IDX], 2, 'média usa os mesmos times de "com versão"');
+assert.equal(itensDaMetrica(comVersao, meses[MAR_IDX], 'bugsSemVersao').length, 2, 'lista do gráfico = número da tabela');
 
 // Índice de Retrabalho: Bug + Issue ÷ todos concluídos: 2 de 11 = 18,2%
 assert.equal(p.porTime.retrabalho.Alfa[MAR_IDX], 18.2, 'Bug e Issue entram no numerador; Task entra só no denominador');

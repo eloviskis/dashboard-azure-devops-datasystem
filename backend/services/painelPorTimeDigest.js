@@ -59,6 +59,8 @@ function montarWorkItem(row) {
     team: row.team, type: row.type, state: row.state, priority: row.priority,
     createdDate: row.created_date, closedDate, cycleTime, cycleTimeBusinessDays,
     timeInStatusDays: row.time_in_status_days || undefined,
+    baseVersion: row.base_version, deliveredVersion: row.delivered_version, rootCauseVersion: row.root_cause_version,
+    tags: row.tags,
   };
 }
 
@@ -75,6 +77,7 @@ async function buscarItensDoPainel(sql, times) {
       w.created_date, w.created_date::text AS created_date_str,
       w.first_activation_date, w.closed_date, w.effective_closed_date,
       w.time_in_status_days,
+      w.base_version, w.delivered_version, w.root_cause_version, w.tags,
       c.fim
     FROM work_items w
     LEFT JOIN ciclo c ON c.id = w.work_item_id

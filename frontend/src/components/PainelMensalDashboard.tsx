@@ -9,7 +9,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { baixarXlsx, montarPainelXlsx } from '../utils/painelXlsx.ts';
 import { getPeriodBuckets, type PeriodBucket, type PeriodGroupMode } from '../utils/periodGrouping.ts';
 import {
-  buildPainelMensal, dentroDaFaixa, faixaDoTime, itensDaMetrica, itensDoTime, METAS_PADRAO, metricasDoTime,
+  acompanha, buildPainelMensal, dentroDaFaixa, faixaDoTime, itensDaMetrica, itensDoTime, METAS_PADRAO,
   TIMES_PADRAO_PAINEL, textoFaixa,
   type Faixa, type MetaMetrica, type MetasPainel, type MetricKey,
 } from '../utils/painelMensal.ts';
@@ -78,6 +78,7 @@ const INFO: Record<MetricKey, string> = {
   cycle: 'Cycle Time P85 em dias úteis (sábado e domingo descontados; feriados não), da criação até a primeira vez que o item chegou a Pronto ou foi Fechado (o que vier primeiro — um fechamento em lote, bem depois do Pronto, não conta). 85% dos itens concluídos no período levaram até esse número. Fechamentos em massa de itens antigos sobem o P85 do mês. As médias são a média dos valores dos times.',
   bugs: 'Quantidade de Issues (erros que escaparam para produção) criadas no período, por time.',
   bugsVersao: 'Das Issues de Bugs Produção (criadas no período), só as que têm versão atrelada: número de versão (ex.: 3.71.0.5) em Base Version, Delivered Version, root cause version ou numa tag. Itens do tipo Bug não têm versão no Azure DevOps, por isso não entram.',
+  bugsSemVersao: 'Das Issues de Bugs Produção (criadas no período), as que NÃO têm número de versão em Base Version, Delivered Version, root cause version nem nas tags. Somado com "com versão", dá o total de Bugs Produção.',
   retrabalho: '% das entregas concluídas no período que são Bug (achado em desenvolvimento) ou Issue (escapou para produção), sobre o total de entregas concluídas. Verde até 31%.',
   qtdP0: 'Quantidade de itens P0 (prioridade vazia ou 0) concluídos no período com Cycle Time preenchido. Prioridade 1 (Crítica) não entra. Mesma base do SLA P0, ao lado — aqui é a contagem, lá é o % dentro do prazo.',
   slaP0: '% dos itens P0 (prioridade vazia ou 0) concluídos no período com Cycle Time em até 7 dias corridos. Prioridade 1 (Crítica) não entra.',
@@ -95,7 +96,7 @@ const corCelula = (ok: boolean | null) =>
 
 const formatar = (v: number | null, key: MetricKey) => {
   if (v === null) return '—';
-  if (key === 'bugs' || key === 'bugsVersao' || key === 'qtdP0') return String(v);
+  if (key === 'bugs' || key === 'bugsVersao' || key === 'bugsSemVersao' || key === 'qtdP0') return String(v);
   return `${v}${key === 'cycle' ? 'd' : '%'}`;
 };
 
@@ -223,7 +224,9 @@ const PainelMensalDashboard: React.FC<Props> = ({ data }) => {
   };
 
   // Só os times cujo perfil acompanha essa métrica (ex.: Franquia some de Fluxo/Cycle, Sustentação some de Bugs).
-  const timesDaMetrica = (key: MetricKey) => painel.times.filter(t => metricasDoTime(t).includes(key));
+  const timesDaMetrica = (key: MetricKey) => painel.times.filter(t => acompanha(t, key));
+  // Filtro da seção "Bugs Produção com versão": marcado, a seção inteira mostra as Issues sem versão
+  const [semVersao, setSemVersao] = useState(false);
 
   const linhasDaMetrica = (key: MetricKey) => [
     ...timesDaMetrica(key).map(t => ({ nome: nomeTime(t), valores: painel.porTime[key][t], team: t, media: false })),
@@ -430,10 +433,18 @@ const PainelMensalDashboard: React.FC<Props> = ({ data }) => {
       ) : painel.times.length === 0 ? (
         <EmptyState message="Selecione pelo menos um time com itens no período escolhido." />
       ) : (
-        METRICAS.map(key => (
-          <div key={key} className="bg-ds-navy p-4 rounded-lg border border-ds-border">
+        METRICAS.map(secao => {
+          const key: MetricKey = secao === 'bugsVersao' && semVersao ? 'bugsSemVersao' : secao;
+          return (
+          <div key={secao} className="bg-ds-navy p-4 rounded-lg border border-ds-border">
             <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
               <h3 className="text-ds-light-text font-bold text-base">{metas[key].label}</h3>
+              {secao === 'bugsVersao' && (
+                <label className="flex items-center gap-2 text-xs text-ds-light-text cursor-pointer">
+                  <input type="checkbox" checked={semVersao} onChange={e => setSemVersao(e.target.checked)} className="accent-ds-green w-4 h-4" />
+                  Mostrar os sem versão
+                </label>
+              )}
               <span className="text-xs text-ds-text">Meta: {textoFaixa({ min: metas[key].min, max: metas[key].max }, metas[key].unidade)}</span>
               <ChartInfoLamp info={INFO[key]} />
             </div>
@@ -443,7 +454,8 @@ const PainelMensalDashboard: React.FC<Props> = ({ data }) => {
             <p className="text-xs text-ds-text/60 mt-4 mb-1">Clique numa barra para ver os itens daquele time e período.</p>
             <div>{graficoBarras(key)}</div>
           </div>
-        ))
+          );
+        })
       )}
     </div>
   );
