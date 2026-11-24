@@ -66,7 +66,7 @@ const ItemModal: React.FC<{ info: ModalInfo | null; onClose: () => void }> = ({ 
 };
 
 const META_KEY = 'metas_painel_mensal';
-const METRICAS: MetricKey[] = ['fluxo', 'cycle', 'bugs', 'retrabalho', 'qtdP0', 'slaP0'];
+const METRICAS: MetricKey[] = ['fluxo', 'cycle', 'bugs', 'bugsVersao', 'retrabalho', 'qtdP0', 'slaP0'];
 const MODOS: { value: PeriodGroupMode; label: string }[] = [
   { value: 'weekly', label: 'Semanal' },
   { value: 'biweekly', label: 'Quinzenal' },
@@ -77,6 +77,7 @@ const INFO: Record<MetricKey, string> = {
   fluxo: 'Fluxo de Eficiência = média, item a item, de Ativo ÷ (Ativo + Fila). Ativo = Desenvolvendo + Testando QA/Testing; Fila = Para Desenvolver + Aguardando Code Review + Fazendo Code Review + CodeReview + Aguardando QA. Período = primeira vez que o item chegou a Pronto ou foi Fechado (o que vier primeiro). Verde = dentro da faixa de meta. Sustentação tem faixa própria.',
   cycle: 'Cycle Time P85 em dias úteis (sábado e domingo descontados; feriados não), da criação até a primeira vez que o item chegou a Pronto ou foi Fechado (o que vier primeiro — um fechamento em lote, bem depois do Pronto, não conta). 85% dos itens concluídos no período levaram até esse número. Fechamentos em massa de itens antigos sobem o P85 do mês. As médias são a média dos valores dos times.',
   bugs: 'Quantidade de Issues (erros que escaparam para produção) criadas no período, por time.',
+  bugsVersao: 'Das Issues de Bugs Produção (criadas no período), só as que têm versão atrelada: número de versão (ex.: 3.71.0.5) em Base Version, Delivered Version, root cause version ou numa tag. Itens do tipo Bug não têm versão no Azure DevOps, por isso não entram.',
   retrabalho: '% das entregas concluídas no período que são Bug (achado em desenvolvimento) ou Issue (escapou para produção), sobre o total de entregas concluídas. Verde até 31%.',
   qtdP0: 'Quantidade de itens P0 (prioridade vazia ou 0) concluídos no período com Cycle Time preenchido. Prioridade 1 (Crítica) não entra. Mesma base do SLA P0, ao lado — aqui é a contagem, lá é o % dentro do prazo.',
   slaP0: '% dos itens P0 (prioridade vazia ou 0) concluídos no período com Cycle Time em até 7 dias corridos. Prioridade 1 (Crítica) não entra.',
@@ -94,7 +95,7 @@ const corCelula = (ok: boolean | null) =>
 
 const formatar = (v: number | null, key: MetricKey) => {
   if (v === null) return '—';
-  if (key === 'bugs' || key === 'qtdP0') return String(v);
+  if (key === 'bugs' || key === 'bugsVersao' || key === 'qtdP0') return String(v);
   return `${v}${key === 'cycle' ? 'd' : '%'}`;
 };
 

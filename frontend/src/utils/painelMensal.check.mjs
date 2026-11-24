@@ -87,6 +87,24 @@ assert.equal(p.porTime.cycle.Sustentacao[MAR_IDX], 10, 'Bug de Sustentação (99
 // Bugs Produção: Issue pela data de criação, no período
 assert.equal(p.porTime.bugs.Alfa[FEV_IDX], 2, 'duas Issues criadas em fevereiro; Bug e Issue de 2025 ficam de fora');
 
+// Bugs Produção com versão: das Issues do período, só as com número de versão em algum campo ou tag
+const issue = (extra) => item('Zeta', { type: 'Issue', state: 'Active', closedDate: null, createdDate: MAR(5), ...extra });
+const comVersao = [
+  issue({ baseVersion: '3.71.0.5' }),
+  issue({ deliveredVersion: '3.71.0.7' }),
+  issue({ rootCauseVersion: '3.69.1' }),
+  issue({ tags: '[INTERNO]; 3.70.4.9' }),
+  issue({ tags: ['[DINNI]', '3.71.0.7'] }),
+  issue({ deliveredVersion: 'ANALISE', tags: '[ANÁLISE]' }), // texto não é versão
+  issue({}),
+  item('Zeta', { type: 'Bug', createdDate: MAR(5), baseVersion: '3.71.0.5' }), // Bug não é Bug Produção
+  issue({ baseVersion: '3.70.0.1', createdDate: FEV(5) }),                    // fora do período
+];
+const pv = buildPainelMensal(comVersao, meses);
+assert.equal(pv.porTime.bugs.Zeta[MAR_IDX], 7, 'Bugs Produção: as 7 Issues de março');
+assert.equal(pv.porTime.bugsVersao.Zeta[MAR_IDX], 5, 'com versão: 5 (base, delivered, root cause, tag texto, tag lista)');
+assert.equal(itensDaMetrica(comVersao, meses[MAR_IDX], 'bugsVersao').length, 5, 'lista do gráfico = número da tabela');
+
 // Índice de Retrabalho: Bug + Issue ÷ todos concluídos: 2 de 11 = 18,2%
 assert.equal(p.porTime.retrabalho.Alfa[MAR_IDX], 18.2, 'Bug e Issue entram no numerador; Task entra só no denominador');
 
@@ -125,8 +143,8 @@ assert.deepEqual(faixaDoTime(METAS_PADRAO.retrabalho, 'Franquia'), { min: null, 
 
 // Perfil por time: quais métricas cada um acompanha, igual aos blocos da planilha de gestão
 assert.deepEqual(metricasDoTime('Sustentacao'), ['fluxo', 'cycle', 'slaP0', 'retrabalho', 'qtdP0'], 'Sustentação não tem Bugs Produção');
-assert.deepEqual(metricasDoTime('Franquia'), ['bugs', 'retrabalho', 'qtdP0'], 'Franquia/CTC não tem Fluxo nem Cycle Time');
-assert.deepEqual(metricasDoTime('Alfa'), ['fluxo', 'cycle', 'bugs', 'retrabalho', 'qtdP0'], 'time genérico cai no perfil padrão, sem SLA P0');
+assert.deepEqual(metricasDoTime('Franquia'), ['bugs', 'bugsVersao', 'retrabalho', 'qtdP0'], 'Franquia/CTC não tem Fluxo nem Cycle Time');
+assert.deepEqual(metricasDoTime('Alfa'), ['fluxo', 'cycle', 'bugs', 'bugsVersao', 'retrabalho', 'qtdP0'], 'time genérico cai no perfil padrão, sem SLA P0');
 
 // itensDaMetrica: a lista por trás do gráfico de barras nunca diverge do número da tabela
 const alfaMar = itensDoTime(items, 'Alfa');
