@@ -32,8 +32,9 @@ export interface WorkItem {
   tags?: string | string[];
   url?: string;
   cycleTime?: number | null;
-  // Cycle time em dias úteis (sem sábado/domingo), usado pelo Painel Mensal. Não substitui cycleTime.
-  cycleTimeBusinessDays?: number | null;
+  // Cycle Time do Painel por Time: dias corridos do início do Doing até a primeira conclusão (critério da GetNaves),
+  // preenchido pelo painel a partir de /api/painel-time/ciclo. Não substitui cycleTime.
+  cicloDias?: number | null;
   leadTime?: number | null;
   age?: number;
   // Campos customizados e outros

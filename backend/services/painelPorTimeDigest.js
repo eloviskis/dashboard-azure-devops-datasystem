@@ -3,7 +3,6 @@
 // anterior, por time, com insight de IA. Reaproveita services/painelMensal.js (port de
 // frontend/src/utils/painelMensal.ts — ver esse arquivo pra entender por que é um port, não um import
 // direto) pra não duplicar a conta de Fluxo de Eficiência/Cycle Time/etc.
-const { calcularDiasUteis, diaBRT } = require('./businessDays');
 const {
   TIMES_PADRAO_PAINEL, METAS_PADRAO, metricasDoTime, buildPainelMensal, faixaDoTime, textoFaixa, dentroDaFaixa,
 } = require('./painelMensal');
@@ -43,21 +42,28 @@ function buildBuckets(now = new Date()) {
 
 const calcularDiasEntre = (ini, fim) => (!ini || !fim ? null : Math.ceil((new Date(fim) - new Date(ini)) / DIA_MS));
 
+// Cycle Time do Painel por Time, na configuração da GetNaves (decisão do usuário em 2026-11-24, config da aba
+// "conf e Filtros Tatico" da planilha): dias corridos completos entre a primeira entrada no Doing e a primeira
+// conclusão. Item que nunca passou pelo Doing (fechado direto, cancelado) fica sem Cycle Time. Usado também pelo
+// endpoint /api/painel-time/ciclo (server.js), de onde a tela tira o mesmo número.
+const ESTADOS_DOING = ['Active', 'Aguardando code review', 'Fazendo code review', 'Aguardando QA', 'Testando QA', 'Testing', 'CodeReview'];
+function cicloDias(inicio, fim) {
+  if (!inicio || !fim) return null;
+  const ms = new Date(fim) - new Date(inicio);
+  return Number.isNaN(ms) || ms < 0 ? null : Math.floor(ms / DIA_MS);
+}
+
 // Mesmo merge que PainelMensalDashboard.tsx faz no frontend (data.map + ciclo.get(id)): só sobrescreve
-// closedDate/cycleTimeBusinessDays quando existe transição pra Finished/Resolved/Closed (c.fim); senão,
-// cai no mesmo fallback que /api/items já usa. cycleTime (dias corridos, usado no SLA P0) nunca é
-// sobrescrito pelo "fim" — vem sempre de first_activation_date, igual a /api/items.
+// closedDate quando existe transição pra Finished/Resolved/Closed (c.fim); senão, cai no mesmo fallback que
+// /api/items já usa. cycleTime (dias corridos, usado no SLA P0) nunca é sobrescrito pelo "fim" — vem sempre de
+// first_activation_date, igual a /api/items.
 function montarWorkItem(row) {
   const effectiveClosedDate = row.effective_closed_date || row.closed_date || null;
   const cycleTime = calcularDiasEntre(row.first_activation_date, effectiveClosedDate);
-  const temFim = row.fim != null;
-  const closedDate = temFim ? row.fim : effectiveClosedDate;
-  const cycleTimeBusinessDays = temFim
-    ? calcularDiasUteis(`${row.created_date_str.slice(0, 10)}T12:00:00`, `${diaBRT(row.fim)}T12:00:00`)
-    : calcularDiasUteis(row.first_activation_date || row.created_date, effectiveClosedDate);
+  const closedDate = row.fim != null ? row.fim : effectiveClosedDate;
   return {
     team: row.team, type: row.type, state: row.state, priority: row.priority,
-    createdDate: row.created_date, closedDate, cycleTime, cycleTimeBusinessDays,
+    createdDate: row.created_date, closedDate, cycleTime, cicloDias: cicloDias(row.inicio, row.fim),
     timeInStatusDays: row.time_in_status_days || undefined,
     baseVersion: row.base_version, deliveredVersion: row.delivered_version, rootCauseVersion: row.root_cause_version,
     tags: row.tags,
@@ -67,18 +73,19 @@ function montarWorkItem(row) {
 async function buscarItensDoPainel(sql, times) {
   const rows = await sql`
     WITH ciclo AS (
-      SELECT t.work_item_id AS id, MIN(t.entered_at) AS fim
+      SELECT t.work_item_id AS id,
+        MIN(t.entered_at) FILTER (WHERE t.state IN ('Finished', 'Resolved', 'Closed')) AS fim,
+        MIN(t.entered_at) FILTER (WHERE t.state = ANY(${ESTADOS_DOING})) AS inicio
       FROM work_item_state_transitions t
-      WHERE t.state IN ('Finished', 'Resolved', 'Closed')
       GROUP BY t.work_item_id
     )
     SELECT
       w.team, w.type, w.state, w.priority,
-      w.created_date, w.created_date::text AS created_date_str,
+      w.created_date,
       w.first_activation_date, w.closed_date, w.effective_closed_date,
       w.time_in_status_days,
       w.base_version, w.delivered_version, w.root_cause_version, w.tags,
-      c.fim
+      c.fim, c.inicio
     FROM work_items w
     LEFT JOIN ciclo c ON c.id = w.work_item_id
     WHERE w.team = ANY(${times}) AND w.created_date IS NOT NULL
@@ -166,6 +173,8 @@ async function runPainelPorTimeDigestIfDue(sql) {
 }
 
 module.exports = {
+  ESTADOS_DOING,
+  cicloDias,
   REPORT_KEY,
   deveEnviar,
   buildBuckets,

@@ -22,8 +22,9 @@ const getPercentile = (sorted, p) => {
 // Retrabalho: contagem de bugs internos, sem meta até a gestão definir uma (2026-11-24; antes era % ≤ 31).
 const METAS_PADRAO = {
   fluxo: { label: 'Fluxo de Eficiência', unidade: '%', min: 45, max: 50, porTime: { sustentacao: { min: 50, max: 55 } } },
-  cycle: { label: 'Cycle Time (P85, dias úteis)', unidade: 'd', min: 20, max: 34, porTime: { sustentacao: { min: 10, max: 12 } } },
-  bugs: { label: 'Bugs Produção', unidade: '', min: 80, max: 100, porTime: { franquia: { min: 80, max: 100 } } },
+  cycle: { label: 'Cycle Time (P85, dias corridos)', unidade: 'd', min: 20, max: 34, porTime: { sustentacao: { min: 10, max: 12 } } },
+  // Sem meta: a faixa 80–100 da planilha era do total da empresa colado em cada time (decisão de 2026-11-24)
+  bugs: { label: 'Bugs Produção', unidade: '', min: null, max: null },
   bugsVersao: { label: 'Bugs Produção com versão', unidade: '', min: null, max: null },
   retrabalho: { label: 'Índice de Retrabalho', unidade: '', min: null, max: null },
   qtdP0: { label: 'Quantidade de P0', unidade: '', min: null, max: null },
@@ -66,8 +67,10 @@ function metricasDoTime(team) {
 // Escopo por tipo, igual ao export da GetNaves: Issue, User Story e Eventuality. Confirmado com o CSV real de
 // cada um dos 5 times da planilha (Bug, QA, Task e os demais tipos ficam de fora).
 // ponytail: só estes 5 times têm a configuração confirmada; um time novo entra com todos os tipos até termos a dele.
+// Estratégico saiu da lista padrão (TIMES_PLANILHA) em 2026-10-29, mas não do escopo: sem ele, Feature/Epic/Task
+// antigas fechadas em lote entravam no Cycle Time do time (P85 de 955 d em ago/26).
 const TIPOS_GETNAVES = Object.fromEntries(
-  TIMES_PLANILHA.map(t => [normalizarTime(t), ['Issue', 'User Story', 'Eventuality']])
+  [...TIMES_PLANILHA, 'Estrategico'].map(t => [normalizarTime(t), ['Issue', 'User Story', 'Eventuality']])
 );
 const noEscopo = (item) => {
   const tipos = TIPOS_GETNAVES[normalizarTime(item.team ?? '')];
@@ -110,16 +113,18 @@ const p85 = (valores) => {
 const pct = (parte, total) =>
   total === 0 ? null : Math.round((parte / total) * 1000) / 10;
 
-// Fluxo de Eficiência como a GetNaves: ativo ÷ (ativo + fila) em cada item, depois a média dos itens.
-// Estados em minúsculo para casar com timeInStatusDays. Itens sem tempo nesses estados não entram.
-// "Para Desenvolver" conta como fila (confirmado comparando, item a item, com a API da GetNave: sem essa
-// coluna o erro total contra a planilha era de 36 pontos nos 9 meses de 2026 já fechados; com ela, 16).
+// Fluxo de Eficiência e Cycle Time na configuração da GetNaves (aba "conf e Filtros Tatico" da planilha; decisão
+// do usuário em 2026-11-24, que reduziu o erro contra o histórico jan–out de 10 para 4 pontos no Fluxo do Tático):
+// - só Issue e User Story;
+// - Fluxo = ativo ÷ (ativo + fila) em cada item, depois a média. Ativo = Desenvolvendo (Active) e Testando QA;
+//   fila = Aguardando/Fazendo code review e Aguardando QA. "Para Desenvolver" é To Do na GetNaves: fica fora;
+// - Cycle Time = dias corridos do início do Doing até a conclusão (cicloDias, ver painelPorTimeDigest.js).
+// Estados em minúsculo para casar com timeInStatusDays. Itens sem tempo nesses estados não entram no Fluxo.
 // "Testing"/"CodeReview" (sem espaço) são nomes de coluna que Boltz/Tático/Estratégico usam e Sustentação
-// não — mesmo sentido de "Testando QA"/code review, só com grafia diferente. Sem eles, centenas de dias
-// desses 3 times ficavam de fora da conta (nem ativo nem fila), inflando o denominador artificialmente
-// pequeno e derrubando o Fluxo em até 30 pontos. Confirmado via query no banco de produção (2026-10-28).
+// não — mesmo sentido de "Testando QA"/code review, só com grafia diferente (confirmado no banco em 2026-10-28).
+const TIPOS_FLUXO_CT = ['Issue', 'User Story'];
 const ESTADOS_ATIVOS = ['active', 'testando qa', 'testing'];
-const ESTADOS_FILA = ['aguardando code review', 'fazendo code review', 'aguardando qa', 'para desenvolver', 'codereview'];
+const ESTADOS_FILA = ['aguardando code review', 'fazendo code review', 'aguardando qa', 'codereview'];
 const diasEm = (item, estados) =>
   Object.entries(item.timeInStatusDays ?? {})
     .filter(([estado]) => estados.includes(estado.toLowerCase()))
@@ -158,11 +163,10 @@ function buildPainelMensal(items, buckets, timesFiltro) {
       // Itens concluídos cuja data de fechamento cai no período
       const noPeriodo = concluidosTime.filter(i => dentroDoPeriodo(i.closedDate, b));
 
-      // Fluxo de Eficiência: média, item a item, como na GetNaves
-      fluxo.push(media(noPeriodo.map(eficienciaItem).filter((v) => v !== null)));
-
-      // Cycle Time em dias úteis (P85)
-      cycle.push(p85(noPeriodo.map(i => i.cycleTimeBusinessDays).filter((v) => typeof v === 'number')));
+      // Fluxo de Eficiência (média, item a item) e Cycle Time (P85, dias corridos desde o Doing): só Issue e User Story
+      const fluxoCt = noPeriodo.filter(i => TIPOS_FLUXO_CT.includes(i.type));
+      fluxo.push(media(fluxoCt.map(eficienciaItem).filter((v) => v !== null)));
+      cycle.push(p85(fluxoCt.map(i => i.cicloDias).filter((v) => typeof v === 'number')));
 
       // Bugs Produção: Issues criadas no período (mesmo critério da série de Qualidade)
       const issuesPeriodo = issuesTime.filter(i => dentroDoPeriodo(i.createdDate, b));

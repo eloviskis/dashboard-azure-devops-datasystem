@@ -17,10 +17,10 @@ const { syncStateHistoryForBatch } = require('./services/stateHistory');
 const { syncPrFiles } = require('./services/prFiles');
 const { syncPrVoteEvents } = require('./services/prVoteEvents');
 const { syncCodeReviewLevelDates } = require('./services/codeReviewLevelDates');
-const { calcularDiasUteis, diaBRT } = require('./services/businessDays');
+const { calcularDiasUteis } = require('./services/businessDays');
 const { sendTeamsMessage } = require('./services/teams');
 const { getDailyReviewRanking } = require('./services/reviewRanking');
-const { runPainelPorTimeDigest, runPainelPorTimeDigestIfDue } = require('./services/painelPorTimeDigest');
+const { runPainelPorTimeDigest, runPainelPorTimeDigestIfDue, ESTADOS_DOING, cicloDias } = require('./services/painelPorTimeDigest');
 const { initRetroSchema, registerRetro } = require('./retro');
 const { initRetroBoardSchema, registerRetroBoard } = require('./retroBoard');
 
@@ -1962,25 +1962,22 @@ app.get('/api/items', authenticateToken, async (req, res) => {
 });
 
 // Painel por Time: fim e Cycle Time no critério da planilha. Fim = primeira entrada em Finished, Resolved ou
-// Closed, a que vier primeiro. Início = criação; dias úteis pelo dia de Brasília. Aditivo: só o Painel usa.
-// Confirmado item a item com o CSV real da GetNaves de 5 times: o Closed costuma vir bem depois (fechamento em
-// lote), então usar só ele (ou priorizá-lo) atrasa o fim e infla o Cycle Time.
+// Closed, a que vier primeiro. Cycle Time = dias corridos completos desde a primeira entrada no Doing, como na
+// GetNaves (ESTADOS_DOING e cicloDias em services/painelPorTimeDigest.js, que o e-mail quinzenal também usa).
+// Aditivo: só o Painel usa. Confirmado item a item com o CSV real da GetNaves de 5 times: o Closed costuma vir
+// bem depois (fechamento em lote), então usar só ele (ou priorizá-lo) atrasa o fim e infla o Cycle Time.
 // ponytail: agrega as transições a cada chamada; upgrade = cache em memória de alguns minutos.
 app.get('/api/painel-time/ciclo', authenticateToken, async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT w.work_item_id AS id, w.created_date::text AS created, MIN(t.entered_at) AS fim
-      FROM work_items w
-      JOIN work_item_state_transitions t ON t.work_item_id = w.work_item_id
-        AND t.state IN ('Finished', 'Resolved', 'Closed')
-      WHERE w.created_date IS NOT NULL
-      GROUP BY w.work_item_id, w.created_date
-    `);
-    res.json(result.rows.map(r => ({
-      id: r.id,
-      fim: r.fim,
-      cicloDiasUteis: calcularDiasUteis(`${r.created.slice(0, 10)}T12:00:00`, `${diaBRT(r.fim)}T12:00:00`)
-    })));
+      SELECT t.work_item_id AS id,
+        MIN(t.entered_at) FILTER (WHERE t.state IN ('Finished', 'Resolved', 'Closed')) AS fim,
+        MIN(t.entered_at) FILTER (WHERE t.state = ANY($1)) AS inicio
+      FROM work_item_state_transitions t
+      GROUP BY t.work_item_id
+      HAVING MIN(t.entered_at) FILTER (WHERE t.state IN ('Finished', 'Resolved', 'Closed')) IS NOT NULL
+    `, [ESTADOS_DOING]);
+    res.json(result.rows.map(r => ({ id: r.id, fim: r.fim, cicloDias: cicloDias(r.inicio, r.fim) })));
   } catch (err) {
     console.error('❌ Error in /api/painel-time/ciclo:', err.message);
     res.status(500).json({ error: 'Failed to fetch painel ciclo' });

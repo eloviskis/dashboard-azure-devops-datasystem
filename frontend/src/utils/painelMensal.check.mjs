@@ -14,9 +14,9 @@ const item = (team, extra = {}) => ({
 
 const items = [
   // Alfa, março: fluxo por item 6/(6+1+1) = 75 (fila = Aguardando CR + Fazendo CR); cycle dias úteis (10, 20, null) → P85 = 20
-  item('Alfa', { timeInStatusDays: { Active: 6, 'Aguardando code review': 1, 'Fazendo code review': 1 }, cycleTimeBusinessDays: 10, cycleTime: 12 }),
-  item('Alfa', { timeInStatusDays: { Active: 6, 'Aguardando code review': 1, 'Fazendo code review': 1 }, cycleTimeBusinessDays: 20, cycleTime: 25 }),
-  item('Alfa', { timeInStatusDays: { Active: 6, 'Aguardando code review': 1, 'Fazendo code review': 1 }, cycleTimeBusinessDays: null, cycleTime: null }),
+  item('Alfa', { timeInStatusDays: { Active: 6, 'Aguardando code review': 1, 'Fazendo code review': 1 }, cicloDias: 10, cycleTime: 12 }),
+  item('Alfa', { timeInStatusDays: { Active: 6, 'Aguardando code review': 1, 'Fazendo code review': 1 }, cicloDias: 20, cycleTime: 25 }),
+  item('Alfa', { timeInStatusDays: { Active: 6, 'Aguardando code review': 1, 'Fazendo code review': 1 }, cicloDias: null, cycleTime: null }),
   // Alfa, março: concluídos de vários tipos. O Bug daqui foi aberto em fevereiro: conta no retrabalho de fevereiro
   item('Alfa', { type: 'User Story', reincidencia: '2' }),
   item('Alfa', { type: 'Bug', reincidencia: null }),
@@ -24,9 +24,9 @@ const items = [
   item('Alfa', { type: 'Eventuality', reincidencia: 0 }),
   item('Alfa', { type: 'Task', reincidencia: '5' }),
   // Alfa: P0 = prioridade vazia ou 0. Dois P0 (5 e 9 dias) → 50% no prazo de 7. Prioridade "1" fica de fora.
-  item('Alfa', { priority: null, cycleTime: 5, cycleTimeBusinessDays: null }),
-  item('Alfa', { priority: '0', cycleTime: 9, cycleTimeBusinessDays: null }),
-  item('Alfa', { priority: '1', cycleTime: 2, cycleTimeBusinessDays: null }),
+  item('Alfa', { priority: null, cycleTime: 5, cicloDias: null }),
+  item('Alfa', { priority: '0', cycleTime: 9, cicloDias: null }),
+  item('Alfa', { priority: '1', cycleTime: 2, cicloDias: null }),
   // Alfa: Issues criadas em fevereiro contam em bugs de fevereiro; Bug não conta; Issue de 2025 não conta
   item('Alfa', { type: 'Issue', state: 'Active', closedDate: null, createdDate: FEV(5) }),
   item('Alfa', { type: 'Issue', state: 'Active', closedDate: null, createdDate: FEV(9) }),
@@ -34,22 +34,22 @@ const items = [
   item('Alfa', { type: 'Issue', state: 'Active', closedDate: null, createdDate: '2025-02-09T12:00:00Z' }),
 
   // Beta, março: cycle mediana 35 (uma só)
-  item('Beta', { cycleTimeBusinessDays: 35, cycleTime: 40 }),
+  item('Beta', { cicloDias: 35, cycleTime: 40 }),
   // Gama, março: P85 de [5, 6, 7, 500] = 500 — P85 é sensível a fechamento em massa (por isso o aviso no painel)
-  item('Gama', { cycleTimeBusinessDays: 5, cycleTime: 5 }),
-  item('Gama', { cycleTimeBusinessDays: 6, cycleTime: 6 }),
-  item('Gama', { cycleTimeBusinessDays: 7, cycleTime: 7 }),
-  item('Gama', { cycleTimeBusinessDays: 500, cycleTime: 500 }),
+  item('Gama', { cicloDias: 5, cycleTime: 5 }),
+  item('Gama', { cicloDias: 6, cycleTime: 6 }),
+  item('Gama', { cicloDias: 7, cycleTime: 7 }),
+  item('Gama', { cicloDias: 500, cycleTime: 500 }),
   // Sustentacao, março: cycle 10 — entra na média de todos, fica fora da média sem Sustentação
-  item('Sustentacao', { cycleTimeBusinessDays: 10, cycleTime: 12 }),
+  item('Sustentacao', { cicloDias: 10, cycleTime: 12 }),
   // Sustentação e Boltz: Bug fica fora do escopo da GetNaves (só Issue, User Story e Eventuality entram),
   // confirmado com o CSV real dos dois times
-  item('Sustentacao', { type: 'Bug', cycleTimeBusinessDays: 999, cycleTime: 999 }),
-  item('Boltz', { type: 'Bug', cycleTimeBusinessDays: 999, cycleTime: 999 }),
+  item('Sustentacao', { type: 'Bug', cicloDias: 999, cycleTime: 999 }),
+  item('Boltz', { type: 'Bug', cicloDias: 999, cycleTime: 999 }),
   // Franquia, março: tem dado de Fluxo de Eficiência (o cálculo roda igual pra qualquer time), mas o perfil
   // dela não acompanha essa métrica — prova que mediaTodos/mediaSemSustentacao não contam esse valor mesmo
   // assim, embora o número por time (porTime.fluxo.Franquia) continue calculado normalmente.
-  item('Franquia', { timeInStatusDays: { Active: 9, 'Aguardando code review': 1 }, cycleTimeBusinessDays: 15, cycleTime: 15 }),
+  item('Franquia', { timeInStatusDays: { Active: 9, 'Aguardando code review': 1 }, cicloDias: 15, cycleTime: 15 }),
   // Delta, março: "Para Desenvolver" conta como fila — 6/(6+2) = 75% (confirmado contra a API da GetNave)
   item('Delta', { timeInStatusDays: { Active: 6, 'Para desenvolver': 2 } }),
   // Epsilon, março: "Testing" conta como ativo e "CodeReview" conta como fila — grafia usada por
@@ -57,7 +57,7 @@ const items = [
   // (4+2) ativo ÷ ((4+2)+2) fila = 75% (confirmado via query no banco de produção, não tinha CSV pra isso)
   item('Epsilon', { timeInStatusDays: { Active: 4, Testing: 2, CodeReview: 2 } }),
   // Sem Time nunca entra
-  item('Sem Time', { cycleTimeBusinessDays: 999, cycleTime: 999 }),
+  item('Sem Time', { cicloDias: 999, cycleTime: 999 }),
 ];
 
 // Mensal de 2026: 12 colunas; março = índice 2
@@ -74,15 +74,27 @@ assert.equal(p.porTime.fluxo.Alfa[MAR_IDX], 75, '6 ativos ÷ (6+2) = 75%');
 assert.equal(p.porTime.fluxo.Alfa[0], null, 'sem concluídos em janeiro = null, não zero');
 assert.equal(p.porTime.fluxo.Beta[MAR_IDX], null, 'item sem tempo em nenhum estado não entra no fluxo');
 assert.equal(p.porTime.fluxo.Franquia[MAR_IDX], 90, 'Franquia: cálculo roda igual pra qualquer time (9 ativos ÷ (9+1))');
-assert.equal(p.mediaTodos.fluxo[MAR_IDX], 75, 'mas a Franquia não entra na média: perfil dela não acompanha Fluxo de Eficiência');
-assert.equal(p.porTime.fluxo.Delta[MAR_IDX], 75, '"Para Desenvolver" conta como fila: 6 ativos ÷ (6+2) = 75%');
+assert.equal(p.mediaTodos.fluxo[MAR_IDX], 83.3, 'Alfa 75 + Delta 100 + Epsilon 75; a Franquia (90) não entra: perfil dela não acompanha Fluxo');
+assert.equal(p.porTime.fluxo.Delta[MAR_IDX], 100, '"Para Desenvolver" é To Do na GetNaves, fora da fila: 6 ativos ÷ (6+0) = 100%');
 assert.equal(p.porTime.fluxo.Epsilon[MAR_IDX], 75, '"Testing" conta como ativo e "CodeReview" como fila: 6 ativos ÷ (6+2) = 75%');
 
-// Cycle Time em dias úteis, P85: null não entra
+// Cycle Time (dias corridos desde o Doing), P85: null não entra
 assert.equal(p.porTime.cycle.Alfa[MAR_IDX], 20, 'P85 nearest-rank de 10 e 20 = 20');
 assert.equal(p.porTime.cycle.Beta[MAR_IDX], 35);
 assert.equal(p.porTime.cycle.Gama[MAR_IDX], 500, 'P85 de [5,6,7,500] = 500: fechamento em massa sobe o P85');
 assert.equal(p.porTime.cycle.Sustentacao[MAR_IDX], 10, 'Bug de Sustentação (999 d) fora do escopo da GetNaves');
+
+// Fluxo e Cycle Time só de Issue e User Story (configuração da GetNaves), em qualquer time
+const pt = buildPainelMensal([
+  item('Alfa', { type: 'Eventuality', timeInStatusDays: { Active: 1, 'Aguardando QA': 9 }, cicloDias: 99 }),
+  item('Alfa', { timeInStatusDays: { Active: 5, 'Aguardando QA': 5 }, cicloDias: 7 }),
+], meses);
+assert.equal(pt.porTime.fluxo.Alfa[MAR_IDX], 50, 'Fluxo: a Eventuality (10%) fica fora');
+assert.equal(pt.porTime.cycle.Alfa[MAR_IDX], 7, 'Cycle Time: a Eventuality (99 d) fica fora');
+
+// Estratégico fora da lista padrão continua com o escopo da GetNaves: Task P0 fechada em lote não entra na Qtd. de P0
+const pe = buildPainelMensal([item('Estrategico', { type: 'Task', priority: null, cycleTime: 3 }), item('Estrategico', { priority: null, cycleTime: 2 })], meses);
+assert.equal(pe.porTime.qtdP0.Estrategico[MAR_IDX], 1, 'Estratégico: só a User Story P0, não a Task');
 
 // Bugs Produção: Issue pela data de criação, no período
 assert.equal(p.porTime.bugs.Alfa[FEV_IDX], 2, 'duas Issues criadas em fevereiro; Bug e Issue de 2025 ficam de fora');
@@ -160,7 +172,7 @@ assert.equal(dentroDaFaixa(null, { min: 45, max: 50 }), null, 'sem dado não é 
 assert.deepEqual(faixaDoTime(METAS_PADRAO.fluxo, 'Sustentação'), { min: 50, max: 55 }, 'override da Sustentação');
 assert.deepEqual(faixaDoTime(METAS_PADRAO.fluxo, 'Alfa'), { min: 45, max: 50 });
 assert.deepEqual(faixaDoTime(METAS_PADRAO.slaP0, 'Sustentação'), { min: 60, max: 70 }, 'SLA P0 só tem meta própria de Sustentação');
-assert.deepEqual(faixaDoTime(METAS_PADRAO.bugs, 'Franquia'), { min: 80, max: 100 }, 'override da Franquia/CTC');
+assert.deepEqual(faixaDoTime(METAS_PADRAO.bugs, 'Franquia'), { min: null, max: null }, 'Bugs Produção sem meta (80–100 era o total da empresa)');
 assert.deepEqual(faixaDoTime(METAS_PADRAO.retrabalho, 'Franquia'), { min: null, max: null }, 'retrabalho virou contagem: sem meta até a gestão definir');
 
 // Perfil por time: quais métricas cada um acompanha, igual aos blocos da planilha de gestão
@@ -172,7 +184,7 @@ assert.deepEqual(metricasDoTime('Alfa'), ['fluxo', 'cycle', 'bugs', 'bugsVersao'
 const alfaMar = itensDoTime(items, 'Alfa');
 const bucketMar = meses[MAR_IDX];
 assert.equal(itensDaMetrica(alfaMar, bucketMar, 'fluxo').length, 3, 'fluxo: os 3 itens com tempo de status em março');
-assert.equal(itensDaMetrica(alfaMar, bucketMar, 'cycle').length, 2, 'cycle: só os 2 itens com cycleTimeBusinessDays numérico (o 3º é null)');
+assert.equal(itensDaMetrica(alfaMar, bucketMar, 'cycle').length, 2, 'cycle: só os 2 itens com cicloDias numérico (o 3º é null)');
 assert.equal(itensDaMetrica(alfaMar, meses[FEV_IDX], 'retrabalho').length, 2, 'retrabalho: os 2 Bugs abertos em fevereiro');
 const sust = itensDoTime(items, 'Sustentacao');
 assert.equal(itensDaMetrica(sust, meses[FEV_IDX], 'retrabalho').length, 1, 'retrabalho: Bug da Sustentação entra na lista');

@@ -15,7 +15,7 @@ import {
 } from '../utils/painelMensal.ts';
 
 interface Props { data: WorkItem[]; }
-interface CicloItem { fim: string; cicloDiasUteis: number | null; }
+interface CicloItem { fim: string; cicloDias: number | null; }
 
 // Modal de itens: mesmo padrão usado nos outros gráficos da ferramenta (ex.: BottleneckAnalysisChart.tsx) —
 // local a este arquivo, não compartilhado.
@@ -74,8 +74,8 @@ const MODOS: { value: PeriodGroupMode; label: string }[] = [
 ];
 
 const INFO: Record<MetricKey, string> = {
-  fluxo: 'Fluxo de Eficiência = média, item a item, de Ativo ÷ (Ativo + Fila). Ativo = Desenvolvendo + Testando QA/Testing; Fila = Para Desenvolver + Aguardando Code Review + Fazendo Code Review + CodeReview + Aguardando QA. Período = primeira vez que o item chegou a Pronto ou foi Fechado (o que vier primeiro). Verde = dentro da faixa de meta. Sustentação tem faixa própria.',
-  cycle: 'Cycle Time P85 em dias úteis (sábado e domingo descontados; feriados não), da criação até a primeira vez que o item chegou a Pronto ou foi Fechado (o que vier primeiro — um fechamento em lote, bem depois do Pronto, não conta). 85% dos itens concluídos no período levaram até esse número. Fechamentos em massa de itens antigos sobem o P85 do mês. As médias são a média dos valores dos times.',
+  fluxo: 'Fluxo de Eficiência, como na GetNaves = média, item a item, de Ativo ÷ (Ativo + Fila), só Issue e User Story. Ativo = Desenvolvendo + Testando QA/Testing; Fila = Aguardando Code Review + Fazendo Code Review + CodeReview + Aguardando QA. "Para Desenvolver" é To Do e fica fora. Período = primeira vez que o item chegou a Pronto ou foi Fechado (o que vier primeiro). Verde = dentro da faixa de meta. Sustentação tem faixa própria.',
+  cycle: 'Cycle Time P85, como na GetNaves: dias corridos do início do Doing (primeira vez em Desenvolvendo, code review ou QA) até a primeira vez que o item chegou a Pronto ou foi Fechado (o que vier primeiro — um fechamento em lote, bem depois do Pronto, não conta). Só Issue e User Story; item que não passou pelo Doing fica de fora. 85% dos itens concluídos no período levaram até esse número. As médias são a média dos valores dos times.',
   bugs: 'Quantidade de Issues abertas no período, por time. Issue é o bug que chegou em produção; o que o QA pega antes disso é Bug e conta no Índice de Retrabalho.',
   bugsVersao: 'Das Issues de Bugs Produção (criadas no período), só as que têm versão atrelada: número de versão (ex.: 3.71.0.5) em Base Version, Delivered Version, root cause version ou numa tag. Itens do tipo Bug não têm versão no Azure DevOps, por isso não entram.',
   bugsSemVersao: 'Das Issues de Bugs Produção (criadas no período), as que NÃO têm número de versão em Base Version, Delivered Version, root cause version nem nas tags. Somado com "com versão", dá o total de Bugs Produção.',
@@ -184,13 +184,13 @@ const PainelMensalDashboard: React.FC<Props> = ({ data }) => {
   useEffect(() => {
     fetch(`${API_URL}/api/painel-time/ciclo`, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
-      .then((rows: { id: number; fim: string; cicloDiasUteis: number | null }[]) =>
-        setCiclo(new Map(rows.map((r): [number, CicloItem] => [r.id, { fim: r.fim, cicloDiasUteis: r.cicloDiasUteis }]))))
+      .then((rows: ({ id: number } & CicloItem)[]) =>
+        setCiclo(new Map(rows.map((r): [number, CicloItem] => [r.id, { fim: r.fim, cicloDias: r.cicloDias }]))))
       .catch(() => setErro('Não foi possível carregar as datas de fim do Painel. Recarregue a página.'));
   }, [API_URL, token]);
   const itens = useMemo(() => data.map(i => {
     const c = ciclo.get(i.workItemId);
-    return c ? { ...i, closedDate: c.fim, cycleTimeBusinessDays: c.cicloDiasUteis } : i;
+    return c ? { ...i, closedDate: c.fim, cicloDias: c.cicloDias } : i;
   }), [data, ciclo]);
 
   // Usa TODOS os itens (não o quickFilter): o painel tem a própria janela de datas.

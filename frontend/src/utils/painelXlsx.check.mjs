@@ -13,10 +13,10 @@ const item = (team, extra = {}) => ({
 });
 const items = [
   // Sustentação, março: fluxo (6/8 = 75 e 3/6 = 50) → média 62,5 (acima da faixa 50–55 = vermelho); CT P85 de [10, 40] = 40
-  item('Sustentacao', { timeInStatusDays: { Active: 6, 'Aguardando code review': 2 }, cycleTimeBusinessDays: 10 }),
-  item('Sustentacao', { timeInStatusDays: { Active: 3, 'Aguardando QA': 3 }, cycleTimeBusinessDays: 40 }),
+  item('Sustentacao', { timeInStatusDays: { Active: 6, 'Aguardando code review': 2 }, cicloDias: 10 }),
+  item('Sustentacao', { timeInStatusDays: { Active: 3, 'Aguardando QA': 3 }, cicloDias: 40 }),
   // Boltz, março: fluxo 1/4 = 25 (abaixo da faixa 45–50 = vermelho); CT 30 (dentro da faixa 20–34 = verde)
-  item('Boltz', { timeInStatusDays: { Active: 1, 'Aguardando QA': 3 }, cycleTimeBusinessDays: 30, baseVersion: '3.71.0.5' }),
+  item('Boltz', { timeInStatusDays: { Active: 1, 'Aguardando QA': 3 }, cicloDias: 30, baseVersion: '3.71.0.5' }),
   // Bugs internos de março (Índice Retrabalho): 1 da Boltz, 2 da Sustentação. Fora do escopo de Fluxo/CT.
   item('Boltz', { type: 'Bug', createdDate: MAR(5) }),
   item('Sustentacao', { type: 'Bug', createdDate: MAR(6) }), item('Sustentacao', { type: 'Bug', createdDate: MAR(7) }),
