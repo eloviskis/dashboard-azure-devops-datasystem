@@ -123,4 +123,14 @@ const data = (b) => ({ board: b, cards, votes, comments, participants: people })
   assert.equal(B.parseGiphy({ data: [], pagination: { total_count: 24, count: 24, offset: 0 } }).hasNext, false);
 }
 
+// ---- Modelos: ids únicos, nada cortado pelo cleanBoardColumns, fonte só das páginas pt de FunRetrospectives
+assert.equal(B.TEMPLATES.length, 15);
+assert.equal(new Set(B.TEMPLATES.map(t => t.id)).size, B.TEMPLATES.length, 'ids únicos');
+for (const t of B.TEMPLATES) {
+  assert.deepEqual(B.cleanBoardColumns(t.columns), { columns: t.columns }, `${t.id}: colunas passam sem corte`);
+  assert.ok(t.group && t.description, `${t.id}: grupo e descrição`);
+  if (t.source) assert.match(t.source, /^https:\/\/www\.funretrospectives\.com\/pt\/[a-z0-9-]+\/$/, `${t.id}: fonte`);
+}
+assert.equal(B.TEMPLATES.filter(t => t.group === 'FunRetrospectives' && t.source).length, 12);
+
 console.log('retroBoardRules: ok');

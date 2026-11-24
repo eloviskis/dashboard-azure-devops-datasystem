@@ -35,6 +35,9 @@ const NewBoardModal: React.FC<{ ctx: RetroCtx; onClose: () => void; onCreated: (
 
   const defaultTitle = `${ctx.teamLabel(teamKey)} ${fmtDate(date)}`.trim();
   const pick = (id: string) => { setTpl(id); const t = templates?.find(x => x.id === id); if (t) setColumns(t.columns.map(c => ({ ...c }))); };
+  const chosen = templates?.find(x => x.id === tpl);
+  const groupOf = (t: BoardTemplate) => t.group || 'Outros';
+  const groups = [...new Set((templates || []).map(groupOf))];
   const upd = (i: number, p: Partial<BoardColumn>) => setColumns(cs => cs.map((c, j) => (j === i ? { ...c, ...p } : c)));
   const create = async () => {
     setBusy(true);
@@ -63,9 +66,19 @@ const NewBoardModal: React.FC<{ ctx: RetroCtx; onClose: () => void; onCreated: (
         <Field label="Modelo">
           <Select value={tpl} onChange={e => pick(e.target.value)} disabled={!templates}>
             {!templates && <option>Carregando…</option>}
-            {templates?.map(t => <option key={t.id} value={t.id}>{t.name} ({t.columns.length} colunas)</option>)}
+            {groups.map(g => (
+              <optgroup key={g} label={g}>
+                {templates!.filter(t => groupOf(t) === g).map(t => <option key={t.id} value={t.id}>{t.name} ({t.columns.length} colunas)</option>)}
+              </optgroup>
+            ))}
           </Select>
         </Field>
+        {chosen?.description && (
+          <p className="text-xs text-ds-text -mt-2">
+            {chosen.description}
+            {chosen.source && <> · <a href={chosen.source} target="_blank" rel="noopener noreferrer" className="text-ds-green hover:underline">Fonte: FunRetrospectives</a></>}
+          </p>
+        )}
 
         <fieldset className="space-y-2">
           <legend className="text-xs font-medium text-ds-text mb-1">Colunas (dá para mudar à vontade)</legend>

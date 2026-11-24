@@ -3,9 +3,13 @@
 // (cards ocultos e anonimato decididos aqui, nunca só na tela), voto, grupo → formato da retro e imagens.
 // Sem I/O — testado em retroBoardRules.check.js.
 
+// Os de FunRetrospectives (só os da categoria em pt-BR): nomes das colunas são os da página (é o formato);
+// perguntas e descrição foram escritas aqui, com o link da página como fonte.
+const FR = 'https://www.funretrospectives.com/pt/';
+const c = (name, description) => ({ name, description });
 const TEMPLATES = [
   {
-    id: 'tias', name: 'Tias', columns: [
+    id: 'tias', name: 'Tias', group: 'Modelos do time', description: 'O modelo que o time já usava no EasyRetro.', columns: [
       { name: 'Tia Calma', description: 'Ações e atitudes que nos deram segurança e que nos acalmaram por ver e saber que fizemos tal ação.' },
       { name: 'Tia Legra', description: 'Tia que celebra algo que fizemos tão bem, mas tão bem, que devemos exaltar.' },
       { name: 'Tia Flige', description: 'Coisas que não foram bem na sprint, que nos entristeceram, que não deveríamos repetir.' },
@@ -14,7 +18,7 @@ const TEMPLATES = [
     ],
   },
   {
-    id: 'quebra-cabeca', name: 'Quebra-cabeça', columns: [
+    id: 'quebra-cabeca', name: 'Quebra-cabeça', group: 'Modelos do time', description: 'O modelo que o time já usava no EasyRetro.', columns: [
       { name: 'Peças que encaixaram', description: 'O que funcionou muito bem nesse ciclo?' },
       { name: 'Peças que ainda não encontramos', description: 'O que ainda está nos causando dificuldade?' },
       { name: 'Peças que podemos construir', description: 'O que podemos melhorar juntos?' },
@@ -23,10 +27,119 @@ const TEMPLATES = [
     ],
   },
   {
-    id: 'classica', name: 'Clássica', columns: [
+    id: 'classica', name: 'Clássica', group: 'Modelos do time', description: 'Três colunas simples, para qualquer retro.', columns: [
       { name: 'O que foi bem', description: '' },
       { name: 'O que pode melhorar', description: '' },
       { name: 'Ideias de ação', description: '' },
+    ],
+  },
+  {
+    id: 'abra-a-caixa', name: 'Abra a Caixa', group: 'FunRetrospectives', source: `${FR}abra-a-caixa/`,
+    description: 'Para questionar como o time trabalha hoje e abrir espaço para inovar. A caixa são as práticas atuais.',
+    columns: [
+      c('Remover', 'O que deveria sair da caixa e parar de ser feito?'),
+      c('Acrescentar', 'O que ainda não fazemos e deveria entrar na caixa?'),
+      c('Reciclar', 'O que já fazemos e dá para reaproveitar de outro jeito?'),
+    ],
+  },
+  {
+    id: 'ancoras-e-motor', name: 'Âncoras e Motor', group: 'FunRetrospectives', source: `${FR}ancoras-e-motor/`,
+    description: 'Para enxergar o que empurra o time para a frente e o que o prende no lugar.',
+    columns: [
+      c('Motor', 'O que dá energia ao time e faz a gente avançar?'),
+      c('Âncoras', 'O que segura o time ou deixa tudo mais lento?'),
+    ],
+  },
+  {
+    id: 'carro-veloz', name: 'Carro Veloz', group: 'FunRetrospectives', source: `${FR}carro-veloz-2/`,
+    description: 'Para descobrir o que acelera o time e o que funciona como freio.',
+    columns: [
+      c('Motor', 'O que faz o time andar mais rápido?'),
+      c('Paraquedas', 'O que está freando o time?'),
+    ],
+  },
+  {
+    id: 'clra', name: 'CLRA: Considerações Futuras, Lições Aprendidas, Realizações, Áreas Problemáticas', group: 'FunRetrospectives',
+    source: `${FR}clra-consideracoes-futuras-licoes-aprendidas-realizacoes-areas-problematicas/`,
+    description: 'Boa para fechar um projeto ou uma fase: olha para trás e já prepara o próximo ciclo.',
+    columns: [
+      c('Considerações futuras', 'O que precisamos levar em conta daqui para a frente?'),
+      c('Lições aprendidas', 'Que conclusões tiramos deste período?'),
+      c('Realizações', 'Que conquistas merecem ser comemoradas?'),
+      c('Áreas problemáticas', 'Onde o time mais sofreu?'),
+    ],
+  },
+  {
+    id: 'conversa-sobre-erros', name: 'Conversa Sobre Erros', group: 'FunRetrospectives', source: `${FR}conversa-sobre-erros/`,
+    description: 'Para falar de erros sem caça às bruxas, separando o que fizemos do que deixamos de fazer. Registre a ação como comentário no card do erro.',
+    columns: [
+      c('Erro por comissão', 'Que erro veio de algo que fizemos e não deveríamos ter feito?'),
+      c('Erro por omissão', 'Que erro veio de algo que deixamos de fazer?'),
+    ],
+  },
+  {
+    id: 'deu-certo-nao-deu-ideias', name: 'Deu certo, Não deu certo, Ideias novas', group: 'FunRetrospectives', source: `${FR}deu-certo-nao-deu-ideias-novas/`,
+    description: 'Direta: o que repetir, o que evitar e o que vale experimentar.',
+    columns: [
+      c('Deu certo', 'O que funcionou e vale repetir?'),
+      c('Não deu certo', 'O que não funcionou e precisa ser evitado?'),
+      c('Ideias novas', 'Que experimento ou sugestão vale testar?'),
+    ],
+  },
+  {
+    id: 'gaf', name: 'GAF: Gostei, Aprendi, Faltou', group: 'FunRetrospectives', source: `${FR}gaf-gostei-aprendi-faltou/`,
+    description: 'Rápida de preencher, boa para revisar um período longo.',
+    columns: [
+      c('Gostei', 'O que você curtiu neste período?'),
+      c('Aprendi', 'O que você aprendeu ou descobriu?'),
+      c('Faltou', 'O que você esperava e não aconteceu?'),
+    ],
+  },
+  {
+    id: 'lidando-com-falha', name: 'Lidando com Falha', group: 'FunRetrospectives', source: `${FR}lidando-com-falha/`,
+    description: 'Para tratar uma falha específica do começo ao fim. Escreva a falha no título da retro.',
+    columns: [
+      c('Análise', 'O que falhou e o que provocou a falha?'),
+      c('Avaliação', 'Qual foi o estrago, quão grave é e qual a chance de acontecer de novo?'),
+      c('Ação', 'O que fazemos para corrigir e para evitar que se repita?'),
+      c('Verificação', 'Como vamos saber se essas ações deram certo?'),
+    ],
+  },
+  {
+    id: 'mamm', name: 'MAMM: Manter, Acrescentar, Mais, Menos', group: 'FunRetrospectives', source: `${FR}mamm-manter-acrescentar-mais-menos/`,
+    description: 'Para ajustar a forma de trabalhar: o que continua, o que entra e o que aumenta ou diminui.',
+    columns: [
+      c('Manter', 'O que fazemos bem e deve continuar?'),
+      c('Acrescentar', 'Que prática nova vale trazer para o time?'),
+      c('Mais', 'O que já fazemos e daria mais resultado se fizéssemos mais?'),
+      c('Menos', 'O que já fazemos e deveria acontecer menos?'),
+    ],
+  },
+  {
+    id: 'tres-porquinhos', name: 'Os Três Porquinhos', group: 'FunRetrospectives', source: `${FR}os-tres-porquinhos/`,
+    description: 'Usa a história das três casas para avaliar o quanto as práticas do time são sólidas.',
+    columns: [
+      c('Casa de palha', 'O que parece funcionar, mas pode desabar a qualquer momento?'),
+      c('Casa de madeira', 'O que é firme, mas ainda dá para melhorar?'),
+      c('Casa de tijolos', 'O que é tão sólido que não precisa de atenção agora?'),
+    ],
+  },
+  {
+    id: 'prazer-e-ganhos', name: 'Prazer e Ganhos', group: 'FunRetrospectives', source: `${FR}prazer-e-ganhos/`,
+    description: 'Cada pessoa coloca as atividades do dia a dia num quadrante. Depois, conversem sobre como levar mais coisas para "Prazer e ganho".',
+    columns: [
+      c('Prazer e ganho', 'O que é bom de fazer e traz resultado? (o quadrante mágico)'),
+      c('Prazer e perda', 'O que é bom de fazer, mas custa caro para o time?'),
+      c('Sofrimento e ganho', 'O que pesa para fazer, mas traz resultado?'),
+      c('Sofrimento e perda', 'O que pesa e não traz benefício?'),
+    ],
+  },
+  {
+    id: 'problemas-e-acoes', name: 'Problemas e Ações', group: 'FunRetrospectives', source: `${FR}problemas-e-acoes/`,
+    description: 'Jeito rápido de levantar problemas e já sair com ações. Agrupe os parecidos antes de votar.',
+    columns: [
+      c('Problemas', 'Que problema você percebe no time?'),
+      c('Ações', 'Que ação ajudaria a resolver?'),
     ],
   },
 ];

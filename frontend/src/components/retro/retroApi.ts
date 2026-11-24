@@ -103,7 +103,7 @@ export const retroApi = {
 // ---------------------------------------------------------------- Retrô ao vivo: quadro (participante, sem login)
 export interface BoardColumn { name: string; description: string }
 export interface BoardSettings { anonymous: boolean; hideUntilReveal: boolean; votesPerPerson: number; votingOpen: boolean }
-export interface BoardTemplate { id: string; name: string; columns: BoardColumn[] }
+export interface BoardTemplate { id: string; name: string; columns: BoardColumn[]; group?: string; description?: string; source?: string }
 export interface BoardSummary {
   id: string; teamKey: string; title: string; date: string | null; token: string; status: 'aberta' | 'encerrada'; retroId: string | null;
   settings: BoardSettings; revealed: boolean; columns: BoardColumn[]; createdByName: string | null; createdAt: string;

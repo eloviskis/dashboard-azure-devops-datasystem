@@ -397,7 +397,7 @@ function registerRetroBoard(app, { getSql, authenticateToken }) {
       const key = columns.map(c => R.norm(c.name)).join('|');
       if (!columns.length || seen.has(key)) continue;
       seen.add(key);
-      fromRetros.push({ id: `retro-${fromRetros.length}`, name: `Colunas de “${r.title}”`, columns });
+      fromRetros.push({ id: `retro-${fromRetros.length}`, name: `Colunas de “${r.title}”`, group: 'Das retros já feitas', columns });
       if (fromRetros.length >= 10) break;
     }
     res.json([...B.TEMPLATES, ...fromRetros]);
