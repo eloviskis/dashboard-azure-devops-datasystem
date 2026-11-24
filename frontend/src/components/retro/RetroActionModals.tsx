@@ -1,7 +1,7 @@
 // Aba Retrô: detalhe da ação, nova ação e cadastro de tipos.
 import React, { useEffect, useState } from 'react';
 import { retroApi } from './retroApi.ts';
-import type { ActionEdits, ActionState, ActionType, Priority, RetroAction } from './retroApi.ts';
+import type { ActionEdits, ActionState, ActionType, Priority, RetroAction, RetroTeam } from './retroApi.ts';
 import type { RetroCtx } from './RetroDashboard.tsx';
 import {
   AzdoBadge, Btn, Field, Input, LIVE, Modal, NOTE_COLORS, PRI_LABEL, PersonSelect, PostIt, STATE_LABEL, Select, TYPE_HUES, TextArea,
@@ -245,6 +245,52 @@ export const TypesModal: React.FC<{ ctx: RetroCtx; onClose: () => void }> = ({ c
             Remover {removed.map(r => `"${r.name}"`).join(', ')} tira esse tipo de {affected} {affected === 1 ? 'ação' : 'ações'}.
           </p>
         )}
+        <div className="flex justify-end gap-2"><Btn onClick={onClose}>Cancelar</Btn><Btn variant="primary" disabled={busy} onClick={save}>Salvar</Btn></div>
+      </div>
+    </Modal>
+  );
+};
+
+// ---------------------------------------------------------------- times da Retrô (só liderança)
+export const TeamsModal: React.FC<{ ctx: RetroCtx; onClose: () => void }> = ({ ctx, onClose }) => {
+  const [list, setList] = useState<RetroTeam[]>(ctx.config.teams.map(t => ({ ...t })));
+  const [azdo, setAzdo] = useState<{ key: string; items: number }[] | null>(null);
+  const [pick, setPick] = useState('');
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { retroApi.azdoTeams().then(setAzdo).catch(e => ctx.toast((e as Error).message, true)); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const missing = (azdo || []).filter(a => !list.some(t => t.key === a.key));
+  const used = (key: string) => ctx.retros.some(r => r.teamKey === key) || ctx.actions.some(a => a.teamKey === key);
+  const upd = (i: number, label: string) => setList(l => l.map((x, j) => (j === i ? { ...x, label } : x)));
+  const add = () => { if (pick) { setList(l => [...l, { key: pick, label: pick }]); setPick(''); } };
+  const save = async () => {
+    setBusy(true);
+    try {
+      ctx.setTeams(await retroApi.saveTeams(list.map(t => ({ ...t, label: t.label.trim() || t.key }))));
+      ctx.toast('Times salvos');
+      onClose();
+    } catch (e) { ctx.toast((e as Error).message, true); } finally { setBusy(false); }
+  };
+  return (
+    <Modal title="Times da Retrô" onClose={onClose}>
+      <div className="space-y-3">
+        <p className="text-xs text-ds-text">Escolha entre os times que o DSMetrics já sincroniza do Azure DevOps. O nome exibido pode ser diferente do nome no DevOps.</p>
+        <ul className="space-y-2">
+          {list.map((t, i) => (
+            <li key={t.key} className="flex items-center gap-2">
+              <Input value={t.label} onChange={e => upd(i, e.target.value)} maxLength={60} aria-label={`Nome exibido do time ${t.key}`} />
+              <span className="text-[11px] text-ds-text whitespace-nowrap w-36 truncate" title={`No Azure DevOps: ${t.key}`}>DevOps: {t.key}</span>
+              <Btn variant="danger" disabled={used(t.key) || list.length === 1} onClick={() => setList(l => l.filter((_, j) => j !== i))}
+                title={used(t.key) ? 'Este time já tem retros ou ações' : ''}>Remover</Btn>
+            </li>
+          ))}
+        </ul>
+        <div className="flex items-center gap-2">
+          <Select value={pick} onChange={e => setPick(e.target.value)} aria-label="Time do Azure DevOps para adicionar" disabled={!azdo}>
+            <option value="">{!azdo ? 'Carregando times do DevOps…' : missing.length ? 'Escolha um time do DevOps…' : 'Todos os times já estão na lista'}</option>
+            {missing.map(a => <option key={a.key} value={a.key}>{a.key} ({a.items} itens)</option>)}
+          </Select>
+          <Btn disabled={!pick} onClick={add}>+ Adicionar</Btn>
+        </div>
         <div className="flex justify-end gap-2"><Btn onClick={onClose}>Cancelar</Btn><Btn variant="primary" disabled={busy} onClick={save}>Salvar</Btn></div>
       </div>
     </Modal>

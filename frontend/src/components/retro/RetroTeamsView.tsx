@@ -4,6 +4,7 @@ import { retroApi } from './retroApi.ts';
 import type { TeamSummary } from './retroApi.ts';
 import type { RetroCtx } from './RetroDashboard.tsx';
 import { Btn, TONE_CLASS, TONE_LABEL, TypeTag, fmtDate, fmtDateTime } from './retroUi.tsx';
+import { TeamsModal } from './RetroActionModals.tsx';
 
 const Counter: React.FC<{ label: string; n: number; alert?: boolean }> = ({ label, n, alert }) => (
   <div className={`rounded-lg border px-2 py-1.5 text-center ${alert && n > 0 ? 'border-red-400/50 text-red-300' : 'border-ds-border text-ds-light-text'}`}>
@@ -15,7 +16,8 @@ const Counter: React.FC<{ label: string; n: number; alert?: boolean }> = ({ labe
 const RetroTeamsView: React.FC<{ ctx: RetroCtx }> = ({ ctx }) => {
   const [teams, setTeams] = useState<TeamSummary[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  useEffect(() => { retroApi.teams().then(setTeams).catch(e => ctx.toast((e as Error).message, true)); }, [ctx.actions, ctx.retros]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [manage, setManage] = useState(false);
+  useEffect(() => { retroApi.teams().then(setTeams).catch(e => ctx.toast((e as Error).message, true)); }, [ctx.actions, ctx.retros, ctx.config.teams]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const feedback = async (key: string) => {
     setBusy(key);
@@ -27,6 +29,11 @@ const RetroTeamsView: React.FC<{ ctx: RetroCtx }> = ({ ctx }) => {
 
   if (!teams) return <p className="text-sm text-ds-text">Carregando…</p>;
   return (
+    <div className="space-y-4">
+    {ctx.config.isLeader && (
+      <div className="flex justify-end"><Btn onClick={() => setManage(true)}>Gerenciar times</Btn></div>
+    )}
+    {manage && <TeamsModal ctx={ctx} onClose={() => setManage(false)} />}
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       {teams.map(t => {
         const maxType = Math.max(1, ...t.typeCounts.map(x => x.count));
@@ -115,6 +122,7 @@ const RetroTeamsView: React.FC<{ ctx: RetroCtx }> = ({ ctx }) => {
           </article>
         );
       })}
+    </div>
     </div>
   );
 };

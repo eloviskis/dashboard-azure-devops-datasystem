@@ -737,6 +737,33 @@ function registerRetro(app, { getSql, authenticateToken }) {
     res.json({ queued: true });
   }));
 
+  // ---- Times: quais aparecem na Retrô (liderança escolhe entre os times que o sync traz do Azure DevOps)
+  router.get('/azdo-teams', leaderOnly, wrap(async (req, res) => {
+    const rows = await db()`SELECT team, count(*)::int AS items FROM work_items WHERE team IS NOT NULL AND team <> '' GROUP BY team ORDER BY team`;
+    res.json(rows.map(r => ({ key: r.team, items: r.items })));
+  }));
+
+  router.put('/teams', leaderOnly, wrap(async (req, res) => {
+    const sql = db();
+    const current = await getTeams();
+    const available = (await sql`SELECT DISTINCT team FROM work_items WHERE team IS NOT NULL AND team <> ''`).map(r => r.team);
+    const { error, teams } = R.cleanTeams(req.body?.teams, available, current);
+    if (error) throw fail(400, error);
+    const removed = current.filter(c => !teams.some(t => t.key === c.key)).map(c => c.key);
+    const used = removed.length ? await sql`
+      SELECT team_key FROM retro WHERE team_key = ANY(${removed})
+      UNION SELECT team_key FROM retro_action WHERE team_key = ANY(${removed})` : [];
+    if (used.length) throw fail(400, `Não dá para tirar ${used.map(u => teamLabel(current, u.team_key)).join(', ')}: já tem retros ou ações.`);
+    const rows = await sql`SELECT value FROM app_settings WHERE key = 'retro_config'`;
+    let cfg = {};
+    try { cfg = JSON.parse(rows[0]?.value || '{}') || {}; } catch { /* config inválida: regrava */ }
+    await sql`
+      INSERT INTO app_settings (key, value, updated_by, updated_at)
+      VALUES ('retro_config', ${JSON.stringify({ ...cfg, teams })}, ${req.user.username}, CURRENT_TIMESTAMP)
+      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_by = EXCLUDED.updated_by, updated_at = CURRENT_TIMESTAMP`;
+    res.json(teams);
+  }));
+
   // ---- Times (acompanhamento)
   router.get('/teams', wrap(async (req, res) => {
     const sql = db();

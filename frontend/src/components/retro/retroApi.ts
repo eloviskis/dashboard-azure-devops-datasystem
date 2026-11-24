@@ -84,5 +84,7 @@ export const retroApi = {
   addUpdate: (id: string, text: string) => req('POST', `/actions/${encodeURIComponent(id)}/updates`, { text }),
   azdoRetry: (id: string) => req('POST', `/actions/${encodeURIComponent(id)}/azdo-retry`),
   teams: () => req<TeamSummary[]>('GET', '/teams'),
+  azdoTeams: () => req<{ key: string; items: number }[]>('GET', '/azdo-teams'),
+  saveTeams: (teams: RetroTeam[]) => req<RetroTeam[]>('PUT', '/teams', { teams }),
   teamFeedback: (key: string) => req<TeamSummary['feedback']>('POST', `/teams/${encodeURIComponent(key)}/feedback`),
 };

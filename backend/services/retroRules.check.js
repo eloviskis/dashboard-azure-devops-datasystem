@@ -98,4 +98,18 @@ assert.deepEqual(R.reconcileFromAdo(wi('andamento'), 'Removed').state, null, 're
 assert.match(R.reconcileFromAdo(wi('andamento'), 'Removed').note, /removido/);
 assert.equal(R.reconcileFromAdo(wi('aberta'), 'New'), null);
 
+// ---- Lista de times ----
+{
+  const cur = [{ key: 'Tatico', label: 'Condado', aliases: ['Tático'] }, { key: 'Antigo', label: 'Antigo', aliases: [] }];
+  const ok = R.cleanTeams([{ key: 'Tatico', label: ' Condado ' }, { key: 'Boltz', label: '' }, { key: 'Antigo', label: 'X' }, { key: 'Boltz' }], ['Tatico', 'Boltz'], cur);
+  assert.deepEqual(ok.teams, [
+    { key: 'Tatico', label: 'Condado', aliases: ['Tático'] },
+    { key: 'Boltz', label: 'Boltz', aliases: [] },
+    { key: 'Antigo', label: 'X', aliases: [] },
+  ], 'mantém aliases, nome vazio vira a chave, repetido some, time que já estava continua válido');
+  assert.match(R.cleanTeams([{ key: 'Inventado' }], ['Boltz'], cur).error, /Inventado/, 'time fora do DevOps é recusado');
+  assert.ok(R.cleanTeams([], ['Boltz']).error, 'lista vazia é recusada');
+  assert.ok(R.cleanTeams(null, ['Boltz']).error);
+}
+
 console.log('retroRules: ok');

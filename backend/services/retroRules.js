@@ -181,8 +181,24 @@ function reconcileFromAdo(action, adoState) {
   return null;
 }
 
+// Lista de times da Retrô editada pela liderança. Só aceita time que existe no Azure DevOps (work_items.team)
+// ou que já estava na lista; o nome exibido é livre, e os aliases (casamento na carga inicial) são mantidos.
+function cleanTeams(list, available, current = []) {
+  if (!Array.isArray(list) || !list.length) return { error: 'Escolha pelo menos um time' };
+  const allowed = new Set([...available, ...current.map(t => t.key)]);
+  const teams = [];
+  for (const t of list) {
+    const key = String(t?.key ?? '').trim();
+    if (!allowed.has(key)) return { error: `Time não encontrado no Azure DevOps: ${key || '(vazio)'}` };
+    if (teams.some(x => x.key === key)) continue;
+    const label = String(t?.label ?? '').trim().slice(0, 60) || key;
+    teams.push({ key, label, aliases: current.find(c => c.key === key)?.aliases || [] });
+  }
+  return { teams };
+}
+
 module.exports = {
-  adoCategory, reconcileFromAdo,
+  adoCategory, reconcileFromAdo, cleanTeams,
   STATES, LIVE, PRIORITIES, TONES, LEADER_ROLES, LEADER_ONLY_MSG,
   norm, slug, newId, isLeader, todayStr, moveError, approveError, isLate, sortActions, sortClosed,
   mapAiTags, sanitizeInsights, buildSuggestions, sanitizeFeedback, extractJson, splitOwners, matchOwner, retroText,

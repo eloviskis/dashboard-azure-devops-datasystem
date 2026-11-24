@@ -1,7 +1,7 @@
 // Aba Retrô: retrospectivas do EasyRetro → ações acompanhadas → work items no board Kaizen.
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { retroApi } from './retroApi.ts';
-import type { ActionType, Person, RetroAction, RetroConfig, RetroSummary } from './retroApi.ts';
+import type { ActionType, Person, RetroAction, RetroConfig, RetroSummary, RetroTeam } from './retroApi.ts';
 import { useToast } from './retroUi.tsx';
 import RetroActionsView from './RetroActionsView.tsx';
 import RetroRetrosView from './RetroRetrosView.tsx';
@@ -20,6 +20,7 @@ export interface RetroCtx {
   retros: RetroSummary[];
   reload: () => Promise<void>;
   setTypes: (t: ActionType[]) => void;
+  setTeams: (t: RetroTeam[]) => void;
   toast: (text: string, error?: boolean) => void;
   openAction: (id: string) => void;
   newAction: (prefill?: NewActionPrefill) => void;
@@ -76,6 +77,7 @@ const RetroDashboard: React.FC = () => {
 
   const ctx: RetroCtx | null = useMemo(() => config && {
     config, types, people: people.people, byTeam: people.byTeam, actions, retros, reload, setTypes, toast,
+    setTeams: (teams: RetroTeam[]) => setConfig(c => c && { ...c, teams }),
     openAction, newAction: (p?: NewActionPrefill) => setNewPrefill(p || {}), teamLabel,
   }, [config, types, people, actions, retros, reload, toast, openAction, teamLabel]);
 
