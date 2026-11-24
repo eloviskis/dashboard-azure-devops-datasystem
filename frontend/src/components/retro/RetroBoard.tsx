@@ -24,17 +24,43 @@ async function uploadImage(api: BoardApi, file: File) {
   return (await api.upload(file)).src;
 }
 
-// ---------------------------------------------------------------- GIFs: link da GIPHY (sempre) e busca (com GIPHY_API_KEY no servidor)
-const GifPicker: React.FC<{ api: BoardApi; toast: Toast; search: boolean; onPick: (src: string) => void; onClose: () => void }> = ({ api, toast, search: canSearch, onPick, onClose }) => {
+// ---------------------------------------------------------------- GIFs: busca enquanto digita (KLIPY/GIPHY, com chave no servidor)
+// e link da GIPHY (sempre). Aberto sem texto, mostra os GIFs em alta; rolando até o fim, carrega mais.
+const PROVIDER_LABEL: Record<string, string> = { klipy: 'KLIPY', giphy: 'GIPHY' };
+const GifPicker: React.FC<{ api: BoardApi; toast: Toast; provider: string | null; onPick: (src: string) => void; onClose: () => void }> = ({ api, toast, provider, onPick, onClose }) => {
   const [q, setQ] = useState('');
   const [link, setLink] = useState('');
-  const [list, setList] = useState<Gif[] | null>(null);
-  const [busy, setBusy] = useState(false);
-  const search = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!q.trim()) return;
-    setBusy(true);
-    try { setList(await api.gifs(q.trim())); } catch (err) { toast((err as Error).message, true); } finally { setBusy(false); }
+  const [showLink, setShowLink] = useState(!provider);
+  const [list, setList] = useState<Gif[]>([]);
+  const [page, setPage] = useState(1);
+  const [hasNext, setHasNext] = useState(false);
+  const [loading, setLoading] = useState(!!provider);
+  const reqId = useRef(0);
+
+  // Busca 300 ms depois de parar de digitar; resposta de uma busca antiga (reqId mudou) é descartada.
+  useEffect(() => {
+    if (!provider) return;
+    const id = ++reqId.current;
+    setLoading(true);
+    const t = setTimeout(async () => {
+      try {
+        const r = await api.gifs(q.trim(), 1);
+        if (id === reqId.current) { setList(r.items); setPage(1); setHasNext(r.hasNext); }
+      } catch (err) { if (id === reqId.current) { setList([]); setHasNext(false); toast((err as Error).message, true); } }
+      finally { if (id === reqId.current) setLoading(false); }
+    }, q.trim() ? 300 : 0);
+    return () => clearTimeout(t);
+  }, [q, provider]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const more = async () => {
+    if (loading || !hasNext) return;
+    const id = reqId.current;
+    setLoading(true);
+    try {
+      const r = await api.gifs(q.trim(), page + 1);
+      if (id === reqId.current) { setList(l => [...l, ...r.items.filter(g => !l.some(x => x.src === g.src))]); setPage(page + 1); setHasNext(r.hasNext); }
+    } catch { if (id === reqId.current) setHasNext(false); }
+    finally { if (id === reqId.current) setLoading(false); }
   };
   const addLink = (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,44 +69,53 @@ const GifPicker: React.FC<{ api: BoardApi; toast: Toast; search: boolean; onPick
     onPick(src);
   };
   return (
-    <div className="mt-2 rounded-lg border border-ds-border bg-ds-dark-blue p-2 space-y-2">
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-medium text-ds-light-text">GIF</span>
+    <div className="mt-2 rounded-lg border border-ds-border bg-ds-dark-blue p-2 space-y-2 shadow-xl"
+      onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); onClose(); } }}>
+      <div className="flex items-center gap-1">
+        {provider ? (
+          <Input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder={`🔍 Pesquisar ${PROVIDER_LABEL[provider] || 'GIF'}`}
+            aria-label="Pesquisar GIF" maxLength={50} className="!py-1.5" />
+        ) : <span className="flex-1 text-xs font-medium text-ds-light-text">GIF</span>}
         <Btn onClick={onClose} aria-label="Fechar GIF">✕</Btn>
       </div>
-      {canSearch && (
-        <form onSubmit={search} className="flex gap-1">
-          <Input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar GIF…" aria-label="Buscar GIF" maxLength={50} />
-          <Btn type="submit" disabled={busy}>{busy ? '…' : 'Buscar'}</Btn>
-        </form>
-      )}
-      <form onSubmit={addLink} className="flex gap-1">
-        <Input autoFocus={!canSearch} value={link} onChange={e => setLink(e.target.value)} placeholder="Cole o link do GIF da GIPHY" aria-label="Link do GIF da GIPHY" maxLength={500} />
-        <Btn type="submit" disabled={!link.trim()}>Usar</Btn>
-      </form>
-      {!canSearch && (
-        <p className="text-[11px] text-ds-text">
-          Ache o GIF em <a href="https://giphy.com" target="_blank" rel="noreferrer" className="underline hover:text-ds-light-text">giphy.com</a>, copie o link e cole acima.
-          Tem o arquivo .gif? Use o botão 🖼️ Imagem, ou cole/arraste no card.
-        </p>
-      )}
-      {list && (list.length ? (
-        <div className="grid grid-cols-3 gap-1 max-h-48 overflow-y-auto">
+
+      {provider && (
+        <div className="grid grid-cols-2 gap-1 max-h-72 overflow-y-auto pr-0.5" aria-busy={loading}
+          onScroll={e => { const el = e.currentTarget; if (el.scrollTop + el.clientHeight > el.scrollHeight - 120) more(); }}>
           {list.map(g => (
-            <button key={g.src} type="button" onClick={() => onPick(g.src)} className="rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-ds-green">
-              <img src={g.preview} alt={g.title || 'GIF'} loading="lazy" className="w-full h-16 object-cover rounded" />
+            <button key={g.src} type="button" onClick={() => onPick(g.src)} title={g.title}
+              className="rounded overflow-hidden bg-ds-navy focus:outline-none focus-visible:ring-2 focus-visible:ring-ds-green">
+              <img src={g.preview} alt={g.title || 'GIF'} loading="lazy" className="w-full h-24 object-cover" />
             </button>
           ))}
+          {loading && <p className="col-span-2 text-center text-xs text-ds-text py-2" role="status">Carregando GIFs…</p>}
+          {!loading && !list.length && <p className="col-span-2 text-center text-xs text-ds-text py-2">Nenhum GIF encontrado.</p>}
         </div>
-      ) : <p className="text-xs text-ds-text">Nenhum GIF encontrado.</p>)}
-      {canSearch && <p className="text-[10px] text-ds-text">GIFs da GIPHY</p>}
+      )}
+
+      {showLink ? (
+        <>
+          <form onSubmit={addLink} className="flex gap-1">
+            <Input autoFocus={!provider} value={link} onChange={e => setLink(e.target.value)} placeholder="Cole o link do GIF da GIPHY" aria-label="Link do GIF da GIPHY" maxLength={500} />
+            <Btn type="submit" disabled={!link.trim()}>Usar</Btn>
+          </form>
+          {!provider && (
+            <p className="text-[11px] text-ds-text">
+              Ache o GIF em <a href="https://giphy.com" target="_blank" rel="noreferrer" className="underline hover:text-ds-light-text">giphy.com</a>, copie o link e cole acima.
+              Tem o arquivo .gif? Use o botão 🖼️ Imagem, ou cole/arraste no card.
+            </p>
+          )}
+        </>
+      ) : <button type="button" className="text-[11px] text-ds-text underline hover:text-ds-light-text" onClick={() => setShowLink(true)}>Colar link da GIPHY</button>}
+
+      {provider && <p className="text-[10px] text-center text-ds-text">Powered by {PROVIDER_LABEL[provider] || provider}</p>}
     </div>
   );
 };
 
 // ---------------------------------------------------------------- escrever / editar card
 const Composer: React.FC<{
-  api: BoardApi; gifs: boolean; toast: Toast; label: string; submitLabel: string;
+  api: BoardApi; gifs: string | null; toast: Toast; label: string; submitLabel: string;
   initial?: { text: string; images: string[] }; onSubmit: (text: string, images: string[]) => Promise<void>; onCancel?: () => void;
 }> = ({ api, gifs, toast, label, submitLabel, initial, onSubmit, onCancel }) => {
   const [text, setText] = useState(initial?.text || '');
@@ -136,7 +171,7 @@ const Composer: React.FC<{
         {onCancel && <Btn onClick={onCancel}>Cancelar</Btn>}
         <Btn variant="primary" disabled={busy || uploading || (!text.trim() && !images.length)} onClick={submit}>{submitLabel}</Btn>
       </div>
-      {gifOpen && <GifPicker api={api} toast={toast} search={gifs} onClose={() => setGifOpen(false)}
+      {gifOpen && <GifPicker api={api} toast={toast} provider={gifs} onClose={() => setGifOpen(false)}
         onPick={src => { setImages(l => [...l, src].slice(0, MAX_IMAGES)); setGifOpen(false); }} />}
     </div>
   );
@@ -206,7 +241,7 @@ const CardView: React.FC<{
         <div key={it.id}>
           {i > 0 && <hr className="my-1.5 border-0 border-t border-dashed" style={{ borderColor: INK_SOFT }} />}
           {editing === it.id ? (
-            <Composer api={api} gifs={state.gifsEnabled} toast={toast} label="Editar card" submitLabel="Salvar" initial={{ text: it.text, images: it.images }}
+            <Composer api={api} gifs={state.gifProvider} toast={toast} label="Editar card" submitLabel="Salvar" initial={{ text: it.text, images: it.images }}
               onCancel={() => setEditing(null)}
               onSubmit={async (t, im) => { await api.editCard(it.id, t, im); setEditing(null); await run(async () => undefined); }} />
           ) : (
@@ -407,7 +442,7 @@ export const RetroBoard: React.FC<{ token: string; toolbar?: (s: BoardState, ref
                 </div>
                 {c.description && <p className="text-xs text-ds-text mt-1">{c.description}</p>}
               </div>
-              <Composer api={api} gifs={state.gifsEnabled} toast={toast} label={`Novo card em ${c.name}`} submitLabel="Adicionar"
+              <Composer api={api} gifs={state.gifProvider} toast={toast} label={`Novo card em ${c.name}`} submitLabel="Adicionar"
                 onSubmit={async (t, im) => { await api.addCard(i, t, im); await refresh(); }} />
               {sorted.map(card => (
                 <CardView key={card.id} card={card} color={color} state={state} api={api} run={run} toast={toast} others={others} dragId={dragId} />

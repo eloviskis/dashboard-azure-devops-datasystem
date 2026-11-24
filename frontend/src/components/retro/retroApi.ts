@@ -115,7 +115,7 @@ export interface BoardCard { id: number; col: number; hidden: boolean; items?: B
 export interface BoardState {
   v: number; unchanged?: boolean; title: string; teamLabel: string; date: string | null; status: string;
   columns: BoardColumn[]; settings: BoardSettings; revealed: boolean; timerEndsAt: string | null; serverNow: string;
-  participants: number; gifsEnabled: boolean; cards: BoardCard[];
+  participants: number; gifProvider: 'klipy' | 'giphy' | null; cards: BoardCard[];
   me: { id: number; name: string; votesUsed: number; votesLeft: number | null };
 }
 export interface Gif { src: string; preview: string; title: string }
@@ -164,7 +164,7 @@ export function boardApi(token: string) {
     group: (id: number, into: number) => call('POST', `/cards/${id}/group`, { into }),
     ungroup: (id: number) => call('POST', `/cards/${id}/ungroup`),
     upload: (file: File) => call<{ src: string }>('POST', '/images', undefined, file),
-    gifs: (q: string) => call<Gif[]>('GET', `/gifs?q=${encodeURIComponent(q)}`),
+    gifs: (q: string, page = 1) => call<{ items: Gif[]; hasNext: boolean; provider: string }>('GET', `/gifs?q=${encodeURIComponent(q)}&page=${page}`),
   };
 }
 export type BoardApi = ReturnType<typeof boardApi>;

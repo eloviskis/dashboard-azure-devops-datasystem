@@ -14,6 +14,14 @@ const MAX_IMAGE = 5 * 1024 * 1024;
 const LIMITS = { participants: 100, cardsPerPerson: 150, commentsPerPerson: 300, imagesPerBoard: 100 };
 const TOKEN_RE = /^[A-Za-z0-9_-]{20,100}$/;
 const newSecret = () => crypto.randomBytes(32).toString('base64url');
+// GIFs: KLIPY (grátis) se KLIPY_API_KEY existir; senão GIPHY (GIPHY_API_KEY, chave beta = 100 buscas/hora).
+const gifProvider = () => (process.env.KLIPY_API_KEY ? 'klipy' : process.env.GIPHY_API_KEY ? 'giphy' : null);
+const GIF_PAGE = 24;
+// ponytail: cache em memória por processo (10 min, 300 buscas) pra a mesma busca de vários participantes não gastar
+// a cota do provedor. Com mais de um processo, cada um tem o seu; se precisar, o caminho é um cache no Postgres.
+const GIF_CACHE_MS = 10 * 60 * 1000;
+const GIF_CACHE_MAX = 300;
+const gifCache = new Map();
 
 async function initRetroBoardSchema(sql) {
   await sql`
@@ -183,7 +191,7 @@ function registerRetroBoard(app, { getSql, authenticateToken }) {
     res.json({
       ...B.viewFor({ board, ...data, meId: me.id }),
       v: board.version, serverNow: new Date().toISOString(), teamLabel: await teamLabelOf(board.team_key),
-      gifsEnabled: !!process.env.GIPHY_API_KEY,
+      gifProvider: gifProvider(),
     });
   }));
 
@@ -318,23 +326,34 @@ function registerRetroBoard(app, { getSql, authenticateToken }) {
     res.status(201).json({ src: `/api/retro-board/img/${id}` });
   }));
 
-  // Busca na GIPHY pelo backend (a chave não vai pro navegador). Sem GIPHY_API_KEY, a busca não aparece na tela.
+  // Busca de GIFs pelo backend (a chave não vai pro navegador): q vazio = em alta. Sem chave, a tela oferece
+  // só link da GIPHY e arquivo .gif.
   pub.get('/:token/gifs', wrap(async (req, res) => {
     const board = await boardByToken(req.params.token);
-    await participantOf(req, board);
-    const key = process.env.GIPHY_API_KEY;
-    if (!key) throw fail(404, 'Busca de GIFs não configurada no servidor');
+    const me = await participantOf(req, board);
+    const provider = gifProvider();
+    if (!provider) throw fail(404, 'Busca de GIFs não configurada no servidor');
     const q = str(req.query.q, 50);
-    if (!q) return res.json([]);
-    const url = `https://api.giphy.com/v1/gifs/search?api_key=${encodeURIComponent(key)}&q=${encodeURIComponent(q)}&limit=12&rating=pg&lang=pt`;
+    const page = Math.min(Math.max(parseInt(req.query.page, 10) || 1, 1), 20);
+    const key = `${provider}|${R.norm(q)}|${page}`;
+    const hit = gifCache.get(key);
+    if (hit && hit.at > Date.now() - GIF_CACHE_MS) return res.json(hit.value);
+    const url = provider === 'klipy'
+      ? `https://api.klipy.com/api/v1/${encodeURIComponent(process.env.KLIPY_API_KEY)}/gifs/${q ? 'search' : 'trending'}?` + new URLSearchParams({
+        ...(q ? { q } : {}), page: String(page), per_page: String(GIF_PAGE), customer_id: `dsmetrics-retro-${me.id}`,
+      })
+      : `https://api.giphy.com/v1/gifs/${q ? 'search' : 'trending'}?` + new URLSearchParams({
+        api_key: process.env.GIPHY_API_KEY, ...(q ? { q, lang: 'pt' } : {}), limit: String(GIF_PAGE), offset: String((page - 1) * GIF_PAGE), rating: 'pg',
+      });
     const r = await fetch(url, { signal: AbortSignal.timeout(8000) }).catch(() => null);
-    if (!r || !r.ok) throw fail(502, 'A busca de GIFs não respondeu agora');
-    const data = (await r.json())?.data || [];
-    res.json(data.map(g => ({
-      src: g.images?.downsized_medium?.url || g.images?.fixed_height?.url,
-      preview: g.images?.fixed_height_small?.url || g.images?.fixed_height?.url,
-      title: str(g.title, 100),
-    })).filter(g => B.isAllowedImageUrl(g.src) && B.isAllowedImageUrl(g.preview)));
+    if (!r || !r.ok) {
+      console.error(`❌ retro-board gifs: ${provider} respondeu ${r ? r.status : 'sem resposta'}`);
+      throw fail(502, 'A busca de GIFs não respondeu agora. Tente de novo.');
+    }
+    const value = { ...(provider === 'klipy' ? B.parseKlipy : B.parseGiphy)(await r.json().catch(() => null)), provider };
+    if (gifCache.size >= GIF_CACHE_MAX) gifCache.delete(gifCache.keys().next().value);
+    gifCache.set(key, { at: Date.now(), value });
+    res.json(value);
   }));
 
   pub.use(parserErrors);

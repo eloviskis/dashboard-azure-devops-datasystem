@@ -128,13 +128,45 @@ function sniffImage(buf) {
   return null;
 }
 
-// Imagens de card: as enviadas pro próprio DSMetrics ou GIFs da GIPHY. Qualquer outra URL fica de fora
+// Imagens de card: as enviadas pro próprio DSMetrics ou GIFs da KLIPY/GIPHY. Qualquer outra URL fica de fora
 // (pixel de rastreio, conteúdo arbitrário de terceiros).
 const IMG_OWN = /^\/api\/retro-board\/img\/[0-9a-f-]{36}$/;
 const IMG_GIPHY = /^https:\/\/(media\d*|i)\.giphy\.com\/[^\s"'<>\\]+$/;
-const isAllowedImageUrl = (u) => typeof u === 'string' && u.length <= 500 && (IMG_OWN.test(u) || IMG_GIPHY.test(u));
+const IMG_KLIPY = /^https:\/\/([a-z0-9-]+\.)*klipy\.com\/[^\s"'<>\\]+$/;
+const isAllowedImageUrl = (u) => typeof u === 'string' && u.length <= 500 && (IMG_OWN.test(u) || IMG_GIPHY.test(u) || IMG_KLIPY.test(u));
 const cleanImages = (list, max = 4) => (Array.isArray(list) ? list : []).filter(isAllowedImageUrl).slice(0, max);
+
+// ---- busca de GIFs: resposta de cada provedor → [{src, preview, title}] + se tem próxima página.
+const pickUrl = (file, sizes, formats) => {
+  for (const sz of sizes) for (const f of formats) { const u = file?.[sz]?.[f]?.url; if (u) return u; }
+  return null;
+};
+const okGif = (g) => isAllowedImageUrl(g.src) && isAllowedImageUrl(g.preview);
+
+// KLIPY: { data: { data: [...], has_next } }, cada item com file.{hd,md,sm,xs}.{gif,webp,jpg}.url.
+// Anúncio (type "ad" ou sem arquivo de GIF) fica de fora: o card guarda a URL e ela precisa ser um GIF.
+function parseKlipy(json) {
+  const list = Array.isArray(json?.data?.data) ? json.data.data : Array.isArray(json?.data) ? json.data : [];
+  const items = list.filter(it => it && it.type !== 'ad').map(it => ({
+    src: pickUrl(it.file, ['md', 'hd', 'sm'], ['gif']),
+    preview: pickUrl(it.file, ['sm', 'xs', 'md'], ['gif', 'webp']),
+    title: s(it.title, 100),
+  })).filter(okGif);
+  return { items, hasNext: !!json?.data?.has_next };
+}
+
+// GIPHY: { data: [...], pagination: { total_count, count, offset } }.
+function parseGiphy(json) {
+  const items = (Array.isArray(json?.data) ? json.data : []).map(g => ({
+    src: g.images?.downsized_medium?.url || g.images?.fixed_height?.url,
+    preview: g.images?.fixed_width?.url || g.images?.fixed_height_small?.url || g.images?.fixed_height?.url,
+    title: s(g.title, 100),
+  })).filter(okGif);
+  const p = json?.pagination || {};
+  return { items, hasNext: (p.offset || 0) + (p.count || 0) < (p.total_count || 0) };
+}
 
 module.exports = {
   TEMPLATES, cleanBoardColumns, cleanSettings, isVisible, viewFor, voteError, toRetroColumns, sniffImage, isAllowedImageUrl, cleanImages,
+  parseKlipy, parseGiphy,
 };

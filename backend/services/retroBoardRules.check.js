@@ -92,6 +92,35 @@ const data = (b) => ({ board: b, cards, votes, comments, participants: people })
     assert.equal(B.isAllowedImageUrl(bad), false, bad);
   }
   assert.equal(B.cleanImages(['https://evil.com/a.png', '/api/retro-board/img/0f8fad5b-d9cb-469f-a165-70867728950e']).length, 1);
+  assert.ok(B.isAllowedImageUrl('https://static.klipy.com/ii/abc/gif.gif'));
+  assert.ok(B.isAllowedImageUrl('https://klipy.com/x.gif'));
+  for (const bad of ['https://klipy.com.evil.com/x.gif', 'https://evilklipy.com/x.gif', 'http://static.klipy.com/x.gif']) {
+    assert.equal(B.isAllowedImageUrl(bad), false, bad);
+  }
+}
+
+// ---- Busca de GIFs: KLIPY e GIPHY → formato único; anúncio e URL de fora ficam de fora
+{
+  const k = B.parseKlipy({ result: true, data: { has_next: true, data: [
+    { id: 1, title: 'Gato', file: { hd: { gif: { url: 'https://static.klipy.com/a/hd.gif' } }, md: { gif: { url: 'https://static.klipy.com/a/md.gif' } }, sm: { gif: { url: 'https://static.klipy.com/a/sm.gif' } } } },
+    { id: 2, type: 'ad', file: { md: { gif: { url: 'https://static.klipy.com/ad.gif' } } } },
+    { id: 3, title: 'sem gif', file: { md: { jpg: { url: 'https://static.klipy.com/b.jpg' } } } },
+    { id: 4, title: 'de fora', file: { md: { gif: { url: 'https://evil.com/x.gif' } } } },
+    { id: 5, title: 'só hd', file: { hd: { gif: { url: 'https://static.klipy.com/c/hd.gif' } }, xs: { webp: { url: 'https://static.klipy.com/c/xs.webp' } } } },
+  ] } });
+  assert.deepEqual(k, { hasNext: true, items: [
+    { src: 'https://static.klipy.com/a/md.gif', preview: 'https://static.klipy.com/a/sm.gif', title: 'Gato' },
+    { src: 'https://static.klipy.com/c/hd.gif', preview: 'https://static.klipy.com/c/xs.webp', title: 'só hd' },
+  ] });
+  assert.deepEqual(B.parseKlipy({}), { items: [], hasNext: false });
+  assert.deepEqual(B.parseKlipy({ data: [] }), { items: [], hasNext: false });
+
+  const g = B.parseGiphy({ data: [
+    { title: 'Oi', images: { downsized_medium: { url: 'https://media2.giphy.com/media/x/giphy.gif' }, fixed_width: { url: 'https://media2.giphy.com/media/x/200w.gif' } } },
+    { title: 'ruim', images: { downsized_medium: { url: 'https://evil.com/x.gif' }, fixed_width: { url: 'https://evil.com/y.gif' } } },
+  ], pagination: { total_count: 50, count: 24, offset: 0 } });
+  assert.deepEqual(g, { hasNext: true, items: [{ src: 'https://media2.giphy.com/media/x/giphy.gif', preview: 'https://media2.giphy.com/media/x/200w.gif', title: 'Oi' }] });
+  assert.equal(B.parseGiphy({ data: [], pagination: { total_count: 24, count: 24, offset: 0 } }).hasNext, false);
 }
 
 console.log('retroBoardRules: ok');
