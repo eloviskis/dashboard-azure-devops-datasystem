@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import {
-  inferDate, inferTeam, normalizeAiPdf, parseCard, parseCsv, parseRows, pdfHeuristic, readXlsxRows, retroStats, splitMerged,
+  giphyMediaUrl, inferDate, inferTeam, normalizeAiPdf, parseCard, parseCsv, parseRows, pdfHeuristic, readXlsxRows, retroStats, splitMerged,
 } from './retroParser.ts';
 
 const fixture = (f) => fileURLToPath(new URL(`../../../docs/retro/fixtures/${f}`, import.meta.url));
@@ -96,5 +96,15 @@ assert.deepEqual(h.columns.map(c => [c.name, c.description, c.cards.map(k => [k.
 const ia = normalizeAiPdf({ title: 'T', columns: [{ name: '', cards: [{ t: ' a ', v: '3', c: ['x', ''] }, { t: '' }] }] });
 assert.deepEqual(ia, { title: 'T', columns: [{ name: 'Coluna 1', description: '', cards: [{ t: 'a', v: 3, c: ['x'] }] }], via: 'ia' });
 assert.throws(() => normalizeAiPdf({ columns: [] }));
+
+// ---- link de GIF da GIPHY (Retrô ao vivo)
+assert.equal(giphyMediaUrl('https://giphy.com/gifs/cat-funny-JIX9t2j0ZTN9S'), 'https://media.giphy.com/media/JIX9t2j0ZTN9S/giphy.gif');
+assert.equal(giphyMediaUrl(' https://giphy.com/gifs/JIX9t2j0ZTN9S/ '), 'https://media.giphy.com/media/JIX9t2j0ZTN9S/giphy.gif');
+assert.equal(giphyMediaUrl('https://giphy.com/stickers/party-hat-l0MYt5jPR6QX5pnqM'), 'https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif');
+assert.equal(giphyMediaUrl('https://giphy.com/embed/JIX9t2j0ZTN9S'), 'https://media.giphy.com/media/JIX9t2j0ZTN9S/giphy.gif');
+assert.equal(giphyMediaUrl('https://media2.giphy.com/media/abc123/giphy.gif?cid=x&rid=giphy.gif'), 'https://media2.giphy.com/media/abc123/giphy.gif?cid=x&rid=giphy.gif');
+for (const bad of ['', 'gato', 'http://giphy.com/gifs/x-JIX9t2j0ZTN9S', 'https://evil.com/gifs/x-JIX9t2j0ZTN9S', 'https://giphy.com.evil.com/gifs/x-JIX9t2j0ZTN9S', 'https://giphy.com/search/cat', 'javascript:alert(1)']) {
+  assert.equal(giphyMediaUrl(bad), null, bad);
+}
 
 console.log('retroParser: ok');

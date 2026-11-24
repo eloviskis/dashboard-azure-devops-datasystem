@@ -5,6 +5,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { boardApi, boardCred, boardImg } from './retroApi.ts';
 import type { BoardApi, BoardCard, BoardError, BoardState, Gif } from './retroApi.ts';
 import { Btn, Input, NOTE_COLORS, NOTE_INK, Select, TextArea, fmtDate, useToast } from './retroUi.tsx';
+import { giphyMediaUrl } from '../../utils/retroParser.ts';
 
 // ponytail: polling a cada 2 s com número de versão (resposta curta quando nada mudou). Se o atraso incomodar, o
 // caminho é SSE (o Nginx já repassa os cabeçalhos de Upgrade).
@@ -23,9 +24,10 @@ async function uploadImage(api: BoardApi, file: File) {
   return (await api.upload(file)).src;
 }
 
-// ---------------------------------------------------------------- GIFs (GIPHY, pelo backend)
-const GifPicker: React.FC<{ api: BoardApi; toast: Toast; onPick: (src: string) => void; onClose: () => void }> = ({ api, toast, onPick, onClose }) => {
+// ---------------------------------------------------------------- GIFs: link da GIPHY (sempre) e busca (com GIPHY_API_KEY no servidor)
+const GifPicker: React.FC<{ api: BoardApi; toast: Toast; search: boolean; onPick: (src: string) => void; onClose: () => void }> = ({ api, toast, search: canSearch, onPick, onClose }) => {
   const [q, setQ] = useState('');
+  const [link, setLink] = useState('');
   const [list, setList] = useState<Gif[] | null>(null);
   const [busy, setBusy] = useState(false);
   const search = async (e: React.FormEvent) => {
@@ -34,13 +36,34 @@ const GifPicker: React.FC<{ api: BoardApi; toast: Toast; onPick: (src: string) =
     setBusy(true);
     try { setList(await api.gifs(q.trim())); } catch (err) { toast((err as Error).message, true); } finally { setBusy(false); }
   };
+  const addLink = (e: React.FormEvent) => {
+    e.preventDefault();
+    const src = giphyMediaUrl(link);
+    if (!src) { toast('Cole o link de um GIF da GIPHY (giphy.com/gifs/…). De outro site, baixe o GIF e use o botão Imagem.', true); return; }
+    onPick(src);
+  };
   return (
     <div className="mt-2 rounded-lg border border-ds-border bg-ds-dark-blue p-2 space-y-2">
-      <form onSubmit={search} className="flex gap-1">
-        <Input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar GIF…" aria-label="Buscar GIF" maxLength={50} />
-        <Btn type="submit" disabled={busy}>{busy ? '…' : 'Buscar'}</Btn>
-        <Btn onClick={onClose} aria-label="Fechar busca de GIF">✕</Btn>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-medium text-ds-light-text">GIF</span>
+        <Btn onClick={onClose} aria-label="Fechar GIF">✕</Btn>
+      </div>
+      {canSearch && (
+        <form onSubmit={search} className="flex gap-1">
+          <Input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar GIF…" aria-label="Buscar GIF" maxLength={50} />
+          <Btn type="submit" disabled={busy}>{busy ? '…' : 'Buscar'}</Btn>
+        </form>
+      )}
+      <form onSubmit={addLink} className="flex gap-1">
+        <Input autoFocus={!canSearch} value={link} onChange={e => setLink(e.target.value)} placeholder="Cole o link do GIF da GIPHY" aria-label="Link do GIF da GIPHY" maxLength={500} />
+        <Btn type="submit" disabled={!link.trim()}>Usar</Btn>
       </form>
+      {!canSearch && (
+        <p className="text-[11px] text-ds-text">
+          Ache o GIF em <a href="https://giphy.com" target="_blank" rel="noreferrer" className="underline hover:text-ds-light-text">giphy.com</a>, copie o link e cole acima.
+          Tem o arquivo .gif? Use o botão 🖼️ Imagem, ou cole/arraste no card.
+        </p>
+      )}
       {list && (list.length ? (
         <div className="grid grid-cols-3 gap-1 max-h-48 overflow-y-auto">
           {list.map(g => (
@@ -50,7 +73,7 @@ const GifPicker: React.FC<{ api: BoardApi; toast: Toast; onPick: (src: string) =
           ))}
         </div>
       ) : <p className="text-xs text-ds-text">Nenhum GIF encontrado.</p>)}
-      <p className="text-[10px] text-ds-text">GIFs da GIPHY</p>
+      {canSearch && <p className="text-[10px] text-ds-text">GIFs da GIPHY</p>}
     </div>
   );
 };
@@ -89,7 +112,7 @@ const Composer: React.FC<{
       onDragOver={e => { if (e.dataTransfer.types.includes('Files')) e.preventDefault(); }}
       onDrop={e => { if (e.dataTransfer.files.length) { e.preventDefault(); e.stopPropagation(); addFiles(Array.from(e.dataTransfer.files)); } }}>
       <TextArea value={text} onChange={e => setText(e.target.value)} maxLength={2000} rows={2} aria-label={label}
-        placeholder="Escreva um card… (Ctrl+Enter envia; cole ou arraste uma imagem)"
+        placeholder="Escreva um card…" title="Ctrl+Enter envia. Dá para colar (Ctrl+V) ou arrastar uma imagem aqui."
         onPaste={e => { const f = Array.from(e.clipboardData.files); if (f.length) { e.preventDefault(); addFiles(f); } }}
         onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); submit(); } }} />
       {images.length > 0 && (
@@ -107,13 +130,13 @@ const Composer: React.FC<{
         <input ref={fileRef} type="file" accept={IMG_TYPES.join(',')} multiple className="sr-only" tabIndex={-1} aria-hidden
           onChange={e => { addFiles(Array.from(e.target.files || [])); e.target.value = ''; }} />
         <Btn onClick={() => fileRef.current?.click()} disabled={uploading || full} title={`PNG, JPG, GIF ou WEBP até ${MAX_MB} MB`}>🖼️ Imagem</Btn>
-        {gifs && <Btn onClick={() => setGifOpen(o => !o)} disabled={full} aria-expanded={gifOpen}>GIF</Btn>}
+        <Btn onClick={() => setGifOpen(o => !o)} disabled={full} aria-expanded={gifOpen}>GIF</Btn>
         {uploading && <span className="text-[11px] text-ds-text" role="status">Enviando imagem…</span>}
         <span className="flex-1" />
         {onCancel && <Btn onClick={onCancel}>Cancelar</Btn>}
         <Btn variant="primary" disabled={busy || uploading || (!text.trim() && !images.length)} onClick={submit}>{submitLabel}</Btn>
       </div>
-      {gifOpen && <GifPicker api={api} toast={toast} onClose={() => setGifOpen(false)}
+      {gifOpen && <GifPicker api={api} toast={toast} search={gifs} onClose={() => setGifOpen(false)}
         onPick={src => { setImages(l => [...l, src].slice(0, MAX_IMAGES)); setGifOpen(false); }} />}
     </div>
   );
@@ -366,13 +389,16 @@ export const RetroBoard: React.FC<{ token: string; toolbar?: (s: BoardState, ref
 
       {toolbar?.(state, refresh)}
 
-      <div className="flex gap-4 overflow-x-auto pb-4 items-start">
+      {/* Colunas dividem a largura da tela (mínimo 12rem cada; abaixo disso rola de lado). No celular, uma embaixo da outra. */}
+      <div className="overflow-x-auto pb-4">
+        <div className="grid gap-4 items-start grid-cols-1 sm:grid-cols-(--retro-cols)"
+          style={{ '--retro-cols': `repeat(${state.columns.length}, minmax(12rem, 1fr))` } as React.CSSProperties}>
         {state.columns.map((c, i) => {
           const color = NOTE_COLORS[i % NOTE_COLORS.length];
           const list = state.cards.filter(k => k.col === i);
           const sorted = byVotes ? [...list].sort((a, b) => (b.votes || 0) - (a.votes || 0)) : list;
           return (
-            <section key={i} className="w-72 shrink-0 space-y-3" aria-labelledby={`board-col-${i}`}>
+            <section key={i} className="min-w-0 space-y-3" aria-labelledby={`board-col-${i}`}>
               <div>
                 <div className="flex items-center gap-2">
                   <span aria-hidden className="w-3 h-3 rounded-sm" style={{ background: color }} />
@@ -389,6 +415,7 @@ export const RetroBoard: React.FC<{ token: string; toolbar?: (s: BoardState, ref
             </section>
           );
         })}
+        </div>
       </div>
       {toastNode}
     </div>

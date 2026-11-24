@@ -65,6 +65,18 @@ export function retroStats(columns: RetroColumn[]) {
 // Partes de um card mesclado (exibidas com um divisor entre elas).
 export const splitMerged = (t: string) => String(t || '').split(/\n?\s*-{3}\s*\n?/).map(s => s.trim()).filter(Boolean);
 
+// Link colado de um GIF da GIPHY → URL da imagem (Retrô ao vivo). Aceita a página do GIF (giphy.com/gifs/nome-ID,
+// /stickers/, /embed/) ou o link direto (media*.giphy.com, i.giphy.com). Qualquer outro site: null.
+export function giphyMediaUrl(raw: string): string | null {
+  let u: URL;
+  try { u = new URL(String(raw || '').trim()); } catch { return null; }
+  if (u.protocol !== 'https:') return null;
+  if (/^(media\d*|i)\.giphy\.com$/.test(u.hostname)) return u.toString();
+  if (u.hostname !== 'giphy.com' && u.hostname !== 'www.giphy.com') return null;
+  const m = u.pathname.match(/^\/(?:gifs|stickers|embed)\/(?:[\w-]*-)?([A-Za-z0-9]{5,})\/?$/);
+  return m ? `https://media.giphy.com/media/${m[1]}/giphy.gif` : null;
+}
+
 const DATE_RE = /(?<!\d)(\d{2})[\/\-_. ]?(\d{2})(?:[\/\-_. ](\d{2,4}))?(?!\d)/;
 
 // dd/mm, ddmm, dd-mm-aa, dd mm aa, dd/mm/aaaa. Sem ano = ano atual; se cair no futuro, ano anterior.
