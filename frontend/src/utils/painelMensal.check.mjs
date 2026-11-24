@@ -114,24 +114,23 @@ assert.equal(p.porTime.retrabalho.Alfa[FEV_IDX], 2, 'os 2 Bugs de fevereiro; Iss
 assert.equal(p.porTime.retrabalho.Alfa[MAR_IDX], 0, 'concluir em março não conta: vale o mês em que o QA abriu o Bug');
 assert.equal(p.porTime.retrabalho.Sustentacao[FEV_IDX], 1, 'Bug conta mesmo no time cujo escopo da GetNaves tira Bug');
 
-// Bugs internos por desenvolvedor: responsável do Bug, times do filtro, mesma base do retrabalho
-const bug = (team, assignedTo, createdDate = MAR(3)) => item(team, { type: 'Bug', assignedTo, createdDate });
+// Bugs internos por desenvolvedor: regra da query BUGS_DEV_2026_AVD, uma cláusula por caso
+const bug = (assignedTo, extra = {}) => item('Qualquer', { type: 'Bug', state: 'Closed', assignedTo, areaPath: 'USE\\Tatico', createdDate: MAR(3), ...extra });
 const porDev = [
-  bug('Alfa', 'Ana'), bug('Alfa', 'Ana'), bug('Beta', 'Ana', FEV(3)),
-  bug('Alfa', 'Beto'), bug('Alfa', 'Beto'),
-  bug('Alfa', ''),                                                         // sem responsável
-  bug('Fora', 'Ana'),                                                      // time fora do filtro
-  item('Alfa', { type: 'Issue', assignedTo: 'Ana', createdDate: MAR(3) }), // Issue não é bug interno
+  bug('Ana'), bug('Ana'), bug('Ana', { createdDate: FEV(3), areaPath: 'USE' }),         // raiz da USE entra
+  bug('Beto'), bug('Beto', { areaPath: 'USE\\Marketing\\DSMedia' }),                    // subárea entra
+  bug('Beto', { tags: '[ANALISE PO]' }),                                                // outra tag: entra
+  bug('Ana', { state: 'Active' }), bug('Ana', { state: 'Resolved' }),                   // só Closed
+  bug(''), bug(null),                                                                   // sem responsável
+  bug('Ana', { areaPath: 'USE\\Diretoria' }), bug('Ana', { areaPath: 'USE\\UX - UI' }), // áreas de fora
+  bug('Ana', { areaPath: 'OUTRA\\Area' }),                                              // fora da USE
+  bug('Ana', { tags: '[ANALISE]; cliente' }), bug('Ana', { tags: ['Analise'] }),        // tag de análise (sem caixa)
+  bug('Ana', { title: 'Erro na Análise fiscal' }), bug('Ana', { title: 'ANALISE do log' }), // "análise" no título
+  item('Qualquer', { type: 'Issue', state: 'Closed', assignedTo: 'Ana', areaPath: 'USE\\Tatico', createdDate: MAR(3) }), // Issue não
 ];
-const devs = bugsPorDesenvolvedor(porDev, meses, ['Alfa', 'Beta']);
-assert.deepEqual(devs.map(d => [d.dev, d.total]), [['Ana', 3], ['Beto', 2], ['(sem responsável)', 1]], 'ordem pelo total');
-assert.deepEqual(devs[0].porPeriodo.slice(0, 3).map(l => l.length), [0, 1, 2], 'Ana: 1 em fevereiro (Beta) e 2 em março (Alfa)');
-const pd = buildPainelMensal(porDev, meses, ['Alfa', 'Beta']);
-meses.forEach((_, i) => assert.equal(
-  devs.reduce((s, d) => s + d.porPeriodo[i].length, 0),
-  pd.times.reduce((s, t) => s + pd.porTime.retrabalho[t][i], 0),
-  `mês ${i + 1}: soma por desenvolvedor = soma do Índice de Retrabalho dos times`,
-));
+const devs = bugsPorDesenvolvedor(porDev, meses);
+assert.deepEqual(devs.map(d => [d.dev, d.total]), [['Ana', 3], ['Beto', 3]], 'só os que passam em todas as cláusulas; empate pelo nome');
+assert.deepEqual(devs[0].porPeriodo.slice(0, 3).map(l => l.length), [0, 1, 2], 'Ana: 1 em fevereiro e 2 em março, pela data de abertura');
 
 // SLA P0: vazio e 0 são P0; "1" não
 assert.equal(p.porTime.slaP0.Alfa[MAR_IDX], 50, 'P0 = vazio ou 0; prioridade "1" não entra');

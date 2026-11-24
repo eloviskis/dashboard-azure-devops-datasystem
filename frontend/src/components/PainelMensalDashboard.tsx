@@ -234,17 +234,14 @@ const PainelMensalDashboard: React.FC<Props> = ({ data }) => {
     { nome: 'Média sem Sustentação', valores: painel.mediaSemSustentacao[key], team: undefined, media: true },
   ];
 
-  // Bugs internos por desenvolvedor (responsável do Bug): mesma base do Índice de Retrabalho. Cada número abre a lista.
-  const devs = useMemo(
-    () => bugsPorDesenvolvedor(itens, periodos, [...timesEscolhidos]),
-    [itens, periodos, timesEscolhidos]
-  );
+  // Bugs internos por desenvolvedor: regra da query BUGS_DEV_2026_AVD (ver painelMensal.ts). Cada número abre a lista.
+  const devs = useMemo(() => bugsPorDesenvolvedor(itens, periodos), [itens, periodos]);
   const celulaDev = (n: number, titulo: string, lista: WorkItem[]) => n === 0
     ? <span className="text-ds-text/40">0</span>
     : <button type="button" onClick={() => setModal({ titulo, itens: lista })} aria-label={`${titulo}: ${n} bugs`}
         className="text-ds-light-text hover:text-ds-green underline decoration-dotted">{n}</button>;
   const tabelaDevs = devs.length === 0 ? (
-    <p className="text-xs text-ds-text">Nenhum bug interno no período para os times escolhidos.</p>
+    <p className="text-xs text-ds-text">Nenhum bug no período pela regra da query BUGS_DEV_2026_AVD.</p>
   ) : (
     <div className="overflow-x-auto max-h-96 overflow-y-auto">
       <table className="text-xs text-left text-ds-text">
@@ -492,7 +489,7 @@ const PainelMensalDashboard: React.FC<Props> = ({ data }) => {
             {secao === 'retrabalho' && (
               <div className="mt-6">
                 <h4 className="text-ds-light-text font-semibold text-sm mb-1">Bugs internos por desenvolvedor</h4>
-                <p className="text-xs text-ds-text/80 mb-2">Os mesmos bugs do Índice de Retrabalho, pelo responsável do Bug (Assigned To), somando os times escolhidos. Clique num número para ver os bugs.</p>
+                <p className="text-xs text-ds-text/80 mb-2">Mesma regra da query BUGS_DEV_2026_AVD do Azure DevOps: Bugs fechados (Closed) com responsável (Assigned To), de todas as áreas da USE menos UX - UI, Freelance, Arquitetura, Diretoria, Inovacao_novo e Bateria, sem a tag [ANALISE]/analise e sem &quot;análise&quot; no título, pela data em que o Bug foi aberto. Não depende dos times escolhidos acima. Clique num número para ver os bugs.</p>
                 {tabelaDevs}
               </div>
             )}

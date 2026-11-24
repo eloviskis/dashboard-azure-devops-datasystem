@@ -245,18 +245,31 @@ export function itensDaMetrica(doTime: WorkItem[], bucket: PeriodBucket, key: Me
   return p0.filter(i => (i.cycleTime as number) <= SLA_P0_DIAS); // slaP0
 }
 
-// Bugs internos por desenvolvedor: os mesmos Bugs do Índice de Retrabalho (abertos no período, times escolhidos),
-// agrupados pelo responsável do Bug (Assigned To). Devolve as listas, não só a contagem, para o modal da tela.
+// Bugs internos por desenvolvedor: mesma regra da query BUGS_DEV_2026_AVD do Azure DevOps (referência da gestão;
+// conferida em 2026-11-24, 649 itens lá e aqui). Bug fechado (Closed), com responsável, área sob USE menos as de fora,
+// sem a tag [ANALISE]/analise e sem "análise" no título. Não depende dos times escolhidos no painel, igual à query.
+const AREAS_FORA_AVD = ['USE\\UX - UI', 'USE\\Freelance', 'USE\\Arquitetura', 'USE\\Diretoria', 'USE\\Inovacao_novo', 'USE\\Bateria']
+  .map(a => a.toLowerCase());
+const tagsDe = (i: WorkItem) => [i.tags ?? []].flat().flatMap(t => String(t).split(';')).map(t => t.trim().toLowerCase());
+const contaNaAvd = (i: WorkItem) => {
+  const area = (i.areaPath ?? '').toLowerCase();
+  const titulo = (i.title ?? '').toLowerCase();
+  return i.type === 'Bug' && i.state === 'Closed' && !!i.assignedTo?.trim()
+    && (area === 'use' || area.startsWith('use\\')) && !AREAS_FORA_AVD.includes(area)
+    && !tagsDe(i).some(t => t === '[analise]' || t === 'analise')
+    && !titulo.includes('análise') && !titulo.includes('analise');
+};
+
+// Agrupa pelo responsável do Bug (Assigned To), no período em que foi aberto. Devolve as listas, não só a contagem,
+// para o modal da tela.
 export interface BugsDoDev { dev: string; porPeriodo: WorkItem[][]; total: number }
-export const SEM_RESPONSAVEL = '(sem responsável)';
-export function bugsPorDesenvolvedor(items: WorkItem[], buckets: PeriodBucket[], timesFiltro?: string[]): BugsDoDev[] {
-  const filtroNorm = timesFiltro?.map(normalizarTime);
+export function bugsPorDesenvolvedor(items: WorkItem[], buckets: PeriodBucket[]): BugsDoDev[] {
   const porDev = new Map<string, WorkItem[][]>();
   for (const i of items) {
-    if (i.type !== 'Bug' || !i.team || i.team === 'Sem Time' || (filtroNorm && !filtroNorm.includes(normalizarTime(i.team)))) continue;
+    if (!contaNaAvd(i)) continue;
     const idx = buckets.findIndex(b => dentroDoPeriodo(i.createdDate, b));
     if (idx < 0) continue;
-    const dev = i.assignedTo?.trim() || SEM_RESPONSAVEL;
+    const dev = (i.assignedTo as string).trim();
     if (!porDev.has(dev)) porDev.set(dev, buckets.map(() => []));
     porDev.get(dev)![idx].push(i);
   }
