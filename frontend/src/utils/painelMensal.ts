@@ -18,22 +18,22 @@ export interface MetaMetrica extends Faixa {
 export type MetasPainel = Record<MetricKey, MetaMetrica>;
 
 // Faixas iniciais da planilha de gestão. Editáveis no painel (admin).
-// Retrabalho: verde até 31% (decisão confirmada).
+// Retrabalho: contagem de bugs internos, sem meta até a gestão definir uma (2026-11-24; antes era % ≤ 31).
 export const METAS_PADRAO: MetasPainel = {
   fluxo: { label: 'Fluxo de Eficiência', unidade: '%', min: 45, max: 50, porTime: { sustentacao: { min: 50, max: 55 } } },
   cycle: { label: 'Cycle Time (P85, dias úteis)', unidade: 'd', min: 20, max: 34, porTime: { sustentacao: { min: 10, max: 12 } } },
   bugs: { label: 'Bugs Produção', unidade: '', min: 80, max: 100, porTime: { franquia: { min: 80, max: 100 } } },
   bugsVersao: { label: 'Bugs Produção com versão', unidade: '', min: null, max: null },
   bugsSemVersao: { label: 'Bugs Produção sem versão', unidade: '', min: null, max: null },
-  retrabalho: { label: 'Índice de Retrabalho', unidade: '%', min: null, max: 31, porTime: { franquia: { min: null, max: 31 } } },
+  retrabalho: { label: 'Índice de Retrabalho', unidade: '', min: null, max: null },
   qtdP0: { label: 'Quantidade de P0', unidade: '', min: null, max: null },
   // Só a Sustentação acompanha SLA P0 (ver PERFIS_TIME) — o geral fica igual ao override só pra não aparecer
   // "sem meta" no cabeçalho da seção; nenhum outro time chega a usar esse valor geral.
   slaP0: { label: 'SLA P0 (≤7 dias)', unidade: '%', min: 60, max: 70, porTime: { sustentacao: { min: 60, max: 70 } } },
 };
 
-// Retrabalho = Bug (achado em desenvolvimento) + Issue (escapou para produção): trabalho de correção.
-const TIPOS_RETRABALHO = ['Bug', 'Issue'];
+// Issue = bug que chegou em produção (Bugs Produção). Bug = bug interno, o que o QA pega antes de produção,
+// sem versão publicada (Índice de Retrabalho) — definição da gestão em 2026-11-24.
 const SLA_P0_DIAS = 7;
 
 // Times da planilha de gestão com escopo de tipos confirmado contra o CSV da GetNaves (ver TIPOS_GETNAVES
@@ -154,6 +154,8 @@ export function buildPainelMensal(items: WorkItem[], buckets: PeriodBucket[], ti
     const doTime = validos.filter(i => i.team === team);
     const concluidosTime = doTime.filter(i => COMPLETED_STATES.includes(i.state));
     const issuesTime = doTime.filter(i => i.type === 'Issue');
+    // Bugs internos vêm de items, não de validos: o escopo da GetNaves (Issue/User Story/Eventuality) tira Bug
+    const bugsInternos = items.filter(i => i.team === team && i.type === 'Bug');
 
     const fluxo: (number | null)[] = [];
     const cycle: (number | null)[] = [];
@@ -181,8 +183,8 @@ export function buildPainelMensal(items: WorkItem[], buckets: PeriodBucket[], ti
       bugsVersao.push(comVersao);
       bugsSemVersao.push(issuesPeriodo.length - comVersao);
 
-      // Índice de Retrabalho: % das entregas concluídas no período que são Bug ou Issue
-      retrabalho.push(pct(noPeriodo.filter(i => TIPOS_RETRABALHO.includes(i.type)).length, noPeriodo.length));
+      // Índice de Retrabalho: bugs internos abertos no período (quando o QA pegou)
+      retrabalho.push(bugsInternos.filter(i => dentroDoPeriodo(i.createdDate, b)).length);
 
       // P0 concluídos do período com Cycle Time preenchido: base da Quantidade de P0 e do SLA P0 (dentro de 7 dias)
       const p0 = noPeriodo.filter(isP0).filter(i => typeof i.cycleTime === 'number');
@@ -221,25 +223,46 @@ export function buildPainelMensal(items: WorkItem[], buckets: PeriodBucket[], ti
   };
 }
 
-// Itens do time dentro do escopo (mesmo filtro que buildPainelMensal usa antes de separar por período).
+// Todos os itens do time. O escopo da GetNaves é aplicado em itensDaMetrica, que sabe que o retrabalho não usa.
 export const itensDoTime = (items: WorkItem[], team: string): WorkItem[] =>
-  items.filter(i => i.team === team && noEscopo(i));
+  items.filter(i => i.team === team);
 
 // Itens que compõem o número de uma métrica, para o time e período dados — usado pelo gráfico de barras
 // (clique na barra abre o modal com esta lista). Reaproveita os mesmos predicados de buildPainelMensal, então
-// a lista nunca diverge do número mostrado. Nas métricas em % (retrabalho, slaP0), devolve o numerador — os
-// itens que contam a favor —, não todos os concluídos do período.
+// a lista nunca diverge do número mostrado. No SLA P0 (em %), devolve o numerador — os itens que contam a
+// favor —, não todos os concluídos do período.
 export function itensDaMetrica(doTime: WorkItem[], bucket: PeriodBucket, key: MetricKey): WorkItem[] {
-  if (key === 'bugs') return doTime.filter(i => i.type === 'Issue' && dentroDoPeriodo(i.createdDate, bucket));
+  if (key === 'retrabalho') return doTime.filter(i => i.type === 'Bug' && dentroDoPeriodo(i.createdDate, bucket));
+  const doEscopo = doTime.filter(noEscopo);
+  if (key === 'bugs') return doEscopo.filter(i => i.type === 'Issue' && dentroDoPeriodo(i.createdDate, bucket));
   if (key === 'bugsVersao') return itensDaMetrica(doTime, bucket, 'bugs').filter(temVersao);
   if (key === 'bugsSemVersao') return itensDaMetrica(doTime, bucket, 'bugs').filter(i => !temVersao(i));
-  const concluidos = doTime.filter(i => COMPLETED_STATES.includes(i.state) && dentroDoPeriodo(i.closedDate, bucket));
+  const concluidos = doEscopo.filter(i => COMPLETED_STATES.includes(i.state) && dentroDoPeriodo(i.closedDate, bucket));
   if (key === 'fluxo') return concluidos.filter(i => eficienciaItem(i) !== null);
   if (key === 'cycle') return concluidos.filter(i => typeof i.cycleTimeBusinessDays === 'number');
-  if (key === 'retrabalho') return concluidos.filter(i => TIPOS_RETRABALHO.includes(i.type));
   const p0 = concluidos.filter(isP0).filter(i => typeof i.cycleTime === 'number');
   if (key === 'qtdP0') return p0;
   return p0.filter(i => (i.cycleTime as number) <= SLA_P0_DIAS); // slaP0
+}
+
+// Bugs internos por desenvolvedor: os mesmos Bugs do Índice de Retrabalho (abertos no período, times escolhidos),
+// agrupados pelo responsável do Bug (Assigned To). Devolve as listas, não só a contagem, para o modal da tela.
+export interface BugsDoDev { dev: string; porPeriodo: WorkItem[][]; total: number }
+export const SEM_RESPONSAVEL = '(sem responsável)';
+export function bugsPorDesenvolvedor(items: WorkItem[], buckets: PeriodBucket[], timesFiltro?: string[]): BugsDoDev[] {
+  const filtroNorm = timesFiltro?.map(normalizarTime);
+  const porDev = new Map<string, WorkItem[][]>();
+  for (const i of items) {
+    if (i.type !== 'Bug' || !i.team || i.team === 'Sem Time' || (filtroNorm && !filtroNorm.includes(normalizarTime(i.team)))) continue;
+    const idx = buckets.findIndex(b => dentroDoPeriodo(i.createdDate, b));
+    if (idx < 0) continue;
+    const dev = i.assignedTo?.trim() || SEM_RESPONSAVEL;
+    if (!porDev.has(dev)) porDev.set(dev, buckets.map(() => []));
+    porDev.get(dev)![idx].push(i);
+  }
+  return [...porDev]
+    .map(([dev, porPeriodo]) => ({ dev, porPeriodo, total: porPeriodo.reduce((s, l) => s + l.length, 0) }))
+    .sort((a, b) => b.total - a.total || a.dev.localeCompare(b.dev, 'pt-BR'));
 }
 
 // Faixa aplicável a um time (override por time quando existir).

@@ -9,7 +9,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { baixarXlsx, montarPainelXlsx } from '../utils/painelXlsx.ts';
 import { getPeriodBuckets, type PeriodBucket, type PeriodGroupMode } from '../utils/periodGrouping.ts';
 import {
-  acompanha, buildPainelMensal, dentroDaFaixa, faixaDoTime, itensDaMetrica, itensDoTime, METAS_PADRAO,
+  acompanha, bugsPorDesenvolvedor, buildPainelMensal, dentroDaFaixa, faixaDoTime, itensDaMetrica, itensDoTime, METAS_PADRAO,
   TIMES_PADRAO_PAINEL, textoFaixa,
   type Faixa, type MetaMetrica, type MetasPainel, type MetricKey,
 } from '../utils/painelMensal.ts';
@@ -76,10 +76,10 @@ const MODOS: { value: PeriodGroupMode; label: string }[] = [
 const INFO: Record<MetricKey, string> = {
   fluxo: 'Fluxo de Eficiência = média, item a item, de Ativo ÷ (Ativo + Fila). Ativo = Desenvolvendo + Testando QA/Testing; Fila = Para Desenvolver + Aguardando Code Review + Fazendo Code Review + CodeReview + Aguardando QA. Período = primeira vez que o item chegou a Pronto ou foi Fechado (o que vier primeiro). Verde = dentro da faixa de meta. Sustentação tem faixa própria.',
   cycle: 'Cycle Time P85 em dias úteis (sábado e domingo descontados; feriados não), da criação até a primeira vez que o item chegou a Pronto ou foi Fechado (o que vier primeiro — um fechamento em lote, bem depois do Pronto, não conta). 85% dos itens concluídos no período levaram até esse número. Fechamentos em massa de itens antigos sobem o P85 do mês. As médias são a média dos valores dos times.',
-  bugs: 'Quantidade de Issues (erros que escaparam para produção) criadas no período, por time.',
+  bugs: 'Quantidade de Issues abertas no período, por time. Issue é o bug que chegou em produção; o que o QA pega antes disso é Bug e conta no Índice de Retrabalho.',
   bugsVersao: 'Das Issues de Bugs Produção (criadas no período), só as que têm versão atrelada: número de versão (ex.: 3.71.0.5) em Base Version, Delivered Version, root cause version ou numa tag. Itens do tipo Bug não têm versão no Azure DevOps, por isso não entram.',
   bugsSemVersao: 'Das Issues de Bugs Produção (criadas no período), as que NÃO têm número de versão em Base Version, Delivered Version, root cause version nem nas tags. Somado com "com versão", dá o total de Bugs Produção.',
-  retrabalho: '% das entregas concluídas no período que são Bug (achado em desenvolvimento) ou Issue (escapou para produção), sobre o total de entregas concluídas. Verde até 31%.',
+  retrabalho: 'Quantidade de bugs internos (tipo Bug) abertos no período, por time: os que o QA pega antes de ir para produção, sem versão publicada. Os que chegam em produção são Issues e contam em Bugs Produção.',
   qtdP0: 'Quantidade de itens P0 (prioridade vazia ou 0) concluídos no período com Cycle Time preenchido. Prioridade 1 (Crítica) não entra. Mesma base do SLA P0, ao lado — aqui é a contagem, lá é o % dentro do prazo.',
   slaP0: '% dos itens P0 (prioridade vazia ou 0) concluídos no período com Cycle Time em até 7 dias corridos. Prioridade 1 (Crítica) não entra.',
 };
@@ -96,7 +96,7 @@ const corCelula = (ok: boolean | null) =>
 
 const formatar = (v: number | null, key: MetricKey) => {
   if (v === null) return '—';
-  if (key === 'bugs' || key === 'bugsVersao' || key === 'bugsSemVersao' || key === 'qtdP0') return String(v);
+  if (['bugs', 'bugsVersao', 'bugsSemVersao', 'retrabalho', 'qtdP0'].includes(key)) return String(v);
   return `${v}${key === 'cycle' ? 'd' : '%'}`;
 };
 
@@ -233,6 +233,42 @@ const PainelMensalDashboard: React.FC<Props> = ({ data }) => {
     { nome: 'Média de todos os times', valores: painel.mediaTodos[key], team: undefined, media: true },
     { nome: 'Média sem Sustentação', valores: painel.mediaSemSustentacao[key], team: undefined, media: true },
   ];
+
+  // Bugs internos por desenvolvedor (responsável do Bug): mesma base do Índice de Retrabalho. Cada número abre a lista.
+  const devs = useMemo(
+    () => bugsPorDesenvolvedor(itens, periodos, [...timesEscolhidos]),
+    [itens, periodos, timesEscolhidos]
+  );
+  const celulaDev = (n: number, titulo: string, lista: WorkItem[]) => n === 0
+    ? <span className="text-ds-text/40">0</span>
+    : <button type="button" onClick={() => setModal({ titulo, itens: lista })} aria-label={`${titulo}: ${n} bugs`}
+        className="text-ds-light-text hover:text-ds-green underline decoration-dotted">{n}</button>;
+  const tabelaDevs = devs.length === 0 ? (
+    <p className="text-xs text-ds-text">Nenhum bug interno no período para os times escolhidos.</p>
+  ) : (
+    <div className="overflow-x-auto max-h-96 overflow-y-auto">
+      <table className="text-xs text-left text-ds-text">
+        <thead className="text-ds-light-text border-b border-ds-border sticky top-0 bg-ds-navy">
+          <tr>
+            <th className="px-2 py-2 sticky left-0 bg-ds-navy">Desenvolvedor</th>
+            {painel.labels.map((lab, i) => <th key={i} className="px-2 py-2 text-right whitespace-nowrap">{lab}</th>)}
+            <th className="px-2 py-2 text-right">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {devs.map(d => (
+            <tr key={d.dev} className="border-b border-ds-border/50">
+              <td className="px-2 py-1.5 whitespace-nowrap sticky left-0 bg-ds-navy">{d.dev}</td>
+              {d.porPeriodo.map((lista, i) => (
+                <td key={i} className="px-2 py-1.5 text-right font-mono">{celulaDev(lista.length, `Bugs internos — ${d.dev} — ${painel.labels[i]}`, lista)}</td>
+              ))}
+              <td className="px-2 py-1.5 text-right font-mono font-semibold">{celulaDev(d.total, `Bugs internos — ${d.dev} — período todo`, d.porPeriodo.flat())}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
 
   const tabelaMetrica = (key: MetricKey) => {
     const meta = metas[key];
@@ -453,6 +489,13 @@ const PainelMensalDashboard: React.FC<Props> = ({ data }) => {
             <div className="mt-4">{graficoMetrica(key)}</div>
             <p className="text-xs text-ds-text/60 mt-4 mb-1">Clique numa barra para ver os itens daquele time e período.</p>
             <div>{graficoBarras(key)}</div>
+            {secao === 'retrabalho' && (
+              <div className="mt-6">
+                <h4 className="text-ds-light-text font-semibold text-sm mb-1">Bugs internos por desenvolvedor</h4>
+                <p className="text-xs text-ds-text/80 mb-2">Os mesmos bugs do Índice de Retrabalho, pelo responsável do Bug (Assigned To), somando os times escolhidos. Clique num número para ver os bugs.</p>
+                {tabelaDevs}
+              </div>
+            )}
           </div>
           );
         })

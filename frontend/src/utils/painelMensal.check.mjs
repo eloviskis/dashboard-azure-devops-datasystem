@@ -1,7 +1,7 @@
 // Check do Painel por Time. Sem framework — `node painelMensal.check.mjs`
 // (Node 24 executa .ts por type-stripping, igual os outros checks).
 import assert from 'node:assert/strict';
-import { buildPainelMensal, dentroDaFaixa, faixaDoTime, itensDaMetrica, itensDoTime, METAS_PADRAO, metricasDoTime } from './painelMensal.ts';
+import { bugsPorDesenvolvedor, buildPainelMensal, dentroDaFaixa, faixaDoTime, itensDaMetrica, itensDoTime, METAS_PADRAO, metricasDoTime } from './painelMensal.ts';
 import { getPeriodBuckets } from './periodGrouping.ts';
 
 const MAR = (dia) => `2026-03-${String(dia).padStart(2, '0')}T12:00:00Z`;
@@ -17,7 +17,7 @@ const items = [
   item('Alfa', { timeInStatusDays: { Active: 6, 'Aguardando code review': 1, 'Fazendo code review': 1 }, cycleTimeBusinessDays: 10, cycleTime: 12 }),
   item('Alfa', { timeInStatusDays: { Active: 6, 'Aguardando code review': 1, 'Fazendo code review': 1 }, cycleTimeBusinessDays: 20, cycleTime: 25 }),
   item('Alfa', { timeInStatusDays: { Active: 6, 'Aguardando code review': 1, 'Fazendo code review': 1 }, cycleTimeBusinessDays: null, cycleTime: null }),
-  // Alfa, março: retrabalho = Bug + Issue concluídos ÷ todos os concluídos (11): 2 de 11 = 18,2%
+  // Alfa, março: concluídos de vários tipos. O Bug daqui foi aberto em fevereiro: conta no retrabalho de fevereiro
   item('Alfa', { type: 'User Story', reincidencia: '2' }),
   item('Alfa', { type: 'Bug', reincidencia: null }),
   item('Alfa', { type: 'Issue', reincidencia: '', createdDate: MAR(2) }),
@@ -109,8 +109,29 @@ assert.equal(pv.porTime.bugsSemVersao.Zeta[MAR_IDX], 2, 'sem versão: 7 − 5');
 assert.equal(pv.mediaTodos.bugsSemVersao[MAR_IDX], 2, 'média usa os mesmos times de "com versão"');
 assert.equal(itensDaMetrica(comVersao, meses[MAR_IDX], 'bugsSemVersao').length, 2, 'lista do gráfico = número da tabela');
 
-// Índice de Retrabalho: Bug + Issue ÷ todos concluídos: 2 de 11 = 18,2%
-assert.equal(p.porTime.retrabalho.Alfa[MAR_IDX], 18.2, 'Bug e Issue entram no numerador; Task entra só no denominador');
+// Índice de Retrabalho: bugs internos (tipo Bug) abertos no período. Alfa tem 2 Bugs abertos em fevereiro
+assert.equal(p.porTime.retrabalho.Alfa[FEV_IDX], 2, 'os 2 Bugs de fevereiro; Issue não conta');
+assert.equal(p.porTime.retrabalho.Alfa[MAR_IDX], 0, 'concluir em março não conta: vale o mês em que o QA abriu o Bug');
+assert.equal(p.porTime.retrabalho.Sustentacao[FEV_IDX], 1, 'Bug conta mesmo no time cujo escopo da GetNaves tira Bug');
+
+// Bugs internos por desenvolvedor: responsável do Bug, times do filtro, mesma base do retrabalho
+const bug = (team, assignedTo, createdDate = MAR(3)) => item(team, { type: 'Bug', assignedTo, createdDate });
+const porDev = [
+  bug('Alfa', 'Ana'), bug('Alfa', 'Ana'), bug('Beta', 'Ana', FEV(3)),
+  bug('Alfa', 'Beto'), bug('Alfa', 'Beto'),
+  bug('Alfa', ''),                                                         // sem responsável
+  bug('Fora', 'Ana'),                                                      // time fora do filtro
+  item('Alfa', { type: 'Issue', assignedTo: 'Ana', createdDate: MAR(3) }), // Issue não é bug interno
+];
+const devs = bugsPorDesenvolvedor(porDev, meses, ['Alfa', 'Beta']);
+assert.deepEqual(devs.map(d => [d.dev, d.total]), [['Ana', 3], ['Beto', 2], ['(sem responsável)', 1]], 'ordem pelo total');
+assert.deepEqual(devs[0].porPeriodo.slice(0, 3).map(l => l.length), [0, 1, 2], 'Ana: 1 em fevereiro (Beta) e 2 em março (Alfa)');
+const pd = buildPainelMensal(porDev, meses, ['Alfa', 'Beta']);
+meses.forEach((_, i) => assert.equal(
+  devs.reduce((s, d) => s + d.porPeriodo[i].length, 0),
+  pd.times.reduce((s, t) => s + pd.porTime.retrabalho[t][i], 0),
+  `mês ${i + 1}: soma por desenvolvedor = soma do Índice de Retrabalho dos times`,
+));
 
 // SLA P0: vazio e 0 são P0; "1" não
 assert.equal(p.porTime.slaP0.Alfa[MAR_IDX], 50, 'P0 = vazio ou 0; prioridade "1" não entra');
@@ -136,14 +157,12 @@ assert.deepEqual(buildPainelMensal(items, meses, ['Alfa']).times, ['Alfa']);
 // Faixas
 assert.equal(dentroDaFaixa(47, { min: 45, max: 50 }), true);
 assert.equal(dentroDaFaixa(40, { min: 45, max: 50 }), false);
-assert.equal(dentroDaFaixa(25, METAS_PADRAO.retrabalho), true, 'retrabalho ≤ 31 é verde');
-assert.equal(dentroDaFaixa(35, METAS_PADRAO.retrabalho), false);
 assert.equal(dentroDaFaixa(null, { min: 45, max: 50 }), null, 'sem dado não é verde nem vermelho');
 assert.deepEqual(faixaDoTime(METAS_PADRAO.fluxo, 'Sustentação'), { min: 50, max: 55 }, 'override da Sustentação');
 assert.deepEqual(faixaDoTime(METAS_PADRAO.fluxo, 'Alfa'), { min: 45, max: 50 });
 assert.deepEqual(faixaDoTime(METAS_PADRAO.slaP0, 'Sustentação'), { min: 60, max: 70 }, 'SLA P0 só tem meta própria de Sustentação');
 assert.deepEqual(faixaDoTime(METAS_PADRAO.bugs, 'Franquia'), { min: 80, max: 100 }, 'override da Franquia/CTC');
-assert.deepEqual(faixaDoTime(METAS_PADRAO.retrabalho, 'Franquia'), { min: null, max: 31 }, 'override da Franquia/CTC');
+assert.deepEqual(faixaDoTime(METAS_PADRAO.retrabalho, 'Franquia'), { min: null, max: null }, 'retrabalho virou contagem: sem meta até a gestão definir');
 
 // Perfil por time: quais métricas cada um acompanha, igual aos blocos da planilha de gestão
 assert.deepEqual(metricasDoTime('Sustentacao'), ['fluxo', 'cycle', 'slaP0', 'retrabalho', 'qtdP0'], 'Sustentação não tem Bugs Produção');
@@ -155,7 +174,10 @@ const alfaMar = itensDoTime(items, 'Alfa');
 const bucketMar = meses[MAR_IDX];
 assert.equal(itensDaMetrica(alfaMar, bucketMar, 'fluxo').length, 3, 'fluxo: os 3 itens com tempo de status em março');
 assert.equal(itensDaMetrica(alfaMar, bucketMar, 'cycle').length, 2, 'cycle: só os 2 itens com cycleTimeBusinessDays numérico (o 3º é null)');
-assert.equal(itensDaMetrica(alfaMar, bucketMar, 'retrabalho').length, 2, 'retrabalho: só Bug e Issue, não Task/Eventuality');
+assert.equal(itensDaMetrica(alfaMar, meses[FEV_IDX], 'retrabalho').length, 2, 'retrabalho: os 2 Bugs abertos em fevereiro');
+const sust = itensDoTime(items, 'Sustentacao');
+assert.equal(itensDaMetrica(sust, meses[FEV_IDX], 'retrabalho').length, 1, 'retrabalho: Bug da Sustentação entra na lista');
+assert.equal(itensDaMetrica(sust, bucketMar, 'cycle').length, 1, 'mas o Bug de 999 d continua fora do cycle: o escopo da GetNaves vale nas outras métricas');
 assert.equal(itensDaMetrica(alfaMar, bucketMar, 'qtdP0').length, 2, 'qtdP0: os 2 P0 concluídos, dentro ou fora do prazo');
 assert.equal(itensDaMetrica(alfaMar, bucketMar, 'slaP0').length, 1, 'slaP0: só o P0 concluído em até 7 dias (o de 9 dias fica fora)');
 assert.equal(itensDaMetrica(alfaMar, meses[FEV_IDX], 'bugs').length, 2, 'bugs: Issues criadas em fevereiro');
