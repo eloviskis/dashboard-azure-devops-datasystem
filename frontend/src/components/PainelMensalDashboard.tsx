@@ -66,6 +66,7 @@ const ItemModal: React.FC<{ info: ModalInfo | null; onClose: () => void }> = ({ 
 };
 
 const META_KEY = 'metas_painel_mensal';
+const DEVS_KEY = 'painel_devs_escolhidos';
 const METRICAS: MetricKey[] = ['fluxo', 'cycle', 'bugs', 'bugsVersao', 'retrabalho', 'qtdP0', 'slaP0'];
 const MODOS: { value: PeriodGroupMode; label: string }[] = [
   { value: 'weekly', label: 'Semanal' },
@@ -236,24 +237,67 @@ const PainelMensalDashboard: React.FC<Props> = ({ data }) => {
 
   // Bugs internos por desenvolvedor: regra da query BUGS_DEV_2026_AVD (ver painelMensal.ts). Cada número abre a lista.
   const devs = useMemo(() => bugsPorDesenvolvedor(itens, periodos), [itens, periodos]);
+  const nomesDevs = useMemo(() => devs.map(d => d.dev).sort((a, b) => a.localeCompare(b, 'pt-BR')), [devs]);
+  // Devs escolhidos no seletor (null = todos). Fica salvo neste navegador; sem storage, volta a mostrar todos.
+  const [devsEscolhidos, setDevsEscolhidos] = useState<Set<string> | null>(() => {
+    try { const v = localStorage.getItem(DEVS_KEY); return v ? new Set<string>(JSON.parse(v)) : null; } catch { return null; }
+  });
+  useEffect(() => {
+    try {
+      if (devsEscolhidos) localStorage.setItem(DEVS_KEY, JSON.stringify([...devsEscolhidos]));
+      else localStorage.removeItem(DEVS_KEY);
+    } catch { /* sem storage: a escolha vale só nesta visita */ }
+  }, [devsEscolhidos]);
+  const [buscaDev, setBuscaDev] = useState('');
+  const devEscolhido = (dev: string) => !devsEscolhidos || devsEscolhidos.has(dev);
+  const alternarDev = (dev: string) => setDevsEscolhidos(prev => {
+    const next = new Set(prev ?? nomesDevs);
+    if (next.has(dev)) next.delete(dev); else next.add(dev);
+    return nomesDevs.every(n => next.has(n)) ? null : next;
+  });
+  const devsVisiveis = devs.filter(d => devEscolhido(d.dev));
+  const seletorDevs = (
+    <details className="relative">
+      <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden select-none px-3 py-2 rounded-lg border border-ds-border text-xs text-ds-light-text hover:bg-ds-border/50 transition-colors">
+        Devs: {nomesDevs.filter(devEscolhido).length} de {nomesDevs.length} ▾
+      </summary>
+      <div className="absolute right-0 z-30 mt-2 w-72 max-h-80 overflow-y-auto bg-ds-navy border border-ds-border rounded-lg shadow-xl p-3">
+        <div className="flex gap-4 mb-2 pb-2 border-b border-ds-border text-xs">
+          <button type="button" onClick={() => setDevsEscolhidos(null)} className="text-ds-green hover:underline">Marcar todos</button>
+          <button type="button" onClick={() => setDevsEscolhidos(new Set())} className="text-ds-text hover:underline">Desmarcar todos</button>
+        </div>
+        <input type="search" value={buscaDev} onChange={e => setBuscaDev(e.target.value)} placeholder="Buscar dev" aria-label="Buscar dev"
+          className="w-full mb-2 bg-ds-dark-blue border border-ds-border rounded px-2 py-1 text-xs text-ds-light-text" />
+        {nomesDevs.filter(n => n.toLowerCase().includes(buscaDev.trim().toLowerCase())).map(n => (
+          <label key={n} className="flex items-center gap-2 py-1 text-xs text-ds-light-text cursor-pointer">
+            <input type="checkbox" checked={devEscolhido(n)} onChange={() => alternarDev(n)} className="accent-ds-green w-4 h-4 shrink-0" />
+            <span className="truncate">{n}</span>
+          </label>
+        ))}
+      </div>
+    </details>
+  );
   const celulaDev = (n: number, titulo: string, lista: WorkItem[]) => n === 0
     ? <span className="text-ds-text/40">0</span>
     : <button type="button" onClick={() => setModal({ titulo, itens: lista })} aria-label={`${titulo}: ${n} bugs`}
         className="text-ds-light-text hover:text-ds-green underline decoration-dotted">{n}</button>;
-  const tabelaDevs = devs.length === 0 ? (
-    <p className="text-xs text-ds-text">Nenhum bug no período pela regra da query BUGS_DEV_2026_AVD.</p>
+  const tabelaDevs = devsVisiveis.length === 0 ? (
+    <p className="text-xs text-ds-text">
+      {devs.length === 0 ? 'Nenhum bug no período pela regra da query BUGS_DEV_2026_AVD.' : 'Nenhum dev escolhido. Use o seletor "Devs" acima.'}
+    </p>
   ) : (
-    <div className="overflow-x-auto max-h-96 overflow-y-auto">
-      <table className="text-xs text-left text-ds-text">
-        <thead className="text-ds-light-text border-b border-ds-border sticky top-0 bg-ds-navy">
-          <tr>
-            <th className="px-2 py-2 sticky left-0 bg-ds-navy">Desenvolvedor</th>
-            {painel.labels.map((lab, i) => <th key={i} className="px-2 py-2 text-right whitespace-nowrap">{lab}</th>)}
-            <th className="px-2 py-2 text-right">Total</th>
+    // Largura toda da seção; cabeçalho fixo ao rolar (cada th precisa do próprio fundo, senão as linhas aparecem por trás)
+    <div className="overflow-x-auto max-h-128 overflow-y-auto">
+      <table className="w-full text-xs text-left text-ds-text">
+        <thead className="text-ds-light-text">
+          <tr className="border-b border-ds-border">
+            <th className="px-2 py-2 sticky top-0 left-0 z-20 bg-ds-navy">Desenvolvedor</th>
+            {painel.labels.map((lab, i) => <th key={i} className="px-2 py-2 text-right whitespace-nowrap sticky top-0 z-10 bg-ds-navy">{lab}</th>)}
+            <th className="px-2 py-2 text-right sticky top-0 z-10 bg-ds-navy">Total</th>
           </tr>
         </thead>
         <tbody>
-          {devs.map(d => (
+          {devsVisiveis.map(d => (
             <tr key={d.dev} className="border-b border-ds-border/50">
               <td className="px-2 py-1.5 whitespace-nowrap sticky left-0 bg-ds-navy">{d.dev}</td>
               {d.porPeriodo.map((lista, i) => (
@@ -271,7 +315,7 @@ const PainelMensalDashboard: React.FC<Props> = ({ data }) => {
     const meta = metas[key];
     return (
       <div className="overflow-x-auto">
-        <table className="text-xs text-left text-ds-text">
+        <table className="w-full text-xs text-left text-ds-text">
           <thead className="text-ds-light-text border-b border-ds-border">
             <tr>
               <th className="px-2 py-2 sticky left-0 bg-ds-navy">Time</th>
@@ -488,7 +532,10 @@ const PainelMensalDashboard: React.FC<Props> = ({ data }) => {
             <div>{graficoBarras(key)}</div>
             {secao === 'retrabalho' && (
               <div className="mt-6">
-                <h4 className="text-ds-light-text font-semibold text-sm mb-1">Bugs internos por desenvolvedor</h4>
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+                  <h4 className="text-ds-light-text font-semibold text-sm">Bugs internos por desenvolvedor</h4>
+                  {devs.length > 0 && seletorDevs}
+                </div>
                 <p className="text-xs text-ds-text/80 mb-2">Mesma regra da query BUGS_DEV_2026_AVD do Azure DevOps: Bugs fechados (Closed) com responsável (Assigned To), de todas as áreas da USE menos UX - UI, Freelance, Arquitetura, Diretoria, Inovacao_novo e Bateria, sem a tag [ANALISE]/analise e sem &quot;análise&quot; no título, pela data em que o Bug foi aberto. Não depende dos times escolhidos acima. Clique num número para ver os bugs.</p>
                 {tabelaDevs}
               </div>
