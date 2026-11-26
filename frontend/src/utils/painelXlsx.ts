@@ -254,6 +254,13 @@ export async function montarPainelXlsx(painel: PainelMensal, metas: MetasPainel,
   });
   celula(ws, r, X0 + P + 1, formulaMedia([`${letra(X0 + 1)}${r}:${letra(X0 + P)}${r}`], media(totalDepto)), { formato: '0.0', negrito: true });
   r++;
+  // Critério da gestão (linha BUGS da planilha de indicadores): Correção vinda de cliente, dos mesmos times escolhidos.
+  // Valor e não fórmula: as linhas por time desse critério não vão para a planilha.
+  const gestaoDepto = painel.labels.map((_, i) => linhasDepto.reduce((s, [t]) => s + (painel.departamento.gestaoPorTime[t]?.[i] ?? 0), 0));
+  celula(ws, r, X0, 'BUGS — CRITÉRIO DA GESTÃO', { alinhar: 'left', negrito: true });
+  gestaoDepto.forEach((v, i) => celula(ws, r, X0 + 1 + i, v, { formato: '0', negrito: true }));
+  celula(ws, r, X0 + P + 1, formulaMedia([`${letra(X0 + 1)}${r}:${letra(X0 + P)}${r}`], media(gestaoDepto)), { formato: '0.0', negrito: true });
+  r++;
 
   // Larguras: rótulos largos, períodos estreitos, META com espaço para o texto da faixa
   for (let c = 1; c <= X1 + LARGURA; c++) ws.getColumn(c).width = 11;

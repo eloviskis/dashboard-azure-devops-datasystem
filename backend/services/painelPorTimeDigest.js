@@ -67,6 +67,7 @@ function montarWorkItem(row) {
     timeInStatusDays: row.time_in_status_days || undefined,
     baseVersion: row.base_version, deliveredVersion: row.delivered_version, rootCauseVersion: row.root_cause_version,
     tags: row.tags,
+    customType: row.custom_type, tipoCliente: row.tipo_cliente, // critério da gestão de Bugs Produção
   };
 }
 
@@ -85,6 +86,7 @@ async function buscarItensDoPainel(sql, times) {
       w.first_activation_date, w.closed_date, w.effective_closed_date,
       w.time_in_status_days,
       w.base_version, w.delivered_version, w.root_cause_version, w.tags,
+      w.custom_type, w.tipo_cliente,
       c.fim, c.inicio
     FROM work_items w
     LEFT JOIN ciclo c ON c.id = w.work_item_id
@@ -162,6 +164,9 @@ async function runPainelPorTimeDigest(sql, overrideRecipients) {
       metricas: [{
         label: 'Índice do Departamento (Issues abertas)', unidade: '',
         anterior: painel.departamento.total[0], atual: painel.departamento.total[1], cor: 'cinza', metaTexto: 'sem meta',
+      }, {
+        label: 'Bugs — critério da gestão', unidade: '',
+        anterior: painel.departamento.gestao[0], atual: painel.departamento.gestao[1], cor: 'cinza', metaTexto: 'sem meta',
       }],
     }, ...montarDadosEmail(painel)],
     insight,

@@ -98,6 +98,14 @@ const temVersao = (item) =>
 const ESTADOS_DESCARTADOS = ['Removed', 'Disapproved'];
 const issueValida = (i) => i.type === 'Issue' && !ESTADOS_DESCARTADOS.includes(i.state);
 
+// Critério da gestão para bug em produção (linha BUGS da planilha Indicadores_2026; conferido em 2026-11-26):
+// Issue do Tipo "Correção" (Análise/Alteração/Melhoria/Update não), vinda de cliente (Tipo Cliente preenchido),
+// menos o cliente "SLA INTERNO DS". Reproduz jun–out/26 da planilha (130/132, 137/138, 150/157, 153/149, 145/145)
+// e a "Média 25" = 127. /^corre/i cobre "Correção", "Correcao" e a grafia com acento quebrado do Azure DevOps.
+const bugDeCliente = (i) =>
+  /^corre/i.test(i.customType ?? '') && !!i.tipoCliente?.trim() && !/INTERNO/i.test(i.tipoCliente ?? '');
+const bugProducao = (i) => issueValida(i) && bugDeCliente(i);
+
 const dentroDoPeriodo = (data, b) => {
   if (!data) return false;
   const t = new Date(data).getTime();
@@ -160,7 +168,7 @@ function buildPainelMensal(items, buckets, timesFiltro) {
   for (const team of times) {
     const doTime = validos.filter(i => i.team === team);
     const concluidosTime = doTime.filter(i => COMPLETED_STATES.includes(i.state));
-    const issuesTime = doTime.filter(issueValida);
+    const issuesTime = doTime.filter(bugProducao);
     // Bugs internos vêm de items, não de validos: o escopo da GetNaves (Issue/User Story/Eventuality) tira Bug
     const bugsInternos = items.filter(i => i.team === team && i.type === 'Bug');
 
@@ -181,7 +189,7 @@ function buildPainelMensal(items, buckets, timesFiltro) {
       fluxo.push(media(fluxoCt.map(eficienciaItem).filter((v) => v !== null)));
       cycle.push(p85(fluxoCt.map(i => i.cicloDias).filter((v) => typeof v === 'number')));
 
-      // Bugs Produção: Issues criadas no período (mesmo critério da série de Qualidade)
+      // Bugs Produção: Issues criadas no período, no critério da gestão (bugProducao)
       const issuesPeriodo = issuesTime.filter(i => dentroDoPeriodo(i.createdDate, b));
       bugs.push(issuesPeriodo.length);
       bugsVersao.push(issuesPeriodo.filter(temVersao).length);
@@ -218,6 +226,8 @@ function buildPainelMensal(items, buckets, timesFiltro) {
 
   // De items, não de validos: o departamento ignora o filtro de times
   const depto = buckets.map(b => issuesDoDepartamento(items, b));
+  const porTimeDepto = (filtro) => Object.fromEntries(TIMES_PADRAO_PAINEL.map(t =>
+    [t, depto.map(l => l.filter(i => filtro(i) && normalizarTime(i.team ?? '') === normalizarTime(t)).length)]));
 
   return {
     labels: buckets.map(b => b.label),
@@ -226,9 +236,11 @@ function buildPainelMensal(items, buckets, timesFiltro) {
     mediaTodos: consolidar(() => true),
     mediaSemSustentacao: consolidar(t => !isSustentacao(t)),
     departamento: {
+      // total/porTime = todas as Issues; gestao/gestaoPorTime = critério da gestão (bugDeCliente)
       total: depto.map(l => l.length),
-      porTime: Object.fromEntries(TIMES_PADRAO_PAINEL.map(t =>
-        [t, depto.map(l => l.filter(i => normalizarTime(i.team ?? '') === normalizarTime(t)).length)])),
+      porTime: porTimeDepto(() => true),
+      gestao: depto.map(l => l.filter(bugDeCliente).length),
+      gestaoPorTime: porTimeDepto(bugDeCliente),
     },
   };
 }

@@ -9,7 +9,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { baixarXlsx, montarPainelXlsx } from '../utils/painelXlsx.ts';
 import { getPeriodBuckets, type PeriodBucket, type PeriodGroupMode } from '../utils/periodGrouping.ts';
 import {
-  acompanha, bugsPorDesenvolvedor, buildPainelMensal, dentroDaFaixa, faixaDoTime, issuesDoDepartamento, itensDaMetrica, itensDoTime,
+  acompanha, bugDeCliente, bugsPorDesenvolvedor, buildPainelMensal, dentroDaFaixa, faixaDoTime, issuesDoDepartamento, itensDaMetrica, itensDoTime,
   METAS_PADRAO, normalizarTime, TIMES_PADRAO_PAINEL, textoFaixa,
   type Faixa, type MetaMetrica, type MetasPainel, type MetricKey,
 } from '../utils/painelMensal.ts';
@@ -78,7 +78,7 @@ const MODOS: { value: PeriodGroupMode; label: string }[] = [
 const INFO: Record<MetricKey, string> = {
   fluxo: 'Fluxo de Eficiência, como na GetNaves = média, item a item, de Ativo ÷ (Ativo + Fila), só Issue e User Story. Ativo = Desenvolvendo + Testando QA/Testing; Fila = Aguardando Code Review + Fazendo Code Review + CodeReview + Aguardando QA. "Para Desenvolver" é To Do e fica fora. Período = primeira vez que o item chegou a Pronto ou foi Fechado (o que vier primeiro). Verde = dentro da faixa de meta. Sustentação tem faixa própria.',
   cycle: 'Cycle Time P85, como na GetNaves: dias corridos do início do Doing (primeira vez em Desenvolvendo, code review ou QA) até a primeira vez que o item chegou a Pronto ou foi Fechado (o que vier primeiro — um fechamento em lote, bem depois do Pronto, não conta). Só Issue e User Story; item que não passou pelo Doing fica de fora. 85% dos itens concluídos no período levaram até esse número. As médias são a média dos valores dos times.',
-  bugs: 'Quantidade de Issues abertas no período, por time. Issue é o bug que chegou em produção; o que o QA pega antes disso é Bug e conta no Índice de Retrabalho. Issue Removed ou Disapproved não entra.',
+  bugs: 'Issues do tipo Correção vindas de cliente (Tipo Cliente preenchido, menos SLA INTERNO DS), abertas no período, por time. Mesmo critério da linha BUGS da planilha de indicadores da gestão: Análise, Alteração, Melhoria e Issues internas não entram, nem Removed/Disapproved. O que o QA pega antes de produção é Bug e conta no Índice de Retrabalho.',
   bugsVersao: 'Das Issues de Bugs Produção (criadas no período), só as que têm versão atrelada: número de versão (ex.: 3.71.0.5) em Base Version, Delivered Version, root cause version ou numa tag. Itens do tipo Bug não têm versão no Azure DevOps, por isso não entram.',
   bugsSemVersao: 'Das Issues de Bugs Produção (criadas no período), as que NÃO têm número de versão em Base Version, Delivered Version, root cause version nem nas tags. Somado com "com versão", dá o total de Bugs Produção.',
   retrabalho: 'Quantidade de bugs internos (tipo Bug) abertos no período, por time: os que o QA pega antes de ir para produção, sem versão publicada. Os que chegam em produção são Issues e contam em Bugs Produção.',
@@ -86,7 +86,7 @@ const INFO: Record<MetricKey, string> = {
   slaP0: '% dos itens P0 (prioridade vazia ou 0) concluídos no período com Cycle Time em até 7 dias corridos. Prioridade 1 (Crítica) não entra.',
 };
 
-const INFO_DEPTO = 'Soma das Issues abertas no período pelos times do departamento de engenharia: Sustentação, Boltz, Tático, Wakanda e Franquia/CTC. Só Issue (bug que chegou em produção), em qualquer estado menos Removed e Disapproved; Bug interno não entra. Não muda com o filtro de times do topo: escolha os times do departamento nas caixas abaixo. Clique num número ou numa barra para ver as Issues.';
+const INFO_DEPTO = 'Soma das Issues abertas no período pelos times do departamento de engenharia: Sustentação, Boltz, Tático, Wakanda e Franquia/CTC. "Departamento de Engenharia" conta toda Issue (menos Removed e Disapproved); "Bugs — critério da gestão" conta só as do tipo Correção vindas de cliente (Tipo Cliente preenchido, menos SLA INTERNO DS), igual à linha BUGS da planilha de indicadores da gestão. Bug interno não entra em nenhuma das duas. Não muda com o filtro de times do topo: escolha os times do departamento nas caixas abaixo. Clique num número ou numa barra para ver as Issues.';
 
 const nomeTime = (t: string) => {
   const norm = t.toLowerCase().replace(/[^a-z]/g, '');
@@ -336,7 +336,13 @@ const PainelMensalDashboard: React.FC<Props> = ({ data }) => {
     listas: depto.map(l => l.filter(i => normalizarTime(i.team ?? '') === normalizarTime(t))),
   }));
   const totalDepto = depto.map((_, i) => linhasTimesDepto.flatMap(l => l.listas[i]));
-  const linhasDepto = [...linhasTimesDepto, { nome: 'Departamento de Engenharia', total: true, listas: totalDepto }];
+  // Critério da gestão (linha BUGS da planilha de indicadores): mesmas Issues, só as de Correção vindas de cliente
+  const gestaoDepto = totalDepto.map(l => l.filter(bugDeCliente));
+  const linhasDepto = [
+    ...linhasTimesDepto,
+    { nome: 'Departamento de Engenharia', total: true, listas: totalDepto },
+    { nome: 'Bugs — critério da gestão', total: true, listas: gestaoDepto },
+  ];
   const secaoDepto = (
     <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
       <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
@@ -379,14 +385,18 @@ const PainelMensalDashboard: React.FC<Props> = ({ data }) => {
       </div>
       <p className="text-xs text-ds-text/60 mt-4 mb-1">Clique numa barra para ver as Issues do departamento naquele período.</p>
       <ResponsiveContainer width="100%" height={220}>
-        <BarChart data={periodos.map((b, i) => ({ periodo: b.label, total: totalDepto[i].length }))} margin={{ left: 0, right: 16, top: 8, bottom: 4 }}>
+        <BarChart data={periodos.map((b, i) => ({ periodo: b.label, total: totalDepto[i].length, gestao: gestaoDepto[i].length }))} margin={{ left: 0, right: 16, top: 8, bottom: 4 }}>
           <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
           <XAxis dataKey="periodo" stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} interval="preserveStartEnd" />
           <YAxis stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} allowDecimals={false} />
           <Tooltip contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff' }} />
+          <Legend />
           {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-          <Bar dataKey="total" name="Departamento de Engenharia" fill={CHART_COLORS.palette[0]} cursor="pointer"
+          <Bar dataKey="total" name="Departamento de Engenharia (todas as Issues)" fill={CHART_COLORS.palette[0]} cursor="pointer"
             onClick={(_: any, idx: number) => setModal({ titulo: `Issues — Departamento de Engenharia — ${periodos[idx].label}`, itens: totalDepto[idx] })} />
+          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+          <Bar dataKey="gestao" name="Bugs — critério da gestão" fill={CHART_COLORS.palette[1]} cursor="pointer"
+            onClick={(_: any, idx: number) => setModal({ titulo: `Issues — Bugs — critério da gestão — ${periodos[idx].label}`, itens: gestaoDepto[idx] })} />
         </BarChart>
       </ResponsiveContainer>
     </div>

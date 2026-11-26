@@ -16,7 +16,8 @@ const items = [
   item('Sustentacao', { timeInStatusDays: { Active: 6, 'Aguardando code review': 2 }, cicloDias: 10 }),
   item('Sustentacao', { timeInStatusDays: { Active: 3, 'Aguardando QA': 3 }, cicloDias: 40 }),
   // Boltz, março: fluxo 1/4 = 25 (abaixo da faixa 45–50 = vermelho); CT 30 (dentro da faixa 20–34 = verde)
-  item('Boltz', { timeInStatusDays: { Active: 1, 'Aguardando QA': 3 }, cicloDias: 30, baseVersion: '3.71.0.5' }),
+  // (Correção vinda de cliente: conta em Bugs Produção pelo critério da gestão; as da Sustentação acima não)
+  item('Boltz', { timeInStatusDays: { Active: 1, 'Aguardando QA': 3 }, cicloDias: 30, baseVersion: '3.71.0.5', customType: 'Correção', tipoCliente: '5 - SLA LIGHT' }),
   // Bugs internos de março (Índice Retrabalho): 1 da Boltz, 2 da Sustentação. Fora do escopo de Fluxo/CT.
   item('Boltz', { type: 'Bug', createdDate: MAR(5) }),
   item('Sustentacao', { type: 'Bug', createdDate: MAR(6) }), item('Sustentacao', { type: 'Bug', createdDate: MAR(7) }),
@@ -99,6 +100,9 @@ const totalDepto = ws.getCell(linhaDepto, 4 + 1 + MAR_IDX).value;
 assert.match(totalDepto.formula, /^SUM\(/, 'total do departamento é fórmula SUM');
 assert.equal(totalDepto.result, 3, '2 Issues da Sustentação + 1 da Boltz em março');
 assert.equal(totalDepto.result, p.departamento.total[MAR_IDX]);
+// Logo abaixo do total, o critério da gestão: só a Issue de Correção vinda de cliente (a da Boltz)
+assert.equal(ws.getCell(linhaDepto + 1, 4).value, 'BUGS — CRITÉRIO DA GESTÃO');
+assert.equal(ws.getCell(linhaDepto + 1, 4 + 1 + MAR_IDX).value, 1, 'só a Correção de cliente da Boltz');
 // 5 linhas de time acima do total, na ordem de TIMES_PADRAO_PAINEL (Sustentação primeiro)
 assert.equal(ws.getCell(linhaDepto - 5, 4).value, 'Sustentação');
 assert.equal(ws.getCell(linhaDepto - 5, 4 + 1 + MAR_IDX).value, 2, 'linha da Sustentação no índice do departamento');
@@ -115,5 +119,6 @@ const ws3 = await lerAba(await montarPainelXlsx(p, METAS_PADRAO, []));
 let linha3 = null;
 ws3.eachRow((row, n) => { if (row.getCell(4).value === 'DEPARTAMENTO DE ENGENHARIA') linha3 = n; });
 assert.equal(ws3.getCell(linha3, 4 + 1 + MAR_IDX).value, 0);
+assert.equal(ws3.getCell(linha3 + 1, 4 + 1 + MAR_IDX).value, 0, 'critério da gestão também segue a escolha de times');
 
 console.log('✅ painelXlsx: aba única Validado, blocos por time, valores, cores pela meta, fórmulas e índice do departamento (com escolha de times) OK');

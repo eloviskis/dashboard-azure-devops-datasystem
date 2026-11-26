@@ -13,6 +13,7 @@ const item = (team, extra = {}) => ({
   workItemId: Math.random(), title: 't', type: 'User Story', state: 'Closed', team,
   closedDate: MAR(10), createdDate: FEV(1), priority: '2', ...extra,
 });
+const CLI = { customType: 'Correção', tipoCliente: '5 - SLA LIGHT' }; // Bugs Produção = Correção vinda de cliente (critério da gestão)
 
 const items = [
   // Alfa, março: fluxo por item 6/(6+1+1) = 75 (fila = Aguardando CR + Fazendo CR); cycle dias úteis (10, 20, null) → P85 = 20
@@ -22,7 +23,7 @@ const items = [
   // Alfa, março: concluídos de vários tipos. O Bug daqui foi aberto em fevereiro: conta no retrabalho de fevereiro
   item('Alfa', { type: 'User Story' }),
   item('Alfa', { type: 'Bug' }),
-  item('Alfa', { type: 'Issue', createdDate: MAR(2) }),
+  item('Alfa', { type: 'Issue', ...CLI, createdDate: MAR(2) }),
   item('Alfa', { type: 'Eventuality' }),
   item('Alfa', { type: 'Task' }),
   // Alfa: P0 = prioridade vazia ou 0. Dois P0 (5 e 9 dias) → 50% no prazo de 7. Prioridade "1" fica de fora.
@@ -30,10 +31,10 @@ const items = [
   item('Alfa', { priority: '0', cycleTime: 9, cicloDias: null }),
   item('Alfa', { priority: '1', cycleTime: 2, cicloDias: null }),
   // Alfa: Issues criadas em fevereiro contam em bugs de fevereiro; Bug não conta; Issue de 2025 não conta
-  item('Alfa', { type: 'Issue', state: 'Active', closedDate: null, createdDate: FEV(5) }),
-  item('Alfa', { type: 'Issue', state: 'Active', closedDate: null, createdDate: FEV(9) }),
+  item('Alfa', { type: 'Issue', ...CLI, state: 'Active', closedDate: null, createdDate: FEV(5) }),
+  item('Alfa', { type: 'Issue', ...CLI, state: 'Active', closedDate: null, createdDate: FEV(9) }),
   item('Alfa', { type: 'Bug', state: 'Active', closedDate: null, createdDate: FEV(9) }),
-  item('Alfa', { type: 'Issue', state: 'Active', closedDate: null, createdDate: '2025-02-09T12:00:00Z' }),
+  item('Alfa', { type: 'Issue', ...CLI, state: 'Active', closedDate: null, createdDate: '2025-02-09T12:00:00Z' }),
 
   // Beta, março: cycle mediana 35 (uma só)
   item('Beta', { cicloDias: 35, cycleTime: 40 }),
@@ -101,7 +102,7 @@ assert.equal(pe.porTime.qtdP0.Estrategico[MAR_IDX], 1, 'Estratégico: só a User
 assert.equal(p.porTime.bugs.Alfa[FEV_IDX], 2, 'duas Issues criadas em fevereiro; Bug e Issue de 2025 ficam de fora');
 
 // Bugs Produção com versão: das Issues do período, só as com número de versão em algum campo ou tag
-const issue = (extra) => item('Zeta', { type: 'Issue', state: 'Active', closedDate: null, createdDate: MAR(5), ...extra });
+const issue = (extra) => item('Zeta', { type: 'Issue', ...CLI, state: 'Active', closedDate: null, createdDate: MAR(5), ...extra });
 const comVersao = [
   issue({ baseVersion: '3.71.0.5' }),
   issue({ deliveredVersion: '3.71.0.7' }),
@@ -155,14 +156,14 @@ assert.deepEqual(metricasDoTime('Alfa'), ['fluxo', 'cycle', 'bugs', 'bugsVersao'
 // Índice do Departamento de Engenharia (mesmo caso do .mjs): Sustentação + Franquia + Tático = 3 em março;
 // Estratégico e o Bug do Wakanda fora; o filtro de times não muda nada.
 const deptoItens = [
-  item('Sustentacao', { type: 'Issue', createdDate: MAR(3) }),
-  item('Franquia', { type: 'Issue', createdDate: MAR(4) }),
-  item('Tatico', { type: 'Issue', createdDate: MAR(5) }),
-  item('Estrategico', { type: 'Issue', createdDate: MAR(5) }),
+  item('Sustentacao', { type: 'Issue', ...CLI, createdDate: MAR(3) }),
+  item('Franquia', { type: 'Issue', ...CLI, createdDate: MAR(4) }),
+  item('Tatico', { type: 'Issue', ...CLI, createdDate: MAR(5) }),
+  item('Estrategico', { type: 'Issue', ...CLI, createdDate: MAR(5) }),
   item('Wakanda', { type: 'Bug', createdDate: MAR(6) }),
   // Removed e Disapproved não eram bug em produção: fora do departamento e de Bugs Produção
-  item('Sustentacao', { type: 'Issue', state: 'Removed', createdDate: MAR(7) }),
-  item('Tatico', { type: 'Issue', state: 'Disapproved', createdDate: MAR(7) }),
+  item('Sustentacao', { type: 'Issue', ...CLI, state: 'Removed', createdDate: MAR(7) }),
+  item('Tatico', { type: 'Issue', ...CLI, state: 'Disapproved', createdDate: MAR(7) }),
 ];
 const pd = buildPainelMensal(deptoItens, meses, ['Tatico']);
 assert.equal(pd.porTime.bugs.Tatico[MAR_IDX], 1, 'Bugs Produção do Tático: a Issue Disapproved não conta');
@@ -172,4 +173,20 @@ assert.equal(pd.departamento.porTime.Wakanda[MAR_IDX], 0, 'Bug não entra');
 assert.deepEqual(pd.departamento.total, buildPainelMensal(deptoItens, meses).departamento.total, 'filtro de times não muda o departamento');
 assert.equal(issuesDoDepartamento(deptoItens, meses[MAR_IDX]).length, 3);
 
-console.log('✅ painelMensal.js (port CommonJS): fluxo, cycle (P85), bugs, retrabalho, P0, consolidado, faixas, perfil por time e departamento OK — paridade com painelMensal.ts confirmada');
+// Critério da gestão (mesmo caso do .mjs): só Correção vinda de cliente, menos SLA INTERNO DS
+const criterio = [
+  ...deptoItens,
+  item('Sustentacao', { type: 'Issue', customType: 'Análise', tipoCliente: '5 - SLA LIGHT', createdDate: MAR(8) }),
+  item('Tatico', { type: 'Issue', customType: 'Correção', tipoCliente: '', createdDate: MAR(8) }),
+  item('Tatico', { type: 'Issue', customType: 'Correção', tipoCliente: '6 - SLA INTERNO DS', createdDate: MAR(8) }),
+  item('Franquia', { type: 'Issue', customType: 'Correcao', tipoCliente: '6 - SLA ONE - CTC', createdDate: MAR(8) }),
+];
+const pc = buildPainelMensal(criterio, meses);
+assert.equal(pc.departamento.total[MAR_IDX], 7, 'todas as Issues válidas');
+assert.equal(pc.departamento.gestao[MAR_IDX], 4, 'critério da gestão');
+assert.equal(pc.departamento.gestaoPorTime.Tatico[MAR_IDX], 1, 'Tático: sem Tipo Cliente e INTERNO ficam fora');
+assert.equal(pc.departamento.gestaoPorTime.Sustentacao[MAR_IDX], 1, 'Sustentação: Análise fica fora');
+assert.equal(pc.porTime.bugs.Tatico[MAR_IDX], 1, 'Bugs Produção do Tático segue o critério da gestão');
+assert.equal(pc.porTime.bugs.Franquia[MAR_IDX], 2, 'Franquia: a de cliente + a "Correcao"');
+
+console.log('✅ painelMensal.js (port CommonJS): fluxo, cycle (P85), bugs (critério da gestão), retrabalho, P0, consolidado, faixas, perfil por time e departamento OK — paridade com painelMensal.ts confirmada');
