@@ -6,10 +6,17 @@ import { retroApi } from './retroApi.ts';
 import type { ActionType, TeamSummary } from './retroApi.ts';
 import { TypeTag } from './retroUi.tsx';
 
+const ESCONDIDO_KEY = 'painel_retro_escondido';
+
 const RetroPainelStrip: React.FC<{ teams: string[] }> = ({ teams }) => {
   const { user } = useAuth();
   const allowed = !user?.tabPermissions || user.tabPermissions.includes('retro');
   const [data, setData] = useState<{ teams: TeamSummary[]; types: ActionType[] } | null>(null);
+  // Esconder: fica só o título. Salvo neste navegador; sem storage, volta a aparecer na próxima visita.
+  const [escondido, setEscondido] = useState(() => { try { return localStorage.getItem(ESCONDIDO_KEY) === '1'; } catch { return false; } });
+  useEffect(() => {
+    try { if (escondido) localStorage.setItem(ESCONDIDO_KEY, '1'); else localStorage.removeItem(ESCONDIDO_KEY); } catch { /* sem storage */ }
+  }, [escondido]);
 
   useEffect(() => {
     if (!allowed) return;
@@ -22,10 +29,17 @@ const RetroPainelStrip: React.FC<{ teams: string[] }> = ({ teams }) => {
 
   return (
     <section className="bg-ds-navy p-4 rounded-lg border border-ds-border" aria-labelledby="retro-painel-h">
-      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+      <div className={`flex flex-wrap items-center justify-between gap-2 ${escondido ? '' : 'mb-3'}`}>
         <h3 id="retro-painel-h" className="text-ds-light-text font-bold text-base">🔁 Ações de melhoria (Retrô)</h3>
-        <a href="?tab=retro&retroView=times" className="text-xs text-ds-green hover:underline">Abrir na Retrô →</a>
+        <div className="flex items-center gap-4">
+          <a href="?tab=retro&retroView=times" className="text-xs text-ds-green hover:underline">Abrir na Retrô →</a>
+          <button type="button" onClick={() => setEscondido(v => !v)} aria-expanded={!escondido} aria-controls="retro-painel-corpo"
+            className="text-xs px-3 py-1.5 rounded-md border border-ds-border text-ds-light-text hover:bg-ds-border/50">
+            {escondido ? 'Mostrar' : 'Esconder'}
+          </button>
+        </div>
       </div>
+      {!escondido && <div id="retro-painel-corpo">
       <p className="text-xs text-ds-text/80 mb-3">Andamento das ações combinadas nas retrospectivas, independente do período escolhido acima.</p>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
@@ -62,6 +76,7 @@ const RetroPainelStrip: React.FC<{ teams: string[] }> = ({ teams }) => {
           </tbody>
         </table>
       </div>
+      </div>}
     </section>
   );
 };
