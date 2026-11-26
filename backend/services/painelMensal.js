@@ -93,6 +93,11 @@ const temVersao = (item) =>
   [item.baseVersion, item.deliveredVersion, item.rootCauseVersion, [item.tags ?? ''].flat().join(';')]
     .some(v => VERSAO.test(v ?? ''));
 
+// Issue Removed ou Disapproved não chegou a ser bug em produção: fica fora de Bugs Produção e do Índice do
+// Departamento (pedido do usuário em 2026-11-26; eram 7 Issues em 2026 nos times do departamento).
+const ESTADOS_DESCARTADOS = ['Removed', 'Disapproved'];
+const issueValida = (i) => i.type === 'Issue' && !ESTADOS_DESCARTADOS.includes(i.state);
+
 const dentroDoPeriodo = (data, b) => {
   if (!data) return false;
   const t = new Date(data).getTime();
@@ -141,7 +146,7 @@ const eficienciaItem = (item) => {
 const doDepartamento = (team) =>
   TIMES_PADRAO_PAINEL.some(t => normalizarTime(t) === normalizarTime(team ?? ''));
 const issuesDoDepartamento = (items, b) =>
-  items.filter(i => i.type === 'Issue' && doDepartamento(i.team) && dentroDoPeriodo(i.createdDate, b));
+  items.filter(i => issueValida(i) && doDepartamento(i.team) && dentroDoPeriodo(i.createdDate, b));
 
 function buildPainelMensal(items, buckets, timesFiltro) {
   const filtroNorm = timesFiltro?.map(normalizarTime);
@@ -155,7 +160,7 @@ function buildPainelMensal(items, buckets, timesFiltro) {
   for (const team of times) {
     const doTime = validos.filter(i => i.team === team);
     const concluidosTime = doTime.filter(i => COMPLETED_STATES.includes(i.state));
-    const issuesTime = doTime.filter(i => i.type === 'Issue');
+    const issuesTime = doTime.filter(issueValida);
     // Bugs internos vêm de items, não de validos: o escopo da GetNaves (Issue/User Story/Eventuality) tira Bug
     const bugsInternos = items.filter(i => i.team === team && i.type === 'Bug');
 

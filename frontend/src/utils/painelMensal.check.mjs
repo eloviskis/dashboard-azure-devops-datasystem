@@ -201,8 +201,13 @@ const deptoItens = [
   item('Tatico', { type: 'Issue', createdDate: MAR(5) }),
   item('Estrategico', { type: 'Issue', createdDate: MAR(5) }),
   item('Wakanda', { type: 'Bug', createdDate: MAR(6) }),
+  // Removed e Disapproved não eram bug em produção: fora do departamento e de Bugs Produção
+  item('Sustentacao', { type: 'Issue', state: 'Removed', createdDate: MAR(7) }),
+  item('Tatico', { type: 'Issue', state: 'Disapproved', createdDate: MAR(7) }),
 ];
 const pd = buildPainelMensal(deptoItens, meses, ['Tatico']);
+assert.equal(pd.porTime.bugs.Tatico[MAR_IDX], 1, 'Bugs Produção do Tático: a Issue Disapproved não conta');
+assert.equal(itensDaMetrica(itensDoTime(deptoItens, 'Tatico'), meses[MAR_IDX], 'bugs').length, 1, 'nem na lista do modal');
 assert.equal(pd.departamento.total[MAR_IDX], 3, 'Sustentação + Franquia + Tático');
 assert.equal(pd.departamento.porTime.Sustentacao[MAR_IDX], 1, 'conta a Sustentação mesmo fora do filtro');
 assert.equal(pd.departamento.porTime.Wakanda[MAR_IDX], 0, 'Bug não entra');

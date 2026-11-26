@@ -96,6 +96,11 @@ const temVersao = (item: WorkItem) =>
   [item.baseVersion, item.deliveredVersion, item.rootCauseVersion, [item.tags ?? ''].flat().join(';')]
     .some(v => VERSAO.test(v ?? ''));
 
+// Issue Removed ou Disapproved não chegou a ser bug em produção: fica fora de Bugs Produção e do Índice do
+// Departamento (pedido do usuário em 2026-11-26; eram 7 Issues em 2026 nos times do departamento).
+const ESTADOS_DESCARTADOS = ['Removed', 'Disapproved'];
+const issueValida = (i: WorkItem) => i.type === 'Issue' && !ESTADOS_DESCARTADOS.includes(i.state);
+
 const dentroDoPeriodo =(data: string | Date | null | undefined, b: PeriodBucket) => {
   if (!data) return false;
   const t = new Date(data).getTime();
@@ -144,7 +149,7 @@ const eficienciaItem = (item: WorkItem): number | null => {
 const doDepartamento = (team: string | null | undefined) =>
   TIMES_PADRAO_PAINEL.some(t => normalizarTime(t) === normalizarTime(team ?? ''));
 export const issuesDoDepartamento = (items: WorkItem[], b: PeriodBucket): WorkItem[] =>
-  items.filter(i => i.type === 'Issue' && doDepartamento(i.team) && dentroDoPeriodo(i.createdDate, b));
+  items.filter(i => issueValida(i) && doDepartamento(i.team) && dentroDoPeriodo(i.createdDate, b));
 
 export interface PainelMensal {
   labels: string[];                                             // um rótulo por período (coluna)
@@ -167,7 +172,7 @@ export function buildPainelMensal(items: WorkItem[], buckets: PeriodBucket[], ti
   for (const team of times) {
     const doTime = validos.filter(i => i.team === team);
     const concluidosTime = doTime.filter(i => COMPLETED_STATES.includes(i.state));
-    const issuesTime = doTime.filter(i => i.type === 'Issue');
+    const issuesTime = doTime.filter(issueValida);
     // Bugs internos vêm de items, não de validos: o escopo da GetNaves (Issue/User Story/Eventuality) tira Bug
     const bugsInternos = items.filter(i => i.team === team && i.type === 'Bug');
 
@@ -255,7 +260,7 @@ export const itensDoTime = (items: WorkItem[], team: string): WorkItem[] =>
 export function itensDaMetrica(doTime: WorkItem[], bucket: PeriodBucket, key: MetricKey): WorkItem[] {
   if (key === 'retrabalho') return doTime.filter(i => i.type === 'Bug' && dentroDoPeriodo(i.createdDate, bucket));
   const doEscopo = doTime.filter(noEscopo);
-  if (key === 'bugs') return doEscopo.filter(i => i.type === 'Issue' && dentroDoPeriodo(i.createdDate, bucket));
+  if (key === 'bugs') return doEscopo.filter(i => issueValida(i) && dentroDoPeriodo(i.createdDate, bucket));
   if (key === 'bugsVersao') return itensDaMetrica(doTime, bucket, 'bugs').filter(temVersao);
   if (key === 'bugsSemVersao') return itensDaMetrica(doTime, bucket, 'bugs').filter(i => !temVersao(i));
   const concluidos = doEscopo.filter(i => COMPLETED_STATES.includes(i.state) && dentroDoPeriodo(i.closedDate, bucket));

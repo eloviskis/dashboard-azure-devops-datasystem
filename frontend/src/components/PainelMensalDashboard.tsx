@@ -78,7 +78,7 @@ const MODOS: { value: PeriodGroupMode; label: string }[] = [
 const INFO: Record<MetricKey, string> = {
   fluxo: 'Fluxo de Eficiência, como na GetNaves = média, item a item, de Ativo ÷ (Ativo + Fila), só Issue e User Story. Ativo = Desenvolvendo + Testando QA/Testing; Fila = Aguardando Code Review + Fazendo Code Review + CodeReview + Aguardando QA. "Para Desenvolver" é To Do e fica fora. Período = primeira vez que o item chegou a Pronto ou foi Fechado (o que vier primeiro). Verde = dentro da faixa de meta. Sustentação tem faixa própria.',
   cycle: 'Cycle Time P85, como na GetNaves: dias corridos do início do Doing (primeira vez em Desenvolvendo, code review ou QA) até a primeira vez que o item chegou a Pronto ou foi Fechado (o que vier primeiro — um fechamento em lote, bem depois do Pronto, não conta). Só Issue e User Story; item que não passou pelo Doing fica de fora. 85% dos itens concluídos no período levaram até esse número. As médias são a média dos valores dos times.',
-  bugs: 'Quantidade de Issues abertas no período, por time. Issue é o bug que chegou em produção; o que o QA pega antes disso é Bug e conta no Índice de Retrabalho.',
+  bugs: 'Quantidade de Issues abertas no período, por time. Issue é o bug que chegou em produção; o que o QA pega antes disso é Bug e conta no Índice de Retrabalho. Issue Removed ou Disapproved não entra.',
   bugsVersao: 'Das Issues de Bugs Produção (criadas no período), só as que têm versão atrelada: número de versão (ex.: 3.71.0.5) em Base Version, Delivered Version, root cause version ou numa tag. Itens do tipo Bug não têm versão no Azure DevOps, por isso não entram.',
   bugsSemVersao: 'Das Issues de Bugs Produção (criadas no período), as que NÃO têm número de versão em Base Version, Delivered Version, root cause version nem nas tags. Somado com "com versão", dá o total de Bugs Produção.',
   retrabalho: 'Quantidade de bugs internos (tipo Bug) abertos no período, por time: os que o QA pega antes de ir para produção, sem versão publicada. Os que chegam em produção são Issues e contam em Bugs Produção.',
@@ -86,7 +86,7 @@ const INFO: Record<MetricKey, string> = {
   slaP0: '% dos itens P0 (prioridade vazia ou 0) concluídos no período com Cycle Time em até 7 dias corridos. Prioridade 1 (Crítica) não entra.',
 };
 
-const INFO_DEPTO = 'Soma das Issues abertas no período pelos times do departamento de engenharia: Sustentação, Boltz, Tático, Wakanda e Franquia/CTC. Só Issue (bug que chegou em produção); Bug interno não entra. Não muda com o filtro de times do topo: escolha os times do departamento nas caixas abaixo. Clique num número ou numa barra para ver as Issues.';
+const INFO_DEPTO = 'Soma das Issues abertas no período pelos times do departamento de engenharia: Sustentação, Boltz, Tático, Wakanda e Franquia/CTC. Só Issue (bug que chegou em produção), em qualquer estado menos Removed e Disapproved; Bug interno não entra. Não muda com o filtro de times do topo: escolha os times do departamento nas caixas abaixo. Clique num número ou numa barra para ver as Issues.';
 
 const nomeTime = (t: string) => {
   const norm = t.toLowerCase().replace(/[^a-z]/g, '');
