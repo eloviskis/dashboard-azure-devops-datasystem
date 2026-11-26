@@ -103,4 +103,17 @@ assert.equal(totalDepto.result, p.departamento.total[MAR_IDX]);
 assert.equal(ws.getCell(linhaDepto - 5, 4).value, 'Sustentação');
 assert.equal(ws.getCell(linhaDepto - 5, 4 + 1 + MAR_IDX).value, 2, 'linha da Sustentação no índice do departamento');
 
-console.log('✅ painelXlsx: aba única Validado, blocos por time, valores, cores pela meta, fórmulas e índice do departamento OK');
+// Times do departamento escolhidos na tela: só a Boltz → uma linha de time e total 1 (a soma segue a escolha)
+const lerAba = async (w) => { const l = new ExcelJS.Workbook(); await l.xlsx.load(await w.xlsx.writeBuffer()); return l.worksheets[0]; };
+const ws2 = await lerAba(await montarPainelXlsx(p, METAS_PADRAO, ['Boltz']));
+let linha2 = null;
+ws2.eachRow((row, n) => { if (row.getCell(4).value === 'DEPARTAMENTO DE ENGENHARIA') linha2 = n; });
+assert.equal(ws2.getCell(linha2 - 1, 4).value, 'Boltz', 'só a linha da Boltz acima do total');
+assert.equal(ws2.getCell(linha2, 4 + 1 + MAR_IDX).value.result, 1, 'total = só a Issue da Boltz');
+// Nenhum time escolhido: total 0, sem fórmula de intervalo vazio
+const ws3 = await lerAba(await montarPainelXlsx(p, METAS_PADRAO, []));
+let linha3 = null;
+ws3.eachRow((row, n) => { if (row.getCell(4).value === 'DEPARTAMENTO DE ENGENHARIA') linha3 = n; });
+assert.equal(ws3.getCell(linha3, 4 + 1 + MAR_IDX).value, 0);
+
+console.log('✅ painelXlsx: aba única Validado, blocos por time, valores, cores pela meta, fórmulas e índice do departamento (com escolha de times) OK');

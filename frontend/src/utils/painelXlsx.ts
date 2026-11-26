@@ -76,7 +76,8 @@ const METRICAS_BLOCO: { key: MetricKey; rotulo: string; formato: string; unidade
 // Cada par de blocos ocupa: título + cabeçalho + uma linha por métrica + uma de folga
 const LINHAS_POR_PAR = METRICAS_BLOCO.length + 3;
 
-export async function montarPainelXlsx(painel: PainelMensal, metas: MetasPainel): Promise<Workbook> {
+// timesDepto: times do departamento escolhidos na tela (sem = os 5), para o bloco do Índice do Departamento.
+export async function montarPainelXlsx(painel: PainelMensal, metas: MetasPainel, timesDepto?: string[]): Promise<Workbook> {
   // mod.default funciona no Node (CJS); no navegador o Vite já expõe Workbook direto no módulo
   const mod = await import('exceljs');
   const ExcelJS = (mod.default ?? mod) as unknown as typeof import('exceljs');
@@ -237,18 +238,21 @@ export async function montarPainelXlsx(painel: PainelMensal, metas: MetasPainel)
   // No fim da aba de propósito: não muda a posição de nenhuma linha acima.
   titulo('ÍNDICE DO DEPARTAMENTO DE ENGENHARIA — ISSUES ABERTAS');
   const primeiraDepto = r;
-  for (const [t, vals] of Object.entries(painel.departamento.porTime)) {
+  const linhasDepto = Object.entries(painel.departamento.porTime).filter(([t]) => !timesDepto || timesDepto.includes(t));
+  for (const [t, vals] of linhasDepto) {
     celula(ws, r, X0, nomeTime(t), { alinhar: 'left' });
     vals.forEach((v, i) => celula(ws, r, X0 + 1 + i, v, { formato: '0' }));
     celula(ws, r, X0 + P + 1, formulaMedia([`${letra(X0 + 1)}${r}:${letra(X0 + P)}${r}`], media(vals)), { formato: '0.0' });
     r++;
   }
+  // Total = soma só dos times escolhidos (igual à tela); sem nenhum time, 0 (um SUM de intervalo vazio inverteria)
+  const totalDepto = painel.labels.map((_, i) => linhasDepto.reduce((s, [, vals]) => s + vals[i], 0));
   celula(ws, r, X0, 'DEPARTAMENTO DE ENGENHARIA', { alinhar: 'left', negrito: true });
-  painel.departamento.total.forEach((v, i) => {
+  totalDepto.forEach((v, i) => {
     const col = letra(X0 + 1 + i);
-    celula(ws, r, X0 + 1 + i, { formula: `SUM(${col}${primeiraDepto}:${col}${r - 1})`, result: v }, { formato: '0', negrito: true });
+    celula(ws, r, X0 + 1 + i, linhasDepto.length ? { formula: `SUM(${col}${primeiraDepto}:${col}${r - 1})`, result: v } : 0, { formato: '0', negrito: true });
   });
-  celula(ws, r, X0 + P + 1, formulaMedia([`${letra(X0 + 1)}${r}:${letra(X0 + P)}${r}`], media(painel.departamento.total)), { formato: '0.0', negrito: true });
+  celula(ws, r, X0 + P + 1, formulaMedia([`${letra(X0 + 1)}${r}:${letra(X0 + P)}${r}`], media(totalDepto)), { formato: '0.0', negrito: true });
   r++;
 
   // Larguras: rótulos largos, períodos estreitos, META com espaço para o texto da faixa
