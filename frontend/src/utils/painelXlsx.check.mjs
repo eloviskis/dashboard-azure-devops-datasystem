@@ -93,4 +93,14 @@ assert.equal(ws.getCell(linhaCab, 4 + 1 + MAR_IDX).value, p.labels[MAR_IDX], 'ca
 assert.equal(ws.getCell(linhaCab, 4 + P + 2).value, 'META', 'coluna META');
 assert.equal(ws.getCell(topSust + 2, 4 + P + 2).value, 'entre 50 e 55 %', 'meta da Sustentação vem da faixa do time');
 
-console.log('✅ painelXlsx: aba única Validado, blocos por time, valores, cores pela meta e fórmulas OK');
+// Índice do Departamento: Issues de março = 2 da Sustentação + 1 da Boltz (os Bugs não entram); total é SUM das linhas
+const linhaDepto = achar('DEPARTAMENTO DE ENGENHARIA');
+const totalDepto = ws.getCell(linhaDepto, 4 + 1 + MAR_IDX).value;
+assert.match(totalDepto.formula, /^SUM\(/, 'total do departamento é fórmula SUM');
+assert.equal(totalDepto.result, 3, '2 Issues da Sustentação + 1 da Boltz em março');
+assert.equal(totalDepto.result, p.departamento.total[MAR_IDX]);
+// 5 linhas de time acima do total, na ordem de TIMES_PADRAO_PAINEL (Sustentação primeiro)
+assert.equal(ws.getCell(linhaDepto - 5, 4).value, 'Sustentação');
+assert.equal(ws.getCell(linhaDepto - 5, 4 + 1 + MAR_IDX).value, 2, 'linha da Sustentação no índice do departamento');
+
+console.log('✅ painelXlsx: aba única Validado, blocos por time, valores, cores pela meta, fórmulas e índice do departamento OK');

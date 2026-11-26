@@ -231,6 +231,24 @@ export async function montarPainelXlsx(painel: PainelMensal, metas: MetasPainel)
     const col = letra(X0 + 1 + i);
     celula(ws, r, X0 + 1 + i, fluxoNaoSust.length ? { formula: `${col}${fluxoSemSust}`, result: v ?? '' } : '', { formato: '0.00' });
   });
+  r += 2;
+
+  // 4) ÍNDICE DO DEPARTAMENTO DE ENGENHARIA: Issues abertas por time do departamento e o total (soma).
+  // No fim da aba de propósito: não muda a posição de nenhuma linha acima.
+  titulo('ÍNDICE DO DEPARTAMENTO DE ENGENHARIA — ISSUES ABERTAS');
+  const primeiraDepto = r;
+  for (const [t, vals] of Object.entries(painel.departamento.porTime)) {
+    celula(ws, r, X0, nomeTime(t), { alinhar: 'left' });
+    vals.forEach((v, i) => celula(ws, r, X0 + 1 + i, v, { formato: '0' }));
+    celula(ws, r, X0 + P + 1, formulaMedia([`${letra(X0 + 1)}${r}:${letra(X0 + P)}${r}`], media(vals)), { formato: '0.0' });
+    r++;
+  }
+  celula(ws, r, X0, 'DEPARTAMENTO DE ENGENHARIA', { alinhar: 'left', negrito: true });
+  painel.departamento.total.forEach((v, i) => {
+    const col = letra(X0 + 1 + i);
+    celula(ws, r, X0 + 1 + i, { formula: `SUM(${col}${primeiraDepto}:${col}${r - 1})`, result: v }, { formato: '0', negrito: true });
+  });
+  celula(ws, r, X0 + P + 1, formulaMedia([`${letra(X0 + 1)}${r}:${letra(X0 + P)}${r}`], media(painel.departamento.total)), { formato: '0.0', negrito: true });
   r++;
 
   // Larguras: rótulos largos, períodos estreitos, META com espaço para o texto da faixa

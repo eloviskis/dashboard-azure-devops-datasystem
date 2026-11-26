@@ -9,8 +9,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { baixarXlsx, montarPainelXlsx } from '../utils/painelXlsx.ts';
 import { getPeriodBuckets, type PeriodBucket, type PeriodGroupMode } from '../utils/periodGrouping.ts';
 import {
-  acompanha, bugsPorDesenvolvedor, buildPainelMensal, dentroDaFaixa, faixaDoTime, itensDaMetrica, itensDoTime, METAS_PADRAO,
-  TIMES_PADRAO_PAINEL, textoFaixa,
+  acompanha, bugsPorDesenvolvedor, buildPainelMensal, dentroDaFaixa, faixaDoTime, issuesDoDepartamento, itensDaMetrica, itensDoTime,
+  METAS_PADRAO, normalizarTime, TIMES_PADRAO_PAINEL, textoFaixa,
   type Faixa, type MetaMetrica, type MetasPainel, type MetricKey,
 } from '../utils/painelMensal.ts';
 
@@ -84,6 +84,8 @@ const INFO: Record<MetricKey, string> = {
   qtdP0: 'Quantidade de itens P0 (prioridade vazia ou 0) concluídos no período com Cycle Time preenchido. Prioridade 1 (Crítica) não entra. Mesma base do SLA P0, ao lado — aqui é a contagem, lá é o % dentro do prazo.',
   slaP0: '% dos itens P0 (prioridade vazia ou 0) concluídos no período com Cycle Time em até 7 dias corridos. Prioridade 1 (Crítica) não entra.',
 };
+
+const INFO_DEPTO = 'Soma das Issues abertas no período pelos times do departamento de engenharia: Sustentação, Boltz, Tático, Wakanda e Franquia/CTC. Só Issue (bug que chegou em produção); Bug interno não entra. Não muda com o filtro de times. Clique num número ou numa barra para ver as Issues.';
 
 const nomeTime = (t: string) => {
   const norm = t.toLowerCase().replace(/[^a-z]/g, '');
@@ -277,9 +279,10 @@ const PainelMensalDashboard: React.FC<Props> = ({ data }) => {
       </div>
     </details>
   );
-  const celulaDev = (n: number, titulo: string, lista: WorkItem[]) => n === 0
+  // Número que abre o modal com a lista por trás dele (tabela de devs e índice do departamento)
+  const celulaLista = (n: number, titulo: string, lista: WorkItem[]) => n === 0
     ? <span className="text-ds-text/40">0</span>
-    : <button type="button" onClick={() => setModal({ titulo, itens: lista })} aria-label={`${titulo}: ${n} bugs`}
+    : <button type="button" onClick={() => setModal({ titulo, itens: lista })} aria-label={`${titulo}: ${n} itens`}
         className="text-ds-light-text hover:text-ds-green underline decoration-dotted">{n}</button>;
   const tabelaDevs = devsVisiveis.length === 0 ? (
     <p className="text-xs text-ds-text">
@@ -301,13 +304,68 @@ const PainelMensalDashboard: React.FC<Props> = ({ data }) => {
             <tr key={d.dev} className="border-b border-ds-border/50">
               <td className="px-2 py-1.5 whitespace-nowrap sticky left-0 bg-ds-navy">{d.dev}</td>
               {d.porPeriodo.map((lista, i) => (
-                <td key={i} className="px-2 py-1.5 text-right font-mono">{celulaDev(lista.length, `Bugs internos — ${d.dev} — ${painel.labels[i]}`, lista)}</td>
+                <td key={i} className="px-2 py-1.5 text-right font-mono">{celulaLista(lista.length, `Bugs internos — ${d.dev} — ${painel.labels[i]}`, lista)}</td>
               ))}
-              <td className="px-2 py-1.5 text-right font-mono font-semibold">{celulaDev(d.total, `Bugs internos — ${d.dev} — período todo`, d.porPeriodo.flat())}</td>
+              <td className="px-2 py-1.5 text-right font-mono font-semibold">{celulaLista(d.total, `Bugs internos — ${d.dev} — período todo`, d.porPeriodo.flat())}</td>
             </tr>
           ))}
         </tbody>
       </table>
+    </div>
+  );
+
+  // Índice do Departamento de Engenharia: Issues abertas pelos 5 times do departamento, fixo (ignora o filtro de
+  // times). Mesma regra de painel.departamento (issuesDoDepartamento); aqui guarda as listas para o modal.
+  const depto = useMemo(() => periodos.map(b => issuesDoDepartamento(itens, b)), [itens, periodos]);
+  const linhasDepto = [
+    ...TIMES_PADRAO_PAINEL.map(t => ({
+      nome: nomeTime(t), total: false,
+      listas: depto.map(l => l.filter(i => normalizarTime(i.team ?? '') === normalizarTime(t))),
+    })),
+    { nome: 'Departamento de Engenharia', total: true, listas: depto },
+  ];
+  const secaoDepto = (
+    <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+        <h3 className="text-ds-light-text font-bold text-base">Índice do Departamento de Engenharia</h3>
+        <span className="text-xs text-ds-text">Meta: sem meta</span>
+        <ChartInfoLamp info={INFO_DEPTO} />
+      </div>
+      <p className="text-xs text-ds-text/80 mb-2">Como é calculado: {INFO_DEPTO}</p>
+      <div className="mt-3 overflow-x-auto">
+        <table className="w-full text-xs text-left text-ds-text">
+          <thead className="text-ds-light-text border-b border-ds-border">
+            <tr>
+              <th className="px-2 py-2 sticky left-0 bg-ds-navy">Time</th>
+              {periodos.map(b => <th key={b.label} className="px-2 py-2 text-right whitespace-nowrap">{b.label}</th>)}
+              <th className="px-2 py-2 text-right">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {linhasDepto.map(l => (
+              <tr key={l.nome} className={`border-b border-ds-border/50 ${l.total ? 'font-semibold text-ds-light-text' : ''}`}>
+                <td className="px-2 py-1.5 whitespace-nowrap sticky left-0 bg-ds-navy">{l.nome}</td>
+                {l.listas.map((lista, i) => (
+                  <td key={periodos[i].label} className="px-2 py-1.5 text-right font-mono">{celulaLista(lista.length, `Issues — ${l.nome} — ${periodos[i].label}`, lista)}</td>
+                ))}
+                <td className="px-2 py-1.5 text-right font-mono font-semibold">{celulaLista(l.listas.flat().length, `Issues — ${l.nome} — período todo`, l.listas.flat())}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-xs text-ds-text/60 mt-4 mb-1">Clique numa barra para ver as Issues do departamento naquele período.</p>
+      <ResponsiveContainer width="100%" height={220}>
+        <BarChart data={periodos.map((b, i) => ({ periodo: b.label, total: depto[i].length }))} margin={{ left: 0, right: 16, top: 8, bottom: 4 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
+          <XAxis dataKey="periodo" stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} interval="preserveStartEnd" />
+          <YAxis stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} allowDecimals={false} />
+          <Tooltip contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff' }} />
+          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+          <Bar dataKey="total" name="Departamento de Engenharia" fill={CHART_COLORS.palette[0]} cursor="pointer"
+            onClick={(_: any, idx: number) => setModal({ titulo: `Issues — Departamento de Engenharia — ${periodos[idx].label}`, itens: depto[idx] })} />
+        </BarChart>
+      </ResponsiveContainer>
     </div>
   );
 
@@ -504,6 +562,8 @@ const PainelMensalDashboard: React.FC<Props> = ({ data }) => {
       {editando && isAdmin && editorMetas}
 
       <RetroPainelStrip teams={[...timesEscolhidos]} />
+
+      {!intervaloInvalido && secaoDepto}
 
       {intervaloInvalido ? (
         <EmptyState message="Escolha um intervalo válido (a data inicial não pode ser depois da final)." />

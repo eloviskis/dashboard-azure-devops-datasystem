@@ -4,7 +4,7 @@
 // mão aqui em vez de periodGrouping.ts (não usado pelo digest — ver painelPorTimeDigest.js, que usa
 // buildBuckets de 15 dias, não mensal/semanal).
 const assert = require('node:assert/strict');
-const { buildPainelMensal, dentroDaFaixa, faixaDoTime, METAS_PADRAO, metricasDoTime } = require('./painelMensal.js');
+const { buildPainelMensal, dentroDaFaixa, faixaDoTime, issuesDoDepartamento, METAS_PADRAO, metricasDoTime } = require('./painelMensal.js');
 
 const MAR = (dia) => `2026-03-${String(dia).padStart(2, '0')}T12:00:00Z`;
 const FEV = (dia) => `2026-02-${String(dia).padStart(2, '0')}T12:00:00Z`;
@@ -152,4 +152,20 @@ assert.deepEqual(metricasDoTime('Sustentacao'), ['fluxo', 'cycle', 'slaP0', 'ret
 assert.deepEqual(metricasDoTime('Franquia'), ['bugs', 'bugsVersao', 'retrabalho', 'qtdP0'], 'Franquia/CTC não tem Fluxo nem Cycle Time');
 assert.deepEqual(metricasDoTime('Alfa'), ['fluxo', 'cycle', 'bugs', 'bugsVersao', 'retrabalho', 'qtdP0'], 'time genérico cai no perfil padrão, sem SLA P0');
 
-console.log('✅ painelMensal.js (port CommonJS): fluxo, cycle (P85), bugs, retrabalho, P0, consolidado, faixas e perfil por time OK — paridade com painelMensal.ts confirmada');
+// Índice do Departamento de Engenharia (mesmo caso do .mjs): Sustentação + Franquia + Tático = 3 em março;
+// Estratégico e o Bug do Wakanda fora; o filtro de times não muda nada.
+const deptoItens = [
+  item('Sustentacao', { type: 'Issue', createdDate: MAR(3) }),
+  item('Franquia', { type: 'Issue', createdDate: MAR(4) }),
+  item('Tatico', { type: 'Issue', createdDate: MAR(5) }),
+  item('Estrategico', { type: 'Issue', createdDate: MAR(5) }),
+  item('Wakanda', { type: 'Bug', createdDate: MAR(6) }),
+];
+const pd = buildPainelMensal(deptoItens, meses, ['Tatico']);
+assert.equal(pd.departamento.total[MAR_IDX], 3, 'Sustentação + Franquia + Tático');
+assert.equal(pd.departamento.porTime.Sustentacao[MAR_IDX], 1, 'conta a Sustentação mesmo fora do filtro');
+assert.equal(pd.departamento.porTime.Wakanda[MAR_IDX], 0, 'Bug não entra');
+assert.deepEqual(pd.departamento.total, buildPainelMensal(deptoItens, meses).departamento.total, 'filtro de times não muda o departamento');
+assert.equal(issuesDoDepartamento(deptoItens, meses[MAR_IDX]).length, 3);
+
+console.log('✅ painelMensal.js (port CommonJS): fluxo, cycle (P85), bugs, retrabalho, P0, consolidado, faixas, perfil por time e departamento OK — paridade com painelMensal.ts confirmada');

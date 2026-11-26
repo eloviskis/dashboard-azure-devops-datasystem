@@ -138,12 +138,21 @@ const eficienciaItem = (item: WorkItem): number | null => {
   return ativo + fila === 0 ? null : (ativo / (ativo + fila)) * 100;
 };
 
+// Índice do Departamento de Engenharia: Issues abertas no período pelos times do departamento (Sustentação,
+// Franquia/CTC, Tático, Wakanda e Boltz — os mesmos de TIMES_PADRAO_PAINEL), somadas. Só Issue (bug em produção);
+// Bug interno não entra. Fixo nesses times: não depende do filtro de times da tela (decisão de 2026-11-26).
+const doDepartamento = (team: string | null | undefined) =>
+  TIMES_PADRAO_PAINEL.some(t => normalizarTime(t) === normalizarTime(team ?? ''));
+export const issuesDoDepartamento = (items: WorkItem[], b: PeriodBucket): WorkItem[] =>
+  items.filter(i => i.type === 'Issue' && doDepartamento(i.team) && dentroDoPeriodo(i.createdDate, b));
+
 export interface PainelMensal {
   labels: string[];                                             // um rótulo por período (coluna)
   times: string[];
   porTime: Record<MetricKey, Record<string, (number | null)[]>>; // uma posição por período
   mediaTodos: Record<MetricKey, (number | null)[]>;             // média dos valores dos times
   mediaSemSustentacao: Record<MetricKey, (number | null)[]>;
+  departamento: { total: number[]; porTime: Record<string, number[]> }; // chaves = TIMES_PADRAO_PAINEL
 }
 
 export function buildPainelMensal(items: WorkItem[], buckets: PeriodBucket[], timesFiltro?: string[]): PainelMensal {
@@ -218,12 +227,20 @@ export function buildPainelMensal(items: WorkItem[], buckets: PeriodBucket[], ti
     return out;
   };
 
+  // De items, não de validos: o departamento ignora o filtro de times
+  const depto = buckets.map(b => issuesDoDepartamento(items, b));
+
   return {
     labels: buckets.map(b => b.label),
     times,
     porTime,
     mediaTodos: consolidar(() => true),
     mediaSemSustentacao: consolidar(t => !isSustentacao(t)),
+    departamento: {
+      total: depto.map(l => l.length),
+      porTime: Object.fromEntries(TIMES_PADRAO_PAINEL.map(t =>
+        [t, depto.map(l => l.filter(i => normalizarTime(i.team ?? '') === normalizarTime(t)).length)])),
+    },
   };
 }
 

@@ -156,7 +156,14 @@ async function runPainelPorTimeDigest(sql, overrideRecipients) {
   const { subject, html } = emailService.painelPorTimeDigestEmail({
     periodoAnteriorLabel: painel.labels[0],
     periodoAtualLabel: painel.labels[1],
-    times: montarDadosEmail(painel),
+    // Primeiro bloco: Índice do Departamento de Engenharia (mesmo formato dos blocos por time)
+    times: [{
+      nome: 'Departamento de Engenharia',
+      metricas: [{
+        label: 'Índice do Departamento (Issues abertas)', unidade: '',
+        anterior: painel.departamento.total[0], atual: painel.departamento.total[1], cor: 'cinza', metaTexto: 'sem meta',
+      }],
+    }, ...montarDadosEmail(painel)],
     insight,
   });
 

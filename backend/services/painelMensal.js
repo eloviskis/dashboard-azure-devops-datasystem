@@ -135,6 +135,14 @@ const eficienciaItem = (item) => {
   return ativo + fila === 0 ? null : (ativo / (ativo + fila)) * 100;
 };
 
+// Índice do Departamento de Engenharia: Issues abertas no período pelos times do departamento (Sustentação,
+// Franquia/CTC, Tático, Wakanda e Boltz — os mesmos de TIMES_PADRAO_PAINEL), somadas. Só Issue (bug em produção);
+// Bug interno não entra. Fixo nesses times: não depende do filtro de times (decisão de 2026-11-26).
+const doDepartamento = (team) =>
+  TIMES_PADRAO_PAINEL.some(t => normalizarTime(t) === normalizarTime(team ?? ''));
+const issuesDoDepartamento = (items, b) =>
+  items.filter(i => i.type === 'Issue' && doDepartamento(i.team) && dentroDoPeriodo(i.createdDate, b));
+
 function buildPainelMensal(items, buckets, timesFiltro) {
   const filtroNorm = timesFiltro?.map(normalizarTime);
   const validos = items.filter(i =>
@@ -203,12 +211,20 @@ function buildPainelMensal(items, buckets, timesFiltro) {
     return out;
   };
 
+  // De items, não de validos: o departamento ignora o filtro de times
+  const depto = buckets.map(b => issuesDoDepartamento(items, b));
+
   return {
     labels: buckets.map(b => b.label),
     times,
     porTime,
     mediaTodos: consolidar(() => true),
     mediaSemSustentacao: consolidar(t => !isSustentacao(t)),
+    departamento: {
+      total: depto.map(l => l.length),
+      porTime: Object.fromEntries(TIMES_PADRAO_PAINEL.map(t =>
+        [t, depto.map(l => l.filter(i => normalizarTime(i.team ?? '') === normalizarTime(t)).length)])),
+    },
   };
 }
 
@@ -243,6 +259,7 @@ module.exports = {
   normalizarTime,
   metricasDoTime,
   buildPainelMensal,
+  issuesDoDepartamento,
   faixaDoTime,
   textoFaixa,
   dentroDaFaixa,

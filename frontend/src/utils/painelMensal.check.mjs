@@ -1,7 +1,7 @@
 // Check do Painel por Time. Sem framework — `node painelMensal.check.mjs`
 // (Node 24 executa .ts por type-stripping, igual os outros checks).
 import assert from 'node:assert/strict';
-import { bugsPorDesenvolvedor, buildPainelMensal, dentroDaFaixa, faixaDoTime, itensDaMetrica, itensDoTime, METAS_PADRAO, metricasDoTime } from './painelMensal.ts';
+import { bugsPorDesenvolvedor, buildPainelMensal, dentroDaFaixa, faixaDoTime, issuesDoDepartamento, itensDaMetrica, itensDoTime, METAS_PADRAO, metricasDoTime } from './painelMensal.ts';
 import { getPeriodBuckets } from './periodGrouping.ts';
 
 const MAR = (dia) => `2026-03-${String(dia).padStart(2, '0')}T12:00:00Z`;
@@ -193,4 +193,20 @@ assert.equal(itensDaMetrica(alfaMar, bucketMar, 'qtdP0').length, 2, 'qtdP0: os 2
 assert.equal(itensDaMetrica(alfaMar, bucketMar, 'slaP0').length, 1, 'slaP0: só o P0 concluído em até 7 dias (o de 9 dias fica fora)');
 assert.equal(itensDaMetrica(alfaMar, meses[FEV_IDX], 'bugs').length, 2, 'bugs: Issues criadas em fevereiro');
 
-console.log('✅ painelMensal: fluxo, cycle (P85), bugs, retrabalho, P0, semanal, consolidado, faixas, perfil por time e itensDaMetrica OK');
+// Índice do Departamento de Engenharia: Issues de Sustentação, Franquia e Tático em março = 3. A Issue do
+// Estratégico (fora do departamento) e o Bug do Wakanda (não é Issue) ficam de fora. O filtro de times não muda nada.
+const deptoItens = [
+  item('Sustentacao', { type: 'Issue', createdDate: MAR(3) }),
+  item('Franquia', { type: 'Issue', createdDate: MAR(4) }),
+  item('Tatico', { type: 'Issue', createdDate: MAR(5) }),
+  item('Estrategico', { type: 'Issue', createdDate: MAR(5) }),
+  item('Wakanda', { type: 'Bug', createdDate: MAR(6) }),
+];
+const pd = buildPainelMensal(deptoItens, meses, ['Tatico']);
+assert.equal(pd.departamento.total[MAR_IDX], 3, 'Sustentação + Franquia + Tático');
+assert.equal(pd.departamento.porTime.Sustentacao[MAR_IDX], 1, 'conta a Sustentação mesmo fora do filtro');
+assert.equal(pd.departamento.porTime.Wakanda[MAR_IDX], 0, 'Bug não entra');
+assert.deepEqual(pd.departamento.total, buildPainelMensal(deptoItens, meses).departamento.total, 'filtro de times não muda o departamento');
+assert.equal(issuesDoDepartamento(deptoItens, meses[MAR_IDX]).length, pd.departamento.total[MAR_IDX], 'a lista do modal = o número');
+
+console.log('✅ painelMensal: fluxo, cycle (P85), bugs, retrabalho, P0, semanal, consolidado, faixas, perfil por time, itensDaMetrica e departamento OK');
