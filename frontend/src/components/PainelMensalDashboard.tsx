@@ -67,9 +67,12 @@ const ItemModal: React.FC<{ info: ModalInfo | null; onClose: () => void }> = ({ 
 
 const META_KEY = 'metas_painel_mensal';
 const DEVS_KEY = 'painel_devs_escolhidos';
+const DEVS_TIME_KEY = 'painel_devs_time'; // filtro de time da tabela de bugs por desenvolvedor
 const DEPTO_KEY = 'painel_depto_fora'; // times do departamento desmarcados no Índice do Departamento
 const METRICAS: MetricKey[] = ['fluxo', 'cycle', 'bugs', 'bugsVersao', 'retrabalho', 'qtdP0', 'slaP0'];
-const METAS_DEPTO: MetaKey[] = ['departamento', 'departamentoGestao'];
+const METAS_DEPTO: MetaKey[] = ['departamento', 'departamentoGestao', 'departamentoFluxo', 'departamentoCycle'];
+// Meta das linhas de média (Fluxo e Cycle Time têm meta própria do departamento; as outras usam a geral)
+const META_MEDIA: Partial<Record<MetricKey, MetaKey>> = { fluxo: 'departamentoFluxo', cycle: 'departamentoCycle' };
 const MODOS: { value: PeriodGroupMode; label: string }[] = [
   { value: 'weekly', label: 'Semanal' },
   { value: 'biweekly', label: 'Quinzenal' },
@@ -240,7 +243,30 @@ const PainelMensalDashboard: React.FC<Props> = ({ data }) => {
   ];
 
   // Bugs internos por desenvolvedor: regra da query BUGS_DEV_2026_AVD (ver painelMensal.ts). Cada número abre a lista.
-  const devs = useMemo(() => bugsPorDesenvolvedor(itens, periodos), [itens, periodos]);
+  const devsTodos = useMemo(() => bugsPorDesenvolvedor(itens, periodos), [itens, periodos]);
+  // Filtro de time: o time do Bug (não há cadastro de time por dev). Opções = times dos bugs que entram na regra.
+  // Fica salvo neste navegador; um time que sumiu das opções volta para "Todos".
+  const timesDevs = useMemo(() => [...new Set(devsTodos.flatMap(d => d.porPeriodo.flat().map(i => i.team)))]
+    .filter((t): t is string => !!t).sort((a, b) => a.localeCompare(b, 'pt-BR')), [devsTodos]);
+  const [timeDev, setTimeDev] = useState(() => { try { return localStorage.getItem(DEVS_TIME_KEY) ?? ''; } catch { return ''; } });
+  useEffect(() => {
+    try { if (timeDev) localStorage.setItem(DEVS_TIME_KEY, timeDev); else localStorage.removeItem(DEVS_TIME_KEY); } catch { /* sem storage */ }
+  }, [timeDev]);
+  const timeDevAtivo = timesDevs.includes(timeDev) ? timeDev : '';
+  const devs = useMemo(
+    () => (timeDevAtivo ? bugsPorDesenvolvedor(itens.filter(i => i.team === timeDevAtivo), periodos) : devsTodos),
+    [timeDevAtivo, itens, periodos, devsTodos]
+  );
+  const seletorTimeDev = (
+    <label className="flex items-center gap-2 text-xs text-ds-text">
+      Time
+      <select value={timeDevAtivo} onChange={e => setTimeDev(e.target.value)}
+        className="bg-ds-navy border border-ds-border rounded-lg px-2 py-2 text-xs text-ds-light-text">
+        <option value="">Todos</option>
+        {timesDevs.map(t => <option key={t} value={t}>{nomeTime(t)}</option>)}
+      </select>
+    </label>
+  );
   const nomesDevs = useMemo(() => devs.map(d => d.dev).sort((a, b) => a.localeCompare(b, 'pt-BR')), [devs]);
   // Devs escolhidos no seletor (null = todos). Fica salvo neste navegador; sem storage, volta a mostrar todos.
   const [devsEscolhidos, setDevsEscolhidos] = useState<Set<string> | null>(() => {
@@ -425,7 +451,7 @@ const PainelMensalDashboard: React.FC<Props> = ({ data }) => {
               <tr key={l.nome} className={`border-b border-ds-border/50 ${l.media ? 'font-semibold text-ds-light-text' : ''}`}>
                 <td className="px-2 py-1.5 whitespace-nowrap sticky left-0 bg-ds-navy">{l.nome}</td>
                 {l.valores.map((v, i) => {
-                  const faixa = l.team ? faixaDoTime(meta, l.team) : { min: meta.min, max: meta.max };
+                  const faixa = l.team ? faixaDoTime(meta, l.team) : (META_MEDIA[key] ? metas[META_MEDIA[key]] : { min: meta.min, max: meta.max });
                   return (
                     <td key={i} className={`px-2 py-1.5 text-right font-mono whitespace-nowrap ${corCelula(dentroDaFaixa(v, faixa))}`}>
                       {formatar(v, key)}
@@ -544,7 +570,7 @@ const PainelMensalDashboard: React.FC<Props> = ({ data }) => {
       </fieldset>
       <fieldset className="space-y-3 rounded-lg border border-ds-green/40 bg-ds-green/5 p-3">
         <legend className="px-2 text-sm font-semibold text-ds-green">Metas do Departamento de Engenharia</legend>
-        <p className="text-xs text-ds-text">Valem para as linhas de total do Índice do Departamento, no período da tela (mensal, quinzenal ou semanal).</p>
+        <p className="text-xs text-ds-text">As duas primeiras valem para as linhas de total do Índice do Departamento, no período da tela (mensal, quinzenal ou semanal). As de média pintam as linhas de média das tabelas de Fluxo e Cycle Time.</p>
         {METAS_DEPTO.map(linhaMeta)}
       </fieldset>
       {erro && <p className="text-xs text-red-400">{erro}</p>}
@@ -638,7 +664,10 @@ const PainelMensalDashboard: React.FC<Props> = ({ data }) => {
                   Mostrar os sem versão
                 </label>
               )}
-              <span className="text-xs text-ds-text">Meta: {textoFaixa({ min: metas[key].min, max: metas[key].max }, metas[key].unidade)}</span>
+              <span className="text-xs text-ds-text">
+                Meta: {textoFaixa({ min: metas[key].min, max: metas[key].max }, metas[key].unidade)}
+                {META_MEDIA[key] && ` · média dos times: ${textoFaixa(metas[META_MEDIA[key]], metas[META_MEDIA[key]].unidade)}`}
+              </span>
               <ChartInfoLamp info={INFO[key]} />
             </div>
             <p className="text-xs text-ds-text/80 mb-2">Como é calculado: {INFO[key]}</p>
@@ -650,9 +679,9 @@ const PainelMensalDashboard: React.FC<Props> = ({ data }) => {
               <div className="mt-6">
                 <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
                   <h4 className="text-ds-light-text font-semibold text-sm">Bugs internos por desenvolvedor</h4>
-                  {devs.length > 0 && seletorDevs}
+                  {devsTodos.length > 0 && <div className="flex flex-wrap items-center gap-2">{seletorTimeDev}{seletorDevs}</div>}
                 </div>
-                <p className="text-xs text-ds-text/80 mb-2">Mesma regra da query BUGS_DEV_2026_AVD do Azure DevOps: Bugs fechados (Closed) com responsável (Assigned To), de todas as áreas da USE menos UX - UI, Freelance, Arquitetura, Diretoria, Inovacao_novo e Bateria, sem a tag [ANALISE]/analise e sem &quot;análise&quot; no título, pela data em que o Bug foi aberto. Não depende dos times escolhidos acima. Clique num número para ver os bugs.</p>
+                <p className="text-xs text-ds-text/80 mb-2">Mesma regra da query BUGS_DEV_2026_AVD do Azure DevOps: Bugs fechados (Closed) com responsável (Assigned To), de todas as áreas da USE menos UX - UI, Freelance, Arquitetura, Diretoria, Inovacao_novo e Bateria, sem a tag [ANALISE]/analise e sem &quot;análise&quot; no título, pela data em que o Bug foi aberto. Não depende dos times escolhidos acima; use o filtro Time ao lado para ver só os bugs de um time (o time do Bug). Clique num número para ver os bugs.</p>
                 {tabelaDevs}
               </div>
             )}

@@ -31,9 +31,11 @@ const METAS_PADRAO = {
   // Só a Sustentação acompanha SLA P0 (ver PERFIS_TIME) — o geral fica igual ao override só pra não aparecer
   // "sem meta" no cabeçalho da seção; nenhum outro time chega a usar esse valor geral.
   slaP0: { label: 'SLA P0 (≤7 dias)', unidade: '%', min: 60, max: 70, porTime: { sustentacao: { min: 60, max: 70 } } },
-  // Índice do Departamento: sem meta até a gestão definir. Vale para o número do período.
+  // Metas do departamento (mesmas de painelMensal.ts; tiradas das planilhas em 2026-11-27, a validar com a gestão)
   departamento: { label: 'Índice do Departamento (todas as Issues)', unidade: '', min: null, max: null },
-  departamentoGestao: { label: 'Bugs — critério da gestão', unidade: '', min: null, max: null },
+  departamentoGestao: { label: 'Bugs — critério da gestão', unidade: '', min: null, max: 100 }, // "80 e 100" da aba Validado; só o máximo
+  departamentoFluxo: { label: 'Fluxo de Eficiência — média dos times', unidade: '%', min: 45, max: 50 },
+  departamentoCycle: { label: 'Cycle Time — média dos times', unidade: 'd', min: 25, max: 34 },
 };
 
 // Tem limite em algum lado? Sem meta não pinta verde nem vermelho (dentroDaFaixa devolveria true).

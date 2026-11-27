@@ -161,11 +161,13 @@ async function runPainelPorTimeDigest(sql, overrideRecipients) {
     // Primeiro bloco: Índice do Departamento de Engenharia (mesmo formato dos blocos por time)
     times: [{
       nome: 'Departamento de Engenharia',
+      // A meta do departamento é mensal e o e-mail é quinzenal: mostra a meta "por mês", sem pintar (15 dias
+      // ficariam sempre verdes contra uma meta de 30).
       metricas: [['departamento', painel.departamento.total], ['departamentoGestao', painel.departamento.gestao]].map(([key, vals]) => {
         const meta = METAS_PADRAO[key];
         return {
-          label: meta.label, unidade: '', anterior: vals[0], atual: vals[1], metaTexto: textoFaixa(meta, ''),
-          cor: temMeta(meta) ? corDaCelula(dentroDaFaixa(vals[1], meta)) : 'cinza',
+          label: meta.label, unidade: '', anterior: vals[0], atual: vals[1], cor: 'cinza',
+          metaTexto: temMeta(meta) ? `${textoFaixa(meta, '')} por mês` : 'sem meta',
         };
       }),
     }, ...montarDadosEmail(painel)],

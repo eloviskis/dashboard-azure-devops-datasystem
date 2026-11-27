@@ -175,7 +175,9 @@ assert.deepEqual(faixaDoTime(METAS_PADRAO.fluxo, 'Alfa'), { min: 45, max: 50 });
 assert.deepEqual(faixaDoTime(METAS_PADRAO.slaP0, 'Sustentação'), { min: 60, max: 70 }, 'SLA P0 só tem meta própria de Sustentação');
 assert.deepEqual(faixaDoTime(METAS_PADRAO.bugs, 'Franquia'), { min: null, max: null }, 'Bugs Produção sem meta (80–100 era o total da empresa)');
 assert.deepEqual(faixaDoTime(METAS_PADRAO.retrabalho, 'Franquia'), { min: null, max: null }, 'retrabalho virou contagem: sem meta até a gestão definir');
-assert.equal(temMeta(METAS_PADRAO.departamento) || temMeta(METAS_PADRAO.departamentoGestao), false, 'departamento começa sem meta');
+assert.equal(temMeta(METAS_PADRAO.departamento), false, 'todas as Issues: sem meta');
+assert.deepEqual([METAS_PADRAO.departamentoGestao.min, METAS_PADRAO.departamentoGestao.max], [null, 100], 'critério da gestão: ≤ 100 ("80 e 100" da aba Validado, sem punir mês com menos bugs)');
+assert.deepEqual([METAS_PADRAO.departamentoCycle.min, METAS_PADRAO.departamentoCycle.max], [25, 34], 'média dos times: CT 25–34 da aba "all hands"');
 assert.equal(temMeta({ min: null, max: 150 }), true);
 
 // Perfil por time: quais métricas cada um acompanha, igual aos blocos da planilha de gestão

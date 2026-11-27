@@ -16,7 +16,7 @@ export interface MetaMetrica extends Faixa {
 }
 
 // Metas por time (MetricKey) + metas do Índice do Departamento de Engenharia (as duas linhas do total).
-export type MetaKey = MetricKey | 'departamento' | 'departamentoGestao';
+export type MetaKey = MetricKey | 'departamento' | 'departamentoGestao' | 'departamentoFluxo' | 'departamentoCycle';
 export type MetasPainel = Record<MetaKey, MetaMetrica>;
 
 // Faixas iniciais da planilha de gestão. Editáveis no painel (admin).
@@ -33,9 +33,16 @@ export const METAS_PADRAO: MetasPainel = {
   // Só a Sustentação acompanha SLA P0 (ver PERFIS_TIME) — o geral fica igual ao override só pra não aparecer
   // "sem meta" no cabeçalho da seção; nenhum outro time chega a usar esse valor geral.
   slaP0: { label: 'SLA P0 (≤7 dias)', unidade: '%', min: 60, max: 70, porTime: { sustentacao: { min: 60, max: 70 } } },
-  // Índice do Departamento: sem meta até a gestão definir. Vale para o número do período escolhido na tela.
+  // Metas do departamento, tiradas das planilhas em 2026-11-27 (a validar com a gestão; editáveis no painel):
+  // - Bugs — critério da gestão: "80 e 100" do Bugs Produção da aba Validado (METRICAS_AVD), que ali tinha o total
+  //   da empresa colado em cada time; a Indicadores_2026 traz "-" para a linha BUGS. Só o máximo (≤ 100): um mínimo
+  //   de 80 pintaria de vermelho um mês com menos bugs. Vale para o número do período.
+  // - Médias de Fluxo e Cycle Time: bloco "MÉDIA MENSAL - TODOS OS TIMES" da aba "all hands" (CT 25–34, não o
+  //   20–34 de cada time). Pintam as linhas de média das tabelas de Fluxo e Cycle Time.
   departamento: { label: 'Índice do Departamento (todas as Issues)', unidade: '', min: null, max: null },
-  departamentoGestao: { label: 'Bugs — critério da gestão', unidade: '', min: null, max: null },
+  departamentoGestao: { label: 'Bugs — critério da gestão', unidade: '', min: null, max: 100 },
+  departamentoFluxo: { label: 'Fluxo de Eficiência — média dos times', unidade: '%', min: 45, max: 50 },
+  departamentoCycle: { label: 'Cycle Time — média dos times', unidade: 'd', min: 25, max: 34 },
 };
 
 // Tem limite em algum lado? Sem meta não pinta verde nem vermelho (dentroDaFaixa devolveria true).

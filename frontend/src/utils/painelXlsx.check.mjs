@@ -123,8 +123,10 @@ assert.equal(ws3.getCell(linha3 + 1, 4 + 1 + MAR_IDX).value, 0, 'critério da ge
 
 // Meta do departamento: padrão "sem meta" e fonte preta; com meta, verde/vermelho e o texto na coluna META
 assert.equal(ws.getCell(linhaDepto, 4 + P + 2).value, 'sem meta');
+assert.equal(ws.getCell(linhaDepto + 1, 4 + P + 2).value, '≤ 100', 'meta padrão do critério da gestão');
+assert.equal(cor(linhaDepto + 1, 4 + 1 + MAR_IDX), 'FF008000', '1 bug, até 100: verde');
 assert.equal(cor(linhaDepto, 4 + 1 + MAR_IDX), 'FF000000', 'sem meta não pinta de verde');
-const metasDepto = { ...METAS_PADRAO, departamento: { ...METAS_PADRAO.departamento, max: 2 }, departamentoGestao: { ...METAS_PADRAO.departamentoGestao, max: 5 } };
+const metasDepto = { ...METAS_PADRAO, departamento: { ...METAS_PADRAO.departamento, max: 2 }, departamentoGestao: { ...METAS_PADRAO.departamentoGestao, min: null, max: 5 } };
 const ws4 = await lerAba(await montarPainelXlsx(p, metasDepto));
 let linha4 = null;
 ws4.eachRow((row, n) => { if (row.getCell(4).value === 'DEPARTAMENTO DE ENGENHARIA') linha4 = n; });
