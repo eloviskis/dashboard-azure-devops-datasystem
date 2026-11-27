@@ -11,7 +11,7 @@ import { getPeriodBuckets, type PeriodBucket, type PeriodGroupMode } from '../ut
 import {
   acompanha, bugDeCliente, bugsPorDesenvolvedor, buildPainelMensal, dentroDaFaixa, faixaDoTime, issuesDoDepartamento, itensDaMetrica, itensDoTime,
   METAS_PADRAO, normalizarTime, TIMES_PADRAO_PAINEL, textoFaixa,
-  type Faixa, type MetaMetrica, type MetasPainel, type MetricKey,
+  temMeta, type Faixa, type MetaKey, type MetaMetrica, type MetasPainel, type MetricKey,
 } from '../utils/painelMensal.ts';
 
 interface Props { data: WorkItem[]; }
@@ -69,6 +69,7 @@ const META_KEY = 'metas_painel_mensal';
 const DEVS_KEY = 'painel_devs_escolhidos';
 const DEPTO_KEY = 'painel_depto_fora'; // times do departamento desmarcados no Índice do Departamento
 const METRICAS: MetricKey[] = ['fluxo', 'cycle', 'bugs', 'bugsVersao', 'retrabalho', 'qtdP0', 'slaP0'];
+const METAS_DEPTO: MetaKey[] = ['departamento', 'departamentoGestao'];
 const MODOS: { value: PeriodGroupMode; label: string }[] = [
   { value: 'weekly', label: 'Semanal' },
   { value: 'biweekly', label: 'Quinzenal' },
@@ -160,7 +161,7 @@ const PainelMensalDashboard: React.FC<Props> = ({ data }) => {
     }
   };
 
-  const ajustarLimite = (key: MetricKey, lado: 'min' | 'max', valor: string, team?: string) => {
+  const ajustarLimite = (key: MetaKey, lado: 'min' | 'max', valor: string, team?: string) => {
     const n = valor === '' ? null : Number(valor);
     setRascunho(prev => {
       const m = { ...prev[key] };
@@ -281,10 +282,11 @@ const PainelMensalDashboard: React.FC<Props> = ({ data }) => {
     </details>
   );
   // Número que abre o modal com a lista por trás dele (tabela de devs e índice do departamento)
-  const celulaLista = (n: number, titulo: string, lista: WorkItem[]) => n === 0
-    ? <span className="text-ds-text/40">0</span>
+  // cor: classe de cor pela meta (verde/vermelho); sem ela, cor normal
+  const celulaLista = (n: number, titulo: string, lista: WorkItem[], cor?: string) => n === 0
+    ? <span className={cor ?? 'text-ds-text/40'}>0</span>
     : <button type="button" onClick={() => setModal({ titulo, itens: lista })} aria-label={`${titulo}: ${n} itens`}
-        className="text-ds-light-text hover:text-ds-green underline decoration-dotted">{n}</button>;
+        className={`${cor ?? 'text-ds-light-text'} hover:text-ds-green underline decoration-dotted`}>{n}</button>;
   const tabelaDevs = devsVisiveis.length === 0 ? (
     <p className="text-xs text-ds-text">
       {devs.length === 0 ? 'Nenhum bug no período pela regra da query BUGS_DEV_2026_AVD.' : 'Nenhum dev escolhido. Use o seletor "Devs" acima.'}
@@ -338,16 +340,21 @@ const PainelMensalDashboard: React.FC<Props> = ({ data }) => {
   const totalDepto = depto.map((_, i) => linhasTimesDepto.flatMap(l => l.listas[i]));
   // Critério da gestão (linha BUGS da planilha de indicadores): mesmas Issues, só as de Correção vindas de cliente
   const gestaoDepto = totalDepto.map(l => l.filter(bugDeCliente));
-  const linhasDepto = [
+  const linhasDepto: { nome: string; total: boolean; listas: WorkItem[][]; meta?: MetaKey }[] = [
     ...linhasTimesDepto,
-    { nome: 'Departamento de Engenharia', total: true, listas: totalDepto },
-    { nome: 'Bugs — critério da gestão', total: true, listas: gestaoDepto },
+    { nome: 'Departamento de Engenharia', total: true, listas: totalDepto, meta: 'departamento' },
+    { nome: 'Bugs — critério da gestão', total: true, listas: gestaoDepto, meta: 'departamentoGestao' },
   ];
+  // Verde/vermelho pela meta do departamento; sem meta (ou linha de time), cor normal
+  const corDepto = (n: number, meta?: MetaKey) =>
+    meta && temMeta(metas[meta]) ? corCelula(dentroDaFaixa(n, metas[meta])) : undefined;
   const secaoDepto = (
     <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
       <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
         <h3 className="text-ds-light-text font-bold text-base">Índice do Departamento de Engenharia</h3>
-        <span className="text-xs text-ds-text">Meta: sem meta</span>
+        <span className="text-xs text-ds-text">
+          Meta: todas as Issues {textoFaixa(metas.departamento, '')} · critério da gestão {textoFaixa(metas.departamentoGestao, '')}
+        </span>
         <ChartInfoLamp info={INFO_DEPTO} />
       </div>
       <p className="text-xs text-ds-text/80 mb-2">Como é calculado: {INFO_DEPTO}</p>
@@ -375,7 +382,7 @@ const PainelMensalDashboard: React.FC<Props> = ({ data }) => {
               <tr key={l.nome} className={`border-b border-ds-border/50 ${l.total ? 'font-semibold text-ds-light-text' : ''}`}>
                 <td className="px-2 py-1.5 whitespace-nowrap sticky left-0 bg-ds-navy">{l.nome}</td>
                 {l.listas.map((lista, i) => (
-                  <td key={periodos[i].label} className="px-2 py-1.5 text-right font-mono">{celulaLista(lista.length, `Issues — ${l.nome} — ${periodos[i].label}`, lista)}</td>
+                  <td key={periodos[i].label} className="px-2 py-1.5 text-right font-mono">{celulaLista(lista.length, `Issues — ${l.nome} — ${periodos[i].label}`, lista, corDepto(lista.length, l.meta))}</td>
                 ))}
                 <td className="px-2 py-1.5 text-right font-mono font-semibold">{celulaLista(l.listas.flat().length, `Issues — ${l.nome} — período todo`, l.listas.flat())}</td>
               </tr>
@@ -504,26 +511,42 @@ const PainelMensalDashboard: React.FC<Props> = ({ data }) => {
     await baixarXlsx(wb, `Painel_${rotulo}_${inicio}_a_${fim}.xlsx`);
   };
 
+  const campoMeta = (valor: number | null, onChange: (v: string) => void, rotulo: string) => (
+    <input type="number" step="any" value={valor ?? ''} onChange={e => onChange(e.target.value)} aria-label={rotulo}
+      className="w-20 bg-ds-dark-blue border border-ds-border rounded px-2 py-1 text-ds-light-text" />
+  );
+  // Uma linha do editor: meta geral (todos os times ou o departamento) e, em destaque, a meta própria de um time
+  const linhaMeta = (key: MetaKey) => {
+    const m = rascunho[key];
+    return (
+      <div key={key} className="flex flex-wrap items-center gap-3 text-xs">
+        <span className="w-64 text-ds-light-text">{m.label}</span>
+        <label className="flex items-center gap-1 text-ds-text">mín {campoMeta(m.min, v => ajustarLimite(key, 'min', v), `${m.label} — mínimo`)}</label>
+        <label className="flex items-center gap-1 text-ds-text">máx {campoMeta(m.max, v => ajustarLimite(key, 'max', v), `${m.label} — máximo`)}</label>
+        {Object.entries(m.porTime ?? {}).map(([teamKey, fx]) => (
+          <span key={teamKey} className="flex items-center gap-2 px-2 py-1 rounded-md border border-sky-400/40 bg-sky-400/10 text-sky-200">
+            <span className="font-semibold">Só {nomeTime(teamKey)}:</span>
+            <label className="flex items-center gap-1">mín {campoMeta(fx.min, v => ajustarLimite(key, 'min', v, teamKey), `${m.label} — ${nomeTime(teamKey)} — mínimo`)}</label>
+            <label className="flex items-center gap-1">máx {campoMeta(fx.max, v => ajustarLimite(key, 'max', v, teamKey), `${m.label} — ${nomeTime(teamKey)} — máximo`)}</label>
+          </span>
+        ))}
+      </div>
+    );
+  };
+
   const editorMetas = (
-    <div className="bg-ds-navy p-4 rounded-lg border border-ds-border mb-4 space-y-3">
+    <div className="bg-ds-navy p-4 rounded-lg border border-ds-border mb-4 space-y-4">
       <p className="text-xs text-ds-text">Edite as faixas de meta. Quem não é admin só visualiza. Sem valor em um lado = sem limite.</p>
-      {METRICAS.map(key => {
-        const m = rascunho[key];
-        return (
-          <div key={key} className="flex flex-wrap items-center gap-3 text-xs">
-            <span className="w-56 text-ds-light-text">{m.label}</span>
-            <label className="flex items-center gap-1">mín <input type="number" step="any" value={m.min ?? ''} onChange={e => ajustarLimite(key, 'min', e.target.value)} className="w-20 bg-ds-dark-blue border border-ds-border rounded px-2 py-1" /></label>
-            <label className="flex items-center gap-1">máx <input type="number" step="any" value={m.max ?? ''} onChange={e => ajustarLimite(key, 'max', e.target.value)} className="w-20 bg-ds-dark-blue border border-ds-border rounded px-2 py-1" /></label>
-            {Object.entries(m.porTime ?? {}).map(([teamKey, fx]) => (
-              <span key={teamKey} className="flex items-center gap-2 text-ds-text">
-                {nomeTime(teamKey)}:
-                <label className="flex items-center gap-1">mín <input type="number" step="any" value={fx.min ?? ''} onChange={e => ajustarLimite(key, 'min', e.target.value, teamKey)} className="w-20 bg-ds-dark-blue border border-ds-border rounded px-2 py-1" /></label>
-                <label className="flex items-center gap-1">máx <input type="number" step="any" value={fx.max ?? ''} onChange={e => ajustarLimite(key, 'max', e.target.value, teamKey)} className="w-20 bg-ds-dark-blue border border-ds-border rounded px-2 py-1" /></label>
-              </span>
-            ))}
-          </div>
-        );
-      })}
+      <fieldset className="space-y-3 rounded-lg border border-ds-border p-3">
+        <legend className="px-2 text-sm font-semibold text-ds-light-text">Metas por time</legend>
+        <p className="text-xs text-ds-text">A faixa da esquerda vale para todos os times. Em azul, a meta própria de um time, que substitui a geral para ele.</p>
+        {METRICAS.map(linhaMeta)}
+      </fieldset>
+      <fieldset className="space-y-3 rounded-lg border border-ds-green/40 bg-ds-green/5 p-3">
+        <legend className="px-2 text-sm font-semibold text-ds-green">Metas do Departamento de Engenharia</legend>
+        <p className="text-xs text-ds-text">Valem para as linhas de total do Índice do Departamento, no período da tela (mensal, quinzenal ou semanal).</p>
+        {METAS_DEPTO.map(linhaMeta)}
+      </fieldset>
       {erro && <p className="text-xs text-red-400">{erro}</p>}
       <div className="flex gap-2">
         <button type="button" onClick={salvarMetas} disabled={salvando} className="text-xs px-3 py-2 rounded-md bg-ds-green text-ds-dark-blue font-semibold disabled:opacity-50">

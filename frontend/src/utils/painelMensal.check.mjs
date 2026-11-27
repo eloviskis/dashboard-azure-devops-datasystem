@@ -1,7 +1,7 @@
 // Check do Painel por Time. Sem framework — `node painelMensal.check.mjs`
 // (Node 24 executa .ts por type-stripping, igual os outros checks).
 import assert from 'node:assert/strict';
-import { bugsPorDesenvolvedor, buildPainelMensal, dentroDaFaixa, faixaDoTime, issuesDoDepartamento, itensDaMetrica, itensDoTime, METAS_PADRAO, metricasDoTime } from './painelMensal.ts';
+import { bugsPorDesenvolvedor, buildPainelMensal, dentroDaFaixa, faixaDoTime, issuesDoDepartamento, itensDaMetrica, itensDoTime, METAS_PADRAO, metricasDoTime, temMeta } from './painelMensal.ts';
 import { getPeriodBuckets } from './periodGrouping.ts';
 
 const MAR = (dia) => `2026-03-${String(dia).padStart(2, '0')}T12:00:00Z`;
@@ -175,6 +175,8 @@ assert.deepEqual(faixaDoTime(METAS_PADRAO.fluxo, 'Alfa'), { min: 45, max: 50 });
 assert.deepEqual(faixaDoTime(METAS_PADRAO.slaP0, 'Sustentação'), { min: 60, max: 70 }, 'SLA P0 só tem meta própria de Sustentação');
 assert.deepEqual(faixaDoTime(METAS_PADRAO.bugs, 'Franquia'), { min: null, max: null }, 'Bugs Produção sem meta (80–100 era o total da empresa)');
 assert.deepEqual(faixaDoTime(METAS_PADRAO.retrabalho, 'Franquia'), { min: null, max: null }, 'retrabalho virou contagem: sem meta até a gestão definir');
+assert.equal(temMeta(METAS_PADRAO.departamento) || temMeta(METAS_PADRAO.departamentoGestao), false, 'departamento começa sem meta');
+assert.equal(temMeta({ min: null, max: 150 }), true);
 
 // Perfil por time: quais métricas cada um acompanha, igual aos blocos da planilha de gestão
 assert.deepEqual(metricasDoTime('Sustentacao'), ['fluxo', 'cycle', 'slaP0', 'retrabalho', 'qtdP0'], 'Sustentação não tem Bugs Produção');

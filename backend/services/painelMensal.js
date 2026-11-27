@@ -31,7 +31,13 @@ const METAS_PADRAO = {
   // Só a Sustentação acompanha SLA P0 (ver PERFIS_TIME) — o geral fica igual ao override só pra não aparecer
   // "sem meta" no cabeçalho da seção; nenhum outro time chega a usar esse valor geral.
   slaP0: { label: 'SLA P0 (≤7 dias)', unidade: '%', min: 60, max: 70, porTime: { sustentacao: { min: 60, max: 70 } } },
+  // Índice do Departamento: sem meta até a gestão definir. Vale para o número do período.
+  departamento: { label: 'Índice do Departamento (todas as Issues)', unidade: '', min: null, max: null },
+  departamentoGestao: { label: 'Bugs — critério da gestão', unidade: '', min: null, max: null },
 };
+
+// Tem limite em algum lado? Sem meta não pinta verde nem vermelho (dentroDaFaixa devolveria true).
+const temMeta = (f) => f.min !== null || f.max !== null;
 
 // Issue = bug que chegou em produção (Bugs Produção). Bug = bug interno, o que o QA pega antes de produção,
 // sem versão publicada (Índice de Retrabalho) — definição da gestão em 2026-11-24.
@@ -278,6 +284,7 @@ module.exports = {
   buildPainelMensal,
   issuesDoDepartamento,
   faixaDoTime,
+  temMeta,
   textoFaixa,
   dentroDaFaixa,
 };

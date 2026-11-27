@@ -1,8 +1,8 @@
 // Exporta o Painel por Time no layout da aba "Validado" da planilha de gestão: uma aba só, blocos por time
 // (dois lado a lado), médias e resumos como fórmulas, e fonte verde/vermelha conforme a meta.
 import type { CellValue, Workbook, Worksheet } from 'exceljs';
-import type { MetasPainel, MetricKey, PainelMensal } from './painelMensal.ts';
-import { dentroDaFaixa, faixaDoTime, metricasDoTime, normalizarTime, textoFaixa } from './painelMensal.ts';
+import type { Faixa, MetasPainel, MetricKey, PainelMensal } from './painelMensal.ts';
+import { dentroDaFaixa, faixaDoTime, metricasDoTime, normalizarTime, temMeta, textoFaixa } from './painelMensal.ts';
 
 // Ordem e nomes da planilha. Times fora dela entram depois, em ordem alfabética.
 const ORDEM: [string, string][] = [
@@ -237,6 +237,9 @@ export async function montarPainelXlsx(painel: PainelMensal, metas: MetasPainel,
   // 4) ÍNDICE DO DEPARTAMENTO DE ENGENHARIA: Issues abertas por time do departamento e o total (soma).
   // No fim da aba de propósito: não muda a posição de nenhuma linha acima.
   titulo('ÍNDICE DO DEPARTAMENTO DE ENGENHARIA — ISSUES ABERTAS');
+  celula(ws, r - 1, X0 + P + 2, 'META', { negrito: true, fundo: AZUL_CLARO }); // só as 2 linhas de total têm meta
+  // Fonte verde/vermelha pela meta do departamento; sem meta, preto (corDaFaixa pintaria tudo de verde)
+  const corDepto = (v: number, f: Faixa) => (temMeta(f) ? corDaFaixa(v, f) : undefined);
   const primeiraDepto = r;
   const linhasDepto = Object.entries(painel.departamento.porTime).filter(([t]) => !timesDepto || timesDepto.includes(t));
   for (const [t, vals] of linhasDepto) {
@@ -250,16 +253,19 @@ export async function montarPainelXlsx(painel: PainelMensal, metas: MetasPainel,
   celula(ws, r, X0, 'DEPARTAMENTO DE ENGENHARIA', { alinhar: 'left', negrito: true });
   totalDepto.forEach((v, i) => {
     const col = letra(X0 + 1 + i);
-    celula(ws, r, X0 + 1 + i, linhasDepto.length ? { formula: `SUM(${col}${primeiraDepto}:${col}${r - 1})`, result: v } : 0, { formato: '0', negrito: true });
+    celula(ws, r, X0 + 1 + i, linhasDepto.length ? { formula: `SUM(${col}${primeiraDepto}:${col}${r - 1})`, result: v } : 0,
+      { formato: '0', negrito: true, cor: corDepto(v, metas.departamento) });
   });
   celula(ws, r, X0 + P + 1, formulaMedia([`${letra(X0 + 1)}${r}:${letra(X0 + P)}${r}`], media(totalDepto)), { formato: '0.0', negrito: true });
+  celula(ws, r, X0 + P + 2, textoFaixa(metas.departamento, ''));
   r++;
   // Critério da gestão (linha BUGS da planilha de indicadores): Correção vinda de cliente, dos mesmos times escolhidos.
   // Valor e não fórmula: as linhas por time desse critério não vão para a planilha.
   const gestaoDepto = painel.labels.map((_, i) => linhasDepto.reduce((s, [t]) => s + (painel.departamento.gestaoPorTime[t]?.[i] ?? 0), 0));
   celula(ws, r, X0, 'BUGS — CRITÉRIO DA GESTÃO', { alinhar: 'left', negrito: true });
-  gestaoDepto.forEach((v, i) => celula(ws, r, X0 + 1 + i, v, { formato: '0', negrito: true }));
+  gestaoDepto.forEach((v, i) => celula(ws, r, X0 + 1 + i, v, { formato: '0', negrito: true, cor: corDepto(v, metas.departamentoGestao) }));
   celula(ws, r, X0 + P + 1, formulaMedia([`${letra(X0 + 1)}${r}:${letra(X0 + P)}${r}`], media(gestaoDepto)), { formato: '0.0', negrito: true });
+  celula(ws, r, X0 + P + 2, textoFaixa(metas.departamentoGestao, ''));
   r++;
 
   // Larguras: rótulos largos, períodos estreitos, META com espaço para o texto da faixa

@@ -121,4 +121,16 @@ ws3.eachRow((row, n) => { if (row.getCell(4).value === 'DEPARTAMENTO DE ENGENHAR
 assert.equal(ws3.getCell(linha3, 4 + 1 + MAR_IDX).value, 0);
 assert.equal(ws3.getCell(linha3 + 1, 4 + 1 + MAR_IDX).value, 0, 'critério da gestão também segue a escolha de times');
 
-console.log('✅ painelXlsx: aba única Validado, blocos por time, valores, cores pela meta, fórmulas e índice do departamento (com escolha de times) OK');
+// Meta do departamento: padrão "sem meta" e fonte preta; com meta, verde/vermelho e o texto na coluna META
+assert.equal(ws.getCell(linhaDepto, 4 + P + 2).value, 'sem meta');
+assert.equal(cor(linhaDepto, 4 + 1 + MAR_IDX), 'FF000000', 'sem meta não pinta de verde');
+const metasDepto = { ...METAS_PADRAO, departamento: { ...METAS_PADRAO.departamento, max: 2 }, departamentoGestao: { ...METAS_PADRAO.departamentoGestao, max: 5 } };
+const ws4 = await lerAba(await montarPainelXlsx(p, metasDepto));
+let linha4 = null;
+ws4.eachRow((row, n) => { if (row.getCell(4).value === 'DEPARTAMENTO DE ENGENHARIA') linha4 = n; });
+assert.equal(ws4.getCell(linha4, 4 + 1 + MAR_IDX).font.color.argb, 'FFC00000', 'total 3 acima do máximo 2: vermelho');
+assert.equal(ws4.getCell(linha4 + 1, 4 + 1 + MAR_IDX).font.color.argb, 'FF008000', 'critério da gestão 1 até 5: verde');
+assert.equal(ws4.getCell(linha4, 4 + P + 2).value, '≤ 2');
+assert.equal(ws4.getCell(linha4 - 6, 4 + P + 2).value, 'META', 'cabeçalho META no bloco do departamento');
+
+console.log('✅ painelXlsx: aba única Validado, blocos por time, valores, cores pela meta, fórmulas e índice do departamento (com escolha de times e meta) OK');

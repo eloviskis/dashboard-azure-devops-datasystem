@@ -4,7 +4,7 @@
 // frontend/src/utils/painelMensal.ts — ver esse arquivo pra entender por que é um port, não um import
 // direto) pra não duplicar a conta de Fluxo de Eficiência/Cycle Time/etc.
 const {
-  TIMES_PADRAO_PAINEL, METAS_PADRAO, metricasDoTime, buildPainelMensal, faixaDoTime, textoFaixa, dentroDaFaixa,
+  TIMES_PADRAO_PAINEL, METAS_PADRAO, metricasDoTime, buildPainelMensal, faixaDoTime, textoFaixa, dentroDaFaixa, temMeta,
 } = require('./painelMensal');
 const { generatePainelPorTimeInsight } = require('./ai');
 const emailService = require('./email');
@@ -161,13 +161,13 @@ async function runPainelPorTimeDigest(sql, overrideRecipients) {
     // Primeiro bloco: Índice do Departamento de Engenharia (mesmo formato dos blocos por time)
     times: [{
       nome: 'Departamento de Engenharia',
-      metricas: [{
-        label: 'Índice do Departamento (Issues abertas)', unidade: '',
-        anterior: painel.departamento.total[0], atual: painel.departamento.total[1], cor: 'cinza', metaTexto: 'sem meta',
-      }, {
-        label: 'Bugs — critério da gestão', unidade: '',
-        anterior: painel.departamento.gestao[0], atual: painel.departamento.gestao[1], cor: 'cinza', metaTexto: 'sem meta',
-      }],
+      metricas: [['departamento', painel.departamento.total], ['departamentoGestao', painel.departamento.gestao]].map(([key, vals]) => {
+        const meta = METAS_PADRAO[key];
+        return {
+          label: meta.label, unidade: '', anterior: vals[0], atual: vals[1], metaTexto: textoFaixa(meta, ''),
+          cor: temMeta(meta) ? corDaCelula(dentroDaFaixa(vals[1], meta)) : 'cinza',
+        };
+      }),
     }, ...montarDadosEmail(painel)],
     insight,
   });
