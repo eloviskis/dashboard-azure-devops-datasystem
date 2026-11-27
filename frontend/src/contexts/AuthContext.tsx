@@ -1,11 +1,23 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 
+export type UserRole = 'admin' | 'QA' | 'PO' | 'DEV' | 'GESTOR' | 'user';
+
+export const ROLE_LABELS: Record<UserRole, string> = {
+  admin: 'Administrador',
+  QA: 'QA',
+  PO: 'PO',
+  DEV: 'Desenvolvedor(a)',
+  GESTOR: 'Gestor(a)',
+  user: 'Usuário',
+};
+
 interface User {
   id: number;
   username: string;
   email: string;
-  role: 'admin' | 'user';
+  role: UserRole;
   tabPermissions?: string[] | null;
+  notificationsEnabled: boolean;
 }
 
 interface AuthContextType {
@@ -14,8 +26,10 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isAdmin: boolean;
   login: (username: string, password: string) => Promise<boolean>;
+  loginWithEntraIdToken: (idToken: string) => Promise<string | null>;
   logout: () => void;
   isLoading: boolean;
+  setNotificationsEnabled: (enabled: boolean) => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -77,6 +91,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               email: data.user.email,
               role: data.user.role,
               tabPermissions: data.user.tab_permissions ?? null,
+              notificationsEnabled: data.user.notifications_enabled !== false,
             };
             setUser(freshUser);
             localStorage.setItem('auth_user', JSON.stringify(freshUser));
@@ -116,6 +131,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           email: data.user.email,
           role: data.user.role,
           tabPermissions: data.user.tab_permissions ?? null,
+          notificationsEnabled: data.user.notifications_enabled !== false,
         };
         setToken(data.token);
         setUser(userObj);
@@ -130,9 +146,65 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [API_URL]);
 
+  // Login via Microsoft Entra ID: troca o id_token que o MSAL devolve (ver components/LoginPage.tsx)
+  // pelo nosso JWT de sempre, no mesmo endpoint/formato que o login usuário+senha usa. Devolve null em
+  // caso de sucesso, ou a mensagem de erro do backend (ex.: "conta não cadastrada") em caso de falha —
+  // diferente de `login`, aqui a razão específica importa pra UX (token x conta não existente).
+  const loginWithEntraIdToken = useCallback(async (idToken: string): Promise<string | null> => {
+    try {
+      const response = await fetch(`${API_URL}/api/auth/entra-login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken }),
+      });
+      const data = await response.json();
+      if (response.ok && data.token) {
+        const userObj: User = {
+          id: data.user.id,
+          username: data.user.username,
+          email: data.user.email,
+          role: data.user.role,
+          tabPermissions: data.user.tab_permissions ?? null,
+          notificationsEnabled: data.user.notifications_enabled !== false,
+        };
+        setToken(data.token);
+        setUser(userObj);
+        localStorage.setItem('auth_token', data.token);
+        localStorage.setItem('auth_user', JSON.stringify(userObj));
+        return null;
+      }
+      return data.error || 'Erro ao entrar com Microsoft';
+    } catch (error) {
+      console.error('Entra ID login error:', error);
+      return 'Erro ao conectar com o servidor';
+    }
+  }, [API_URL]);
+
   const logout = useCallback(() => {
     clearAuth();
   }, [clearAuth]);
+
+  const setNotificationsEnabled = useCallback(async (enabled: boolean): Promise<boolean> => {
+    if (!token || !user) return false;
+    try {
+      const response = await fetch(`${API_URL}/api/auth/notification-preferences`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ enabled }),
+      });
+      if (!response.ok) return false;
+      const updatedUser: User = { ...user, notificationsEnabled: enabled };
+      setUser(updatedUser);
+      localStorage.setItem('auth_user', JSON.stringify(updatedUser));
+      return true;
+    } catch (error) {
+      console.error('Error updating notification preferences:', error);
+      return false;
+    }
+  }, [API_URL, token, user]);
 
   const value: AuthContextType = {
     user,
@@ -140,7 +212,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     isAuthenticated: !!token && !!user,
     isAdmin: user?.role === 'admin',
     login,
+    loginWithEntraIdToken,
     logout,
+    setNotificationsEnabled,
     isLoading
   };
 

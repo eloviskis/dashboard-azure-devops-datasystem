@@ -8,9 +8,65 @@ interface AgingItemsCardProps {
 
 // URL base do Azure DevOps
 const AZURE_DEVOPS_BASE_URL = 'https://dev.azure.com/datasystemsoftwares/USE/_workitems/edit';
+const getWorkItemUrl = (workItemId: number | string) => `${AZURE_DEVOPS_BASE_URL}/${workItemId}`;
+
+interface ModalData {
+  title: string;
+  items: WorkItem[];
+  color: string;
+}
+
+const ItemListModal: React.FC<{ data: ModalData | null; onClose: () => void }> = ({ data, onClose }) => {
+  if (!data) return null;
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50" onClick={onClose}>
+      <div className="bg-ds-navy border border-ds-border rounded-lg shadow-2xl max-w-4xl w-full mx-4 max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="p-4 rounded-t-lg flex justify-between items-center" style={{ backgroundColor: data.color }}>
+          <h2 className="text-white font-bold text-lg">{data.title}</h2>
+          <button onClick={onClose} className="text-white hover:text-gray-200 text-2xl font-bold leading-none">×</button>
+        </div>
+        <div className="p-4 overflow-y-auto flex-1">
+          <div className="text-ds-text mb-3 text-sm">
+            Total: <span className="font-bold text-white">{data.items.length}</span> itens
+          </div>
+          {data.items.length === 0 ? (
+            <div className="text-ds-text text-center py-8">Nenhum item encontrado</div>
+          ) : (
+            <ul className="space-y-2">
+              {data.items.map((item, idx) => (
+                <li key={item.workItemId || idx} className="bg-ds-dark-blue border border-ds-border rounded-lg p-3 hover:border-ds-green transition-colors">
+                  <div className="flex items-start gap-3">
+                    <span className="text-xs font-mono px-2 py-1 rounded shrink-0 text-white" style={{ backgroundColor: data.color }}>
+                      #{item.workItemId}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <a href={getWorkItemUrl(item.workItemId)} target="_blank" rel="noopener noreferrer" className="text-white hover:text-ds-green font-medium block truncate mb-1" title={item.title}>
+                        {item.title}
+                      </a>
+                      <div className="grid grid-cols-2 gap-1 text-xs text-ds-text">
+                        <div>👤 {item.assignedTo || 'Não atribuído'}</div>
+                        <div>👥 {item.team || 'Sem time'}</div>
+                        <div>🏷️ {item.type}</div>
+                        <div>📊 {item.state}</div>
+                      </div>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <div className="p-4 border-t border-ds-border">
+          <button onClick={onClose} className="w-full bg-ds-border hover:bg-ds-green text-white py-2 px-4 rounded-lg transition-colors">Fechar</button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const AgingItemsCard: React.FC<AgingItemsCardProps> = ({ workItems }) => {
   const [sortBy, setSortBy] = useState<'dias' | 'prioridade'>('dias');
+  const [modalData, setModalData] = useState<ModalData | null>(null);
 
   const agingAnalysis = useMemo(() => {
     const now = new Date();
@@ -37,15 +93,15 @@ const AgingItemsCard: React.FC<AgingItemsCardProps> = ({ workItems }) => {
     });
 
     // Dados para gráfico de tendência (últimos 30 dias)
-    const trendData: { date: string; count: number }[] = [];
+    const trendData: { date: string; count: number; items: WorkItem[] }[] = [];
     for (let i = 29; i >= 0; i--) {
       const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
       const dateStr = date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-      const count = openItems.filter(item => {
+      const itemsAsOf = openItems.filter(item => {
         const itemDate = new Date(item.createdDate);
         return itemDate <= date;
-      }).length;
-      trendData.push({ date: dateStr, count });
+      });
+      trendData.push({ date: dateStr, count: itemsAsOf.length, items: itemsAsOf });
     }
 
     return {
@@ -53,9 +109,13 @@ const AgingItemsCard: React.FC<AgingItemsCardProps> = ({ workItems }) => {
       critical: critical.length,
       warning: warning.length,
       normal: normal.length,
+      allOpenItems: openItems,
+      criticalItems: critical,
+      warningItems: warning,
+      normalItems: normal,
       items: sortedItems.slice(0, 50), // Limitar a 50 itens
       trendData: trendData.filter((_, i) => i % 3 === 0), // A cada 3 dias
-      avgDays: openItems.length > 0 
+      avgDays: openItems.length > 0
         ? Math.round(openItems.reduce((sum, i) => sum + i.daysOld, 0) / openItems.length)
         : 0
     };
@@ -102,19 +162,31 @@ const AgingItemsCard: React.FC<AgingItemsCardProps> = ({ workItems }) => {
 
       {/* Métricas resumidas */}
       <div className="grid grid-cols-4 gap-2 mb-3">
-        <div className="bg-ds-bg p-2 rounded text-center">
+        <div
+          className="bg-ds-bg p-2 rounded text-center cursor-pointer hover:border hover:border-ds-green transition-colors"
+          onClick={() => setModalData({ title: 'Itens em aberto', items: agingAnalysis.allOpenItems, color: '#1D4ED8' })}
+        >
           <div className="text-lg font-bold text-ds-light-text">{agingAnalysis.total}</div>
           <div className="text-xs text-ds-text">Total</div>
         </div>
-        <div className="bg-red-500/10 p-2 rounded text-center border border-red-500/30">
+        <div
+          className="bg-red-500/10 p-2 rounded text-center border border-red-500/30 cursor-pointer hover:border-red-400 transition-colors"
+          onClick={() => setModalData({ title: 'Itens críticos (>30 dias)', items: agingAnalysis.criticalItems, color: '#DC2626' })}
+        >
           <div className="text-lg font-bold text-red-400">{agingAnalysis.critical}</div>
           <div className="text-xs text-red-400">&gt;30d</div>
         </div>
-        <div className="bg-yellow-500/10 p-2 rounded text-center border border-yellow-500/30">
+        <div
+          className="bg-yellow-500/10 p-2 rounded text-center border border-yellow-500/30 cursor-pointer hover:border-yellow-400 transition-colors"
+          onClick={() => setModalData({ title: 'Itens em atenção (15-30 dias)', items: agingAnalysis.warningItems, color: '#CA8A04' })}
+        >
           <div className="text-lg font-bold text-yellow-400">{agingAnalysis.warning}</div>
           <div className="text-xs text-yellow-400">15-30d</div>
         </div>
-        <div className="bg-green-500/10 p-2 rounded text-center border border-green-500/30">
+        <div
+          className="bg-green-500/10 p-2 rounded text-center border border-green-500/30 cursor-pointer hover:border-green-400 transition-colors"
+          onClick={() => setModalData({ title: 'Itens normais (<15 dias)', items: agingAnalysis.normalItems, color: '#16A34A' })}
+        >
           <div className="text-lg font-bold text-green-400">{agingAnalysis.normal}</div>
           <div className="text-xs text-green-400">&lt;15d</div>
         </div>
@@ -131,8 +203,15 @@ const AgingItemsCard: React.FC<AgingItemsCardProps> = ({ workItems }) => {
       {/* Gráfico de tendência (compacto) */}
       <div className="h-24 mb-3">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={agingAnalysis.trendData}>
-            <XAxis 
+          <LineChart
+            data={agingAnalysis.trendData}
+            className="cursor-pointer"
+            onClick={(e: any) => {
+              const p = e?.activePayload?.[0]?.payload;
+              if (p?.items?.length) setModalData({ title: `Itens em aberto em ${p.date}`, items: p.items, color: '#F6416C' });
+            }}
+          >
+            <XAxis
               dataKey="date" 
               tick={{ fontSize: 9, fill: '#8E9AAF' }}
               axisLine={{ stroke: '#3B4A6B' }}
@@ -192,6 +271,7 @@ const AgingItemsCard: React.FC<AgingItemsCardProps> = ({ workItems }) => {
           ))
         )}
       </div>
+      <ItemListModal data={modalData} onClose={() => setModalData(null)} />
     </div>
   );
 };

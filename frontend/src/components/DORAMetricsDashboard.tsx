@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { WorkItem } from '../types';
 import { CHART_COLORS } from '../constants';
 import { getPercentile } from '../utils/metrics';
@@ -6,50 +6,111 @@ import ChartInfoLamp from './ChartInfoLamp';
 import {
   ResponsiveContainer, BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Legend, ReferenceLine, Cell
 } from 'recharts';
-import { format, subDays, eachWeekOfInterval, endOfWeek } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import { subDays } from 'date-fns';
+import { getPeriodBuckets, PeriodGroupMode, PERIOD_GROUP_MODE_OPTIONS } from '../utils/periodGrouping';
 
 interface Props { data: WorkItem[]; }
+
+interface ModalData {
+  title: string;
+  items: WorkItem[];
+  color: string;
+}
+
+const AZURE_DEVOPS_BASE_URL = 'https://dev.azure.com/datasystemsoftwares/USE/_workitems/edit';
+
+const ItemListModal: React.FC<{ data: ModalData | null; onClose: () => void }> = ({ data, onClose }) => {
+  if (!data) return null;
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50" onClick={onClose}>
+      <div className="bg-ds-navy border border-ds-border rounded-lg shadow-2xl max-w-4xl w-full mx-4 max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="p-4 rounded-t-lg flex justify-between items-center" style={{ backgroundColor: data.color }}>
+          <h2 className="text-white font-bold text-lg">{data.title}</h2>
+          <button onClick={onClose} className="text-white hover:text-gray-200 text-2xl font-bold leading-none">×</button>
+        </div>
+        <div className="p-4 overflow-y-auto flex-1">
+          <div className="text-ds-text mb-3 text-sm">
+            Total: <span className="font-bold text-white">{data.items.length}</span> itens
+          </div>
+          {data.items.length === 0 ? (
+            <div className="text-ds-text text-center py-8">Nenhum item encontrado</div>
+          ) : (
+            <ul className="space-y-2">
+              {data.items.map((item, idx) => (
+                <li key={item.workItemId || idx} className="bg-ds-dark-blue border border-ds-border rounded-lg p-3 hover:border-ds-green transition-colors">
+                  <div className="flex items-start gap-3">
+                    <span className="text-xs font-mono px-2 py-1 rounded shrink-0 text-white" style={{ backgroundColor: data.color }}>
+                      #{item.workItemId}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <a href={item.url || `${AZURE_DEVOPS_BASE_URL}/${item.workItemId}`} target="_blank" rel="noopener noreferrer" className="text-white hover:text-ds-green font-medium block truncate mb-1" title={item.title}>
+                        {item.title}
+                      </a>
+                      <div className="grid grid-cols-2 gap-1 text-xs text-ds-text">
+                        <div>👤 {item.assignedTo || 'Não atribuído'}</div>
+                        <div>👥 {item.team || 'Sem time'}</div>
+                        <div>🏷️ {item.type}</div>
+                        <div>📊 {item.state}</div>
+                      </div>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <div className="p-4 border-t border-ds-border">
+          <button onClick={onClose} className="w-full bg-ds-border hover:bg-ds-green text-white py-2 px-4 rounded-lg transition-colors">Fechar</button>
+        </div>
+      </div>
+    </div>
+  );
+};
 const COMPLETED_STATES = ['Done', 'Concluído', 'Closed', 'Fechado', 'Finished', 'Resolved', 'Pronto'];
 const BUG_TYPES = ['Bug', 'Issue'];
 
 const DORAMetricsDashboard: React.FC<Props> = ({ data }) => {
-  // Deployment Frequency: items completed per week
+  const [modalData, setModalData] = useState<ModalData | null>(null);
+  const [trendGroupMode, setTrendGroupMode] = useState<PeriodGroupMode>('weekly');
+
+  // Deployment Frequency: items completed por período (controla também o Change Failure Rate abaixo,
+  // já que os dois são a mesma janela/base de itens entregues nos últimos 90 dias).
   const deployFrequency = useMemo(() => {
     const now = new Date();
     const start = subDays(now, 90);
-    const weeks = eachWeekOfInterval({ start, end: now }, { weekStartsOn: 1 });
-    return weeks.map(weekStart => {
-      const wEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
+    const buckets = getPeriodBuckets(start, now, trendGroupMode);
+    return buckets.map(({ label, start: bStart, end: bEnd }) => {
       const completedInWeek = data.filter(item => {
         if (!COMPLETED_STATES.includes(item.state)) return false;
         const closed = item.closedDate ? new Date(item.closedDate as string) : null;
-        return closed && closed >= weekStart && closed <= wEnd;
+        return closed && closed >= bStart && closed <= bEnd;
       });
       return {
-        week: format(weekStart, 'dd/MM', { locale: ptBR }),
+        week: label,
         deployments: completedInWeek.length,
         pbi: completedInWeek.filter(i => i.type === 'Product Backlog Item' || i.type === 'User Story').length,
         bugs: completedInWeek.filter(i => i.type === 'Bug').length,
+        items: completedInWeek,
       };
     });
-  }, [data]);
+  }, [data, trendGroupMode]);
 
   // Lead Time for Changes: cycle time of completed non-bug items
   const leadTimeData = useMemo(() => {
     const completed = data.filter(i => COMPLETED_STATES.includes(i.state) && i.cycleTime != null && !BUG_TYPES.includes(i.type));
-    const byTeam: Record<string, number[]> = {};
+    const byTeam: Record<string, WorkItem[]> = {};
     completed.forEach(item => {
       const team = item.team || 'Sem Time';
       if (!byTeam[team]) byTeam[team] = [];
-      byTeam[team].push(item.cycleTime as number);
+      byTeam[team].push(item);
     });
-    return Object.entries(byTeam).map(([team, times]) => {
+    return Object.entries(byTeam).map(([team, items]) => {
+      const times = items.map(i => i.cycleTime as number);
       const sorted = [...times].sort((a, b) => a - b);
       const avg = times.reduce((a, b) => a + b, 0) / times.length;
       const p50 = getPercentile(sorted, 0.50);
       const p85 = getPercentile(sorted, 0.85);
-      return { team, avg: Math.round(avg * 10) / 10, p50: Math.round(p50 * 10) / 10, p85: Math.round(p85 * 10) / 10, count: times.length };
+      return { team, avg: Math.round(avg * 10) / 10, p50: Math.round(p50 * 10) / 10, p85: Math.round(p85 * 10) / 10, count: times.length, items };
     }).sort((a, b) => a.avg - b.avg);
   }, [data]);
 
@@ -57,52 +118,56 @@ const DORAMetricsDashboard: React.FC<Props> = ({ data }) => {
   const failureRate = useMemo(() => {
     const now = new Date();
     const start = subDays(now, 90);
-    const weeks = eachWeekOfInterval({ start, end: now }, { weekStartsOn: 1 });
-    return weeks.map(weekStart => {
-      const wEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
+    const buckets = getPeriodBuckets(start, now, trendGroupMode);
+    return buckets.map(({ label, start: bStart, end: bEnd }) => {
       const completedInWeek = data.filter(item => {
         if (!COMPLETED_STATES.includes(item.state)) return false;
         const closed = item.closedDate ? new Date(item.closedDate as string) : null;
-        return closed && closed >= weekStart && closed <= wEnd;
+        return closed && closed >= bStart && closed <= bEnd;
       });
-      const bugsInWeek = completedInWeek.filter(i => i.type === 'Bug').length;
+      const bugsInWeek = completedInWeek.filter(i => i.type === 'Bug');
       const total = completedInWeek.length;
       return {
-        week: format(weekStart, 'dd/MM', { locale: ptBR }),
-        rate: total > 0 ? Math.round((bugsInWeek / total) * 1000) / 10 : 0,
-        bugs: bugsInWeek,
+        week: label,
+        rate: total > 0 ? Math.round((bugsInWeek.length / total) * 1000) / 10 : 0,
+        bugs: bugsInWeek.length,
         total,
+        bugItems: bugsInWeek,
       };
     });
-  }, [data]);
+  }, [data, trendGroupMode]);
 
   // MTTR: Mean Time to Restore (avg cycle time of bugs)
   const mttr = useMemo(() => {
     const bugs = data.filter(i => i.type === 'Bug' && COMPLETED_STATES.includes(i.state) && i.cycleTime != null);
-    const byTeam: Record<string, number[]> = {};
+    const byTeam: Record<string, WorkItem[]> = {};
     bugs.forEach(item => {
       const team = item.team || 'Sem Time';
       if (!byTeam[team]) byTeam[team] = [];
-      byTeam[team].push(item.cycleTime as number);
+      byTeam[team].push(item);
     });
-    return Object.entries(byTeam).map(([team, times]) => ({
-      team,
-      mttr: Math.round((times.reduce((a, b) => a + b, 0) / times.length) * 10) / 10,
-      count: times.length,
-    })).sort((a, b) => a.mttr - b.mttr);
+    return Object.entries(byTeam).map(([team, items]) => {
+      const times = items.map(i => i.cycleTime as number);
+      return {
+        team,
+        mttr: Math.round((times.reduce((a, b) => a + b, 0) / times.length) * 10) / 10,
+        count: times.length,
+        items,
+      };
+    }).sort((a, b) => a.mttr - b.mttr);
   }, [data]);
 
   // DORA KPIs
   const doraKPIs = useMemo(() => {
     const avgDeployFreq = deployFrequency.length > 0 ? deployFrequency.reduce((s, w) => s + w.deployments, 0) / deployFrequency.length : 0;
-    const allLeadTimes = data.filter(i => COMPLETED_STATES.includes(i.state) && i.cycleTime != null && !BUG_TYPES.includes(i.type)).map(i => i.cycleTime as number);
-    const avgLT = allLeadTimes.length > 0 ? allLeadTimes.reduce((a, b) => a + b, 0) / allLeadTimes.length : 0;
+    const leadTimeItems = data.filter(i => COMPLETED_STATES.includes(i.state) && i.cycleTime != null && !BUG_TYPES.includes(i.type));
+    const avgLT = leadTimeItems.length > 0 ? leadTimeItems.reduce((a, b) => a + (b.cycleTime as number), 0) / leadTimeItems.length : 0;
     const allBugsCompleted = data.filter(i => i.type === 'Bug' && COMPLETED_STATES.includes(i.state));
     const totalCompleted = data.filter(i => COMPLETED_STATES.includes(i.state)).length;
     const cfr = totalCompleted > 0 ? (allBugsCompleted.length / totalCompleted) * 100 : 0;
-    const bugCTs = allBugsCompleted.filter(i => i.cycleTime != null).map(i => i.cycleTime as number);
-    const avgMTTR = bugCTs.length > 0 ? bugCTs.reduce((a, b) => a + b, 0) / bugCTs.length : 0;
-    
+    const mttrItems = allBugsCompleted.filter(i => i.cycleTime != null);
+    const avgMTTR = mttrItems.length > 0 ? mttrItems.reduce((a, b) => a + (b.cycleTime as number), 0) / mttrItems.length : 0;
+
     const classify = (metric: string, value: number): { level: string; color: string } => {
       if (metric === 'df') return value >= 10 ? { level: 'Elite', color: 'text-green-400' } : value >= 5 ? { level: 'Alta', color: 'text-blue-400' } : value >= 2 ? { level: 'Média', color: 'text-yellow-400' } : { level: 'Baixa', color: 'text-red-400' };
       if (metric === 'lt') return value <= 3 ? { level: 'Elite', color: 'text-green-400' } : value <= 7 ? { level: 'Alta', color: 'text-blue-400' } : value <= 14 ? { level: 'Média', color: 'text-yellow-400' } : { level: 'Baixa', color: 'text-red-400' };
@@ -112,15 +177,16 @@ const DORAMetricsDashboard: React.FC<Props> = ({ data }) => {
     };
 
     return {
-      deployFreq: { value: Math.round(avgDeployFreq * 10) / 10, ...classify('df', avgDeployFreq) },
-      leadTime: { value: Math.round(avgLT * 10) / 10, ...classify('lt', avgLT) },
-      cfr: { value: Math.round(cfr * 10) / 10, ...classify('cfr', cfr) },
-      mttr: { value: Math.round(avgMTTR * 10) / 10, ...classify('mttr', avgMTTR) },
+      deployFreq: { value: Math.round(avgDeployFreq * 10) / 10, items: deployFrequency.flatMap(w => w.items), ...classify('df', avgDeployFreq) },
+      leadTime: { value: Math.round(avgLT * 10) / 10, items: leadTimeItems, ...classify('lt', avgLT) },
+      cfr: { value: Math.round(cfr * 10) / 10, items: allBugsCompleted, ...classify('cfr', cfr) },
+      mttr: { value: Math.round(avgMTTR * 10) / 10, items: mttrItems, ...classify('mttr', avgMTTR) },
     };
   }, [data, deployFrequency]);
 
   return (
     <div className="space-y-6">
+      <ItemListModal data={modalData} onClose={() => setModalData(null)} />
       {/* DORA KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
@@ -129,7 +195,11 @@ const DORAMetricsDashboard: React.FC<Props> = ({ data }) => {
           { label: 'Change Failure Rate', value: `${doraKPIs.cfr.value}%`, unit: '', ...doraKPIs.cfr },
           { label: 'MTTR', value: `${doraKPIs.mttr.value}`, unit: 'dias', ...doraKPIs.mttr },
         ].map((kpi, i) => (
-          <div key={i} className="bg-ds-navy p-5 rounded-lg border border-ds-border text-center">
+          <div
+            key={i}
+            className="bg-ds-navy p-5 rounded-lg border border-ds-border text-center cursor-pointer hover:border-ds-green transition-colors"
+            onClick={() => setModalData({ title: kpi.label, items: kpi.items, color: '#64FFDA' })}
+          >
             <p className="text-ds-text text-xs mb-1">{kpi.label}</p>
             <p className={`text-3xl font-bold ${kpi.color}`}>{kpi.value}</p>
             {kpi.unit && <p className="text-ds-text text-xs">{kpi.unit}</p>}
@@ -149,10 +219,30 @@ const DORAMetricsDashboard: React.FC<Props> = ({ data }) => {
 
       {/* Deployment Frequency Trend */}
       <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
-        <h3 className="text-ds-light-text font-bold text-lg mb-4">📦 Deployment Frequency (Itens Entregues/Semana)</h3>
-        <ChartInfoLamp info="Frequência de entrega semanal (throughput). Adaptação da métrica DORA 'Deployment Frequency' — a original mede deploys para produção." />
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <h3 className="text-ds-light-text font-bold text-lg">📦 Deployment Frequency (Itens Entregues)</h3>
+          <div className="flex gap-1">
+            {PERIOD_GROUP_MODE_OPTIONS.map(opt => (
+              <button
+                key={opt.value}
+                onClick={() => setTrendGroupMode(opt.value)}
+                className={`px-3 py-1.5 text-xs rounded-md font-medium transition-colors ${trendGroupMode === opt.value ? 'bg-ds-green text-ds-dark-blue' : 'bg-ds-muted/20 text-ds-text hover:bg-ds-muted/40'}`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <ChartInfoLamp info="Frequência de entrega (throughput), agrupada no período escolhido. Adaptação da métrica DORA 'Deployment Frequency' — a original mede deploys para produção." />
         <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={deployFrequency}>
+          <BarChart
+            data={deployFrequency}
+            className="cursor-pointer"
+            onClick={(e: any) => {
+              const p = e?.activePayload?.[0]?.payload;
+              if (p?.items?.length) setModalData({ title: `Itens concluídos — ${p.week}`, items: p.items, color: '#64FFDA' });
+            }}
+          >
             <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
             <XAxis dataKey="week" stroke={CHART_COLORS.text} tick={{ fontSize: 10 }} />
             <YAxis stroke={CHART_COLORS.text} />
@@ -175,11 +265,11 @@ const DORAMetricsDashboard: React.FC<Props> = ({ data }) => {
             <XAxis type="number" stroke={CHART_COLORS.text} />
             <YAxis type="category" dataKey="team" tick={{ fill: '#CCD6F6', fontSize: 11 }} width={120} />
             <Tooltip contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }} labelStyle={{ color: '#64ffda', fontWeight: 'bold' }} itemStyle={{ color: '#e6f1ff' }}
-              formatter={(value: number, name: string) => [`${value} dias`, name]} />
+              formatter={(value: number, name: string) => [`${value} dias (clique para ver)`, name]} />
             <Legend />
-            <Bar dataKey="avg" name="Média" fill="#47C5FB" />
-            <Bar dataKey="p50" name="P50" fill="#64FFDA" />
-            <Bar dataKey="p85" name="P85" fill="#FFB86C" />
+            <Bar dataKey="avg" name="Média" fill="#47C5FB" cursor="pointer" onClick={(d: any) => setModalData({ title: `Itens — ${d.team}`, items: d.items, color: '#47C5FB' })} />
+            <Bar dataKey="p50" name="P50" fill="#64FFDA" cursor="pointer" onClick={(d: any) => setModalData({ title: `Itens — ${d.team}`, items: d.items, color: '#64FFDA' })} />
+            <Bar dataKey="p85" name="P85" fill="#FFB86C" cursor="pointer" onClick={(d: any) => setModalData({ title: `Itens — ${d.team}`, items: d.items, color: '#FFB86C' })} />
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -187,10 +277,17 @@ const DORAMetricsDashboard: React.FC<Props> = ({ data }) => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Change Failure Rate Trend */}
         <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
-          <h3 className="text-ds-light-text font-bold text-lg mb-4">🐛 Change Failure Rate (Semanal)</h3>
-          <ChartInfoLamp info="Percentual de bugs sobre o total entregue por semana. Adaptação da métrica DORA 'Change Failure Rate' — a original mede % de deploys que causam falha." />
+          <h3 className="text-ds-light-text font-bold text-lg mb-4">🐛 Change Failure Rate</h3>
+          <ChartInfoLamp info="Percentual de bugs sobre o total entregue no período escolhido (controlado pelo seletor do gráfico de Deployment Frequency acima). Adaptação da métrica DORA 'Change Failure Rate' — a original mede % de deploys que causam falha." />
           <ResponsiveContainer width="100%" height={280}>
-            <LineChart data={failureRate}>
+            <LineChart
+              data={failureRate}
+              className="cursor-pointer"
+              onClick={(e: any) => {
+                const p = e?.activePayload?.[0]?.payload;
+                if (p?.bugItems?.length) setModalData({ title: `Bugs — ${p.week}`, items: p.bugItems, color: '#F56565' });
+              }}
+            >
               <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
               <XAxis dataKey="week" stroke={CHART_COLORS.text} tick={{ fontSize: 10 }} />
               <YAxis stroke={CHART_COLORS.text} unit="%" />
@@ -213,7 +310,7 @@ const DORAMetricsDashboard: React.FC<Props> = ({ data }) => {
               <YAxis stroke={CHART_COLORS.text} />
               <Tooltip contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff', padding: '10px 14px' }} labelStyle={{ color: '#64ffda', fontWeight: 'bold' }} itemStyle={{ color: '#e6f1ff' }}
                 formatter={(value: number) => [`${value} dias`]} />
-              <Bar dataKey="mttr" name="MTTR (dias)" fill="#F6E05E" label={{ position: 'top', fill: '#F6E05E', fontSize: 11, fontWeight: 'bold', formatter: (v: number) => `${v}d` }}>
+              <Bar dataKey="mttr" name="MTTR (dias)" fill="#F6E05E" cursor="pointer" onClick={(d: any) => setModalData({ title: `Bugs resolvidos — ${d.team}`, items: d.items, color: '#F6E05E' })} label={{ position: 'top', fill: '#F6E05E', fontSize: 11, fontWeight: 'bold', formatter: (v: number) => `${v}d` }}>
                 {mttr.map((entry, i) => (
                   <Cell key={i} fill={entry.mttr <= 3 ? '#64FFDA' : entry.mttr <= 7 ? '#F6E05E' : '#F56565'} />
                 ))}

@@ -1,4 +1,4 @@
-import { WorkItem, WorkItemType } from '../types.ts';
+import type { WorkItem, WorkItemType } from '../types.ts';
 
 export const COMPLETED_STATES = ['Done', 'Concluído', 'Closed', 'Fechado', 'Finished', 'Resolved', 'Pronto'];
 export const IN_PROGRESS_STATES = ['Active', 'Ativo', 'Em Progresso', 'Para Desenvolver', 'Aguardando Code Review', 'Fazendo Code Review', 'Aguardando QA', 'Testando QA'];

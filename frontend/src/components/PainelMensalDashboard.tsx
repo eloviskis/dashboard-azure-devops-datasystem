@@ -1,0 +1,696 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import RetroPainelStrip from './retro/RetroPainelStrip.tsx';
+import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ReferenceArea, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { WorkItem } from '../types';
+import { CHART_COLORS } from '../constants';
+import ChartInfoLamp from './ChartInfoLamp';
+import { EmptyState } from './ChartStates.tsx';
+import { useAuth } from '../contexts/AuthContext';
+import { baixarXlsx, montarPainelXlsx } from '../utils/painelXlsx.ts';
+import { getPeriodBuckets, type PeriodBucket, type PeriodGroupMode } from '../utils/periodGrouping.ts';
+import {
+  acompanha, bugDeCliente, bugsPorDesenvolvedor, buildPainelMensal, dentroDaFaixa, faixaDoTime, issuesDoDepartamento, itensDaMetrica, itensDoTime,
+  METAS_PADRAO, normalizarTime, TIMES_PADRAO_PAINEL, textoFaixa,
+  temMeta, type Faixa, type MetaKey, type MetaMetrica, type MetasPainel, type MetricKey,
+} from '../utils/painelMensal.ts';
+
+interface Props { data: WorkItem[]; }
+interface CicloItem { fim: string; cicloDias: number | null; }
+
+// Modal de itens: mesmo padrão usado nos outros gráficos da ferramenta (ex.: BottleneckAnalysisChart.tsx) —
+// local a este arquivo, não compartilhado.
+const AZURE_DEVOPS_BASE_URL = 'https://dev.azure.com/datasystemsoftwares/USE/_workitems/edit';
+interface ModalInfo { titulo: string; itens: WorkItem[]; }
+const ItemModal: React.FC<{ info: ModalInfo | null; onClose: () => void }> = ({ info, onClose }) => {
+  if (!info) return null;
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50" onClick={onClose}>
+      <div className="bg-ds-navy border border-ds-border rounded-lg shadow-2xl max-w-3xl w-full mx-4 max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="p-4 rounded-t-lg flex justify-between items-center bg-blue-600">
+          <h2 className="text-white font-bold text-base">{info.titulo}</h2>
+          <button onClick={onClose} className="text-white hover:text-gray-200 text-2xl font-bold leading-none">×</button>
+        </div>
+        <div className="p-4 overflow-y-auto flex-1">
+          <div className="text-ds-text mb-3 text-sm">Total: <span className="font-bold text-white">{info.itens.length}</span> itens</div>
+          {info.itens.length === 0 ? (
+            <p className="text-ds-text text-sm">Nenhum item nesse período.</p>
+          ) : (
+            <ul className="space-y-2">
+              {info.itens.map((item, idx) => (
+                <li key={item.workItemId || idx} className="bg-ds-dark-blue border border-ds-border rounded-lg p-3 hover:border-ds-green transition-colors">
+                  <div className="flex items-start gap-3">
+                    <span className="text-xs font-mono px-2 py-1 rounded bg-blue-600 text-white flex-shrink-0">#{item.workItemId}</span>
+                    <div className="flex-1 min-w-0">
+                      <a href={item.url || `${AZURE_DEVOPS_BASE_URL}/${item.workItemId}`} target="_blank" rel="noopener noreferrer" className="text-white hover:text-ds-green font-medium block truncate mb-2" title={item.title}>
+                        {item.title}
+                      </a>
+                      <div className="grid grid-cols-2 gap-2 text-xs text-ds-text">
+                        <div>👤 {item.assignedTo || 'Não atribuído'}</div>
+                        <div>👥 {item.team || 'Sem time'}</div>
+                        <div>🏷️ {item.type}</div>
+                        <div>📊 {item.state}</div>
+                      </div>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <div className="p-4 border-t border-ds-border">
+          <button onClick={onClose} className="w-full bg-ds-border hover:bg-ds-green text-white py-2 px-4 rounded-lg transition-colors">Fechar</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const META_KEY = 'metas_painel_mensal';
+const DEVS_KEY = 'painel_devs_escolhidos';
+const DEVS_TIME_KEY = 'painel_devs_time'; // filtro de time da tabela de bugs por desenvolvedor
+const DEPTO_KEY = 'painel_depto_fora'; // times do departamento desmarcados no Índice do Departamento
+const METRICAS: MetricKey[] = ['fluxo', 'cycle', 'bugs', 'bugsVersao', 'retrabalho', 'qtdP0', 'slaP0'];
+const METAS_DEPTO: MetaKey[] = ['departamento', 'departamentoGestao', 'departamentoFluxo', 'departamentoCycle'];
+// Meta das linhas de média (Fluxo e Cycle Time têm meta própria do departamento; as outras usam a geral)
+const META_MEDIA: Partial<Record<MetricKey, MetaKey>> = { fluxo: 'departamentoFluxo', cycle: 'departamentoCycle' };
+const MODOS: { value: PeriodGroupMode; label: string }[] = [
+  { value: 'weekly', label: 'Semanal' },
+  { value: 'biweekly', label: 'Quinzenal' },
+  { value: 'monthly', label: 'Mensal' },
+];
+
+const INFO: Record<MetricKey, string> = {
+  fluxo: 'Fluxo de Eficiência, como na GetNaves = média, item a item, de Ativo ÷ (Ativo + Fila), só Issue e User Story. Ativo = Desenvolvendo + Testando QA/Testing; Fila = Aguardando Code Review + Fazendo Code Review + CodeReview + Aguardando QA. "Para Desenvolver" é To Do e fica fora. Período = primeira vez que o item chegou a Pronto ou foi Fechado (o que vier primeiro). Verde = dentro da faixa de meta. Sustentação tem faixa própria.',
+  cycle: 'Cycle Time P85, como na GetNaves: dias corridos do início do Doing (primeira vez em Desenvolvendo, code review ou QA) até a primeira vez que o item chegou a Pronto ou foi Fechado (o que vier primeiro — um fechamento em lote, bem depois do Pronto, não conta). Só Issue e User Story; item que não passou pelo Doing fica de fora. 85% dos itens concluídos no período levaram até esse número. As médias são a média dos valores dos times.',
+  bugs: 'Issues do tipo Correção vindas de cliente (Tipo Cliente preenchido, menos SLA INTERNO DS), abertas no período, por time. Mesmo critério da linha BUGS da planilha de indicadores da gestão: Análise, Alteração, Melhoria e Issues internas não entram, nem Removed/Disapproved. O que o QA pega antes de produção é Bug e conta no Índice de Retrabalho.',
+  bugsVersao: 'Das Issues de Bugs Produção (criadas no período), só as que têm versão atrelada: número de versão (ex.: 3.71.0.5) em Base Version, Delivered Version, root cause version ou numa tag. Itens do tipo Bug não têm versão no Azure DevOps, por isso não entram.',
+  bugsSemVersao: 'Das Issues de Bugs Produção (criadas no período), as que NÃO têm número de versão em Base Version, Delivered Version, root cause version nem nas tags. Somado com "com versão", dá o total de Bugs Produção.',
+  retrabalho: 'Quantidade de bugs internos (tipo Bug) abertos no período, por time: os que o QA pega antes de ir para produção, sem versão publicada. Os que chegam em produção são Issues e contam em Bugs Produção.',
+  qtdP0: 'Quantidade de itens P0 (prioridade vazia ou 0) concluídos no período com Cycle Time preenchido. Prioridade 1 (Crítica) não entra. Mesma base do SLA P0, ao lado — aqui é a contagem, lá é o % dentro do prazo.',
+  slaP0: '% dos itens P0 (prioridade vazia ou 0) concluídos no período com Cycle Time em até 7 dias corridos. Prioridade 1 (Crítica) não entra.',
+};
+
+const INFO_DEPTO = 'Soma das Issues abertas no período pelos times do departamento de engenharia: Sustentação, Boltz, Tático, Wakanda e Franquia/CTC. "Departamento de Engenharia" conta toda Issue (menos Removed e Disapproved); "Bugs — critério da gestão" conta só as do tipo Correção vindas de cliente (Tipo Cliente preenchido, menos SLA INTERNO DS), igual à linha BUGS da planilha de indicadores da gestão. Bug interno não entra em nenhuma das duas. Não muda com o filtro de times do topo: escolha os times do departamento nas caixas abaixo. Clique num número ou numa barra para ver as Issues.';
+
+const nomeTime = (t: string) => {
+  const norm = t.toLowerCase().replace(/[^a-z]/g, '');
+  if (norm === 'sustentacao') return 'Sustentação';
+  if (norm === 'franquia') return 'Franquia/CTC';
+  return t;
+};
+
+const corCelula = (ok: boolean | null) =>
+  ok === true ? 'text-green-400' : ok === false ? 'text-red-400' : 'text-ds-text/40';
+
+const formatar = (v: number | null, key: MetricKey) => {
+  if (v === null) return '—';
+  if (['bugs', 'bugsVersao', 'bugsSemVersao', 'retrabalho', 'qtdP0'].includes(key)) return String(v);
+  return `${v}${key === 'cycle' ? 'd' : '%'}`;
+};
+
+// Data local como AAAA-MM-DD (toISOString usa UTC e pode pular um dia)
+const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+const PainelMensalDashboard: React.FC<Props> = ({ data }) => {
+  const { token, isAdmin } = useAuth();
+  const API_URL = import.meta.env.VITE_API_URL || '';
+
+  const hoje = new Date();
+  const [modo, setModo] = useState<PeriodGroupMode>('monthly');
+  const [inicio, setInicio] = useState<string>(iso(new Date(hoje.getFullYear(), 0, 1)));
+  const [fim, setFim] = useState<string>(iso(hoje));
+
+  const [metas, setMetas] = useState<MetasPainel>(METAS_PADRAO);
+  const [rascunho, setRascunho] = useState<MetasPainel>(METAS_PADRAO);
+  const [editando, setEditando] = useState(false);
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState('');
+
+  // Metas compartilhadas: o servidor guarda a configuração; sem ela, valem as padrão da planilha.
+  useEffect(() => {
+    if (!token) return;
+    fetch(`${API_URL}/api/settings/${META_KEY}`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => {
+        if (d?.value) {
+          const merged = { ...METAS_PADRAO, ...d.value } as MetasPainel;
+          setMetas(merged);
+          setRascunho(merged);
+        }
+      })
+      .catch(() => { /* sem conexão: usa as metas padrão */ });
+  }, [token, API_URL]);
+
+  const salvarMetas = async () => {
+    setSalvando(true);
+    setErro('');
+    try {
+      const res = await fetch(`${API_URL}/api/settings/${META_KEY}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ value: rascunho }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setErro(d.error || 'Erro ao salvar metas');
+        return;
+      }
+      setMetas(rascunho);
+      setEditando(false);
+    } catch {
+      setErro('Erro de conexão ao salvar metas');
+    } finally {
+      setSalvando(false);
+    }
+  };
+
+  const ajustarLimite = (key: MetaKey, lado: 'min' | 'max', valor: string, team?: string) => {
+    const n = valor === '' ? null : Number(valor);
+    setRascunho(prev => {
+      const m = { ...prev[key] };
+      if (team) {
+        const porTime = { ...(m.porTime || {}) };
+        porTime[team] = { ...(porTime[team] || { min: null, max: null }), [lado]: n } as Faixa;
+        m.porTime = porTime;
+      } else {
+        m[lado] = n;
+      }
+      return { ...prev, [key]: m };
+    });
+  };
+
+  // Períodos do intervalo escolhido, no modo escolhido (semanal, quinzenal ou mensal)
+  const periodos = useMemo(() => {
+    const ini = new Date(`${inicio}T00:00:00`);
+    const end = new Date(`${fim}T23:59:59`);
+    if (Number.isNaN(ini.getTime()) || Number.isNaN(end.getTime()) || ini > end) return [];
+    return getPeriodBuckets(ini, end, modo);
+  }, [inicio, fim, modo]);
+
+  // Fim (primeiro Fechado, ou Pronto) e Cycle Time no critério da planilha. Só o Painel usa esses valores.
+  const [ciclo, setCiclo] = useState<Map<number, CicloItem>>(() => new Map());
+  useEffect(() => {
+    fetch(`${API_URL}/api/painel-time/ciclo`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+      .then((rows: ({ id: number } & CicloItem)[]) =>
+        setCiclo(new Map(rows.map((r): [number, CicloItem] => [r.id, { fim: r.fim, cicloDias: r.cicloDias }]))))
+      .catch(() => setErro('Não foi possível carregar as datas de fim do Painel. Recarregue a página.'));
+  }, [API_URL, token]);
+  const itens = useMemo(() => data.map(i => {
+    const c = ciclo.get(i.workItemId);
+    return c ? { ...i, closedDate: c.fim, cicloDias: c.cicloDias } : i;
+  }), [data, ciclo]);
+
+  // Usa TODOS os itens (não o quickFilter): o painel tem a própria janela de datas.
+  // Times escolhidos no seletor. Começa com os 6 times com bloco na planilha; o usuário marca/desmarca os outros.
+  const [timesEscolhidos, setTimesEscolhidos] = useState<Set<string>>(() => new Set(TIMES_PADRAO_PAINEL));
+  const todosTimes = useMemo(
+    () => [...new Set(itens.map(i => i.team).filter((t): t is string => !!t && t !== 'Sem Time'))]
+      .sort((a, b) => a.localeCompare(b, 'pt-BR')),
+    [itens]
+  );
+  const alternarTime = (team: string) => setTimesEscolhidos(prev => {
+    const next = new Set(prev);
+    if (next.has(team)) next.delete(team); else next.add(team);
+    return next;
+  });
+
+  const painel = useMemo(
+    () => buildPainelMensal(itens, periodos, [...timesEscolhidos]),
+    [itens, periodos, timesEscolhidos]
+  );
+
+  // Clique numa barra do gráfico: mesma lista de itens que gerou o número daquela métrica/time/período.
+  const [modal, setModal] = useState<ModalInfo | null>(null);
+  const abrirModal = (key: MetricKey, team: string, idx: number) => {
+    const bucket: PeriodBucket | undefined = periodos[idx];
+    if (!bucket) return;
+    setModal({
+      titulo: `${metas[key].label} — ${nomeTime(team)} — ${painel.labels[idx]}`,
+      itens: itensDaMetrica(itensDoTime(itens, team), bucket, key),
+    });
+  };
+
+  // Só os times cujo perfil acompanha essa métrica (ex.: Franquia some de Fluxo/Cycle, Sustentação some de Bugs).
+  const timesDaMetrica = (key: MetricKey) => painel.times.filter(t => acompanha(t, key));
+  // Filtro da seção "Bugs Produção com versão": marcado, a seção inteira mostra as Issues sem versão
+  const [semVersao, setSemVersao] = useState(false);
+
+  const linhasDaMetrica = (key: MetricKey) => [
+    ...timesDaMetrica(key).map(t => ({ nome: nomeTime(t), valores: painel.porTime[key][t], team: t, media: false })),
+    { nome: 'Média de todos os times', valores: painel.mediaTodos[key], team: undefined, media: true },
+    { nome: 'Média sem Sustentação', valores: painel.mediaSemSustentacao[key], team: undefined, media: true },
+  ];
+
+  // Bugs internos por desenvolvedor: regra da query BUGS_DEV_2026_AVD (ver painelMensal.ts). Cada número abre a lista.
+  const devsTodos = useMemo(() => bugsPorDesenvolvedor(itens, periodos), [itens, periodos]);
+  // Filtro de time: o time do Bug (não há cadastro de time por dev). Opções = times dos bugs que entram na regra.
+  // Fica salvo neste navegador; um time que sumiu das opções volta para "Todos".
+  const timesDevs = useMemo(() => [...new Set(devsTodos.flatMap(d => d.porPeriodo.flat().map(i => i.team)))]
+    .filter((t): t is string => !!t).sort((a, b) => a.localeCompare(b, 'pt-BR')), [devsTodos]);
+  const [timeDev, setTimeDev] = useState(() => { try { return localStorage.getItem(DEVS_TIME_KEY) ?? ''; } catch { return ''; } });
+  useEffect(() => {
+    try { if (timeDev) localStorage.setItem(DEVS_TIME_KEY, timeDev); else localStorage.removeItem(DEVS_TIME_KEY); } catch { /* sem storage */ }
+  }, [timeDev]);
+  const timeDevAtivo = timesDevs.includes(timeDev) ? timeDev : '';
+  const devs = useMemo(
+    () => (timeDevAtivo ? bugsPorDesenvolvedor(itens.filter(i => i.team === timeDevAtivo), periodos) : devsTodos),
+    [timeDevAtivo, itens, periodos, devsTodos]
+  );
+  const seletorTimeDev = (
+    <label className="flex items-center gap-2 text-xs text-ds-text">
+      Time
+      <select value={timeDevAtivo} onChange={e => setTimeDev(e.target.value)}
+        className="bg-ds-navy border border-ds-border rounded-lg px-2 py-2 text-xs text-ds-light-text">
+        <option value="">Todos</option>
+        {timesDevs.map(t => <option key={t} value={t}>{nomeTime(t)}</option>)}
+      </select>
+    </label>
+  );
+  const nomesDevs = useMemo(() => devs.map(d => d.dev).sort((a, b) => a.localeCompare(b, 'pt-BR')), [devs]);
+  // Devs escolhidos no seletor (null = todos). Fica salvo neste navegador; sem storage, volta a mostrar todos.
+  const [devsEscolhidos, setDevsEscolhidos] = useState<Set<string> | null>(() => {
+    try { const v = localStorage.getItem(DEVS_KEY); return v ? new Set<string>(JSON.parse(v)) : null; } catch { return null; }
+  });
+  useEffect(() => {
+    try {
+      if (devsEscolhidos) localStorage.setItem(DEVS_KEY, JSON.stringify([...devsEscolhidos]));
+      else localStorage.removeItem(DEVS_KEY);
+    } catch { /* sem storage: a escolha vale só nesta visita */ }
+  }, [devsEscolhidos]);
+  const [buscaDev, setBuscaDev] = useState('');
+  const devEscolhido = (dev: string) => !devsEscolhidos || devsEscolhidos.has(dev);
+  const alternarDev = (dev: string) => setDevsEscolhidos(prev => {
+    const next = new Set(prev ?? nomesDevs);
+    if (next.has(dev)) next.delete(dev); else next.add(dev);
+    return nomesDevs.every(n => next.has(n)) ? null : next;
+  });
+  const devsVisiveis = devs.filter(d => devEscolhido(d.dev));
+  const seletorDevs = (
+    <details className="relative">
+      <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden select-none px-3 py-2 rounded-lg border border-ds-border text-xs text-ds-light-text hover:bg-ds-border/50 transition-colors">
+        Devs: {nomesDevs.filter(devEscolhido).length} de {nomesDevs.length} ▾
+      </summary>
+      <div className="absolute right-0 z-30 mt-2 w-72 max-h-80 overflow-y-auto bg-ds-navy border border-ds-border rounded-lg shadow-xl p-3">
+        <div className="flex gap-4 mb-2 pb-2 border-b border-ds-border text-xs">
+          <button type="button" onClick={() => setDevsEscolhidos(null)} className="text-ds-green hover:underline">Marcar todos</button>
+          <button type="button" onClick={() => setDevsEscolhidos(new Set())} className="text-ds-text hover:underline">Desmarcar todos</button>
+        </div>
+        <input type="search" value={buscaDev} onChange={e => setBuscaDev(e.target.value)} placeholder="Buscar dev" aria-label="Buscar dev"
+          className="w-full mb-2 bg-ds-dark-blue border border-ds-border rounded px-2 py-1 text-xs text-ds-light-text" />
+        {nomesDevs.filter(n => n.toLowerCase().includes(buscaDev.trim().toLowerCase())).map(n => (
+          <label key={n} className="flex items-center gap-2 py-1 text-xs text-ds-light-text cursor-pointer">
+            <input type="checkbox" checked={devEscolhido(n)} onChange={() => alternarDev(n)} className="accent-ds-green w-4 h-4 shrink-0" />
+            <span className="truncate">{n}</span>
+          </label>
+        ))}
+      </div>
+    </details>
+  );
+  // Número que abre o modal com a lista por trás dele (tabela de devs e índice do departamento)
+  // cor: classe de cor pela meta (verde/vermelho); sem ela, cor normal
+  const celulaLista = (n: number, titulo: string, lista: WorkItem[], cor?: string) => n === 0
+    ? <span className={cor ?? 'text-ds-text/40'}>0</span>
+    : <button type="button" onClick={() => setModal({ titulo, itens: lista })} aria-label={`${titulo}: ${n} itens`}
+        className={`${cor ?? 'text-ds-light-text'} hover:text-ds-green underline decoration-dotted`}>{n}</button>;
+  const tabelaDevs = devsVisiveis.length === 0 ? (
+    <p className="text-xs text-ds-text">
+      {devs.length === 0 ? 'Nenhum bug no período pela regra da query BUGS_DEV_2026_AVD.' : 'Nenhum dev escolhido. Use o seletor "Devs" acima.'}
+    </p>
+  ) : (
+    // Largura toda da seção; cabeçalho fixo ao rolar (cada th precisa do próprio fundo, senão as linhas aparecem por trás)
+    <div className="overflow-x-auto max-h-128 overflow-y-auto">
+      <table className="w-full text-xs text-left text-ds-text">
+        <thead className="text-ds-light-text">
+          <tr className="border-b border-ds-border">
+            <th className="px-2 py-2 sticky top-0 left-0 z-20 bg-ds-navy">Desenvolvedor</th>
+            {painel.labels.map((lab, i) => <th key={i} className="px-2 py-2 text-right whitespace-nowrap sticky top-0 z-10 bg-ds-navy">{lab}</th>)}
+            <th className="px-2 py-2 text-right sticky top-0 z-10 bg-ds-navy">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {devsVisiveis.map(d => (
+            <tr key={d.dev} className="border-b border-ds-border/50">
+              <td className="px-2 py-1.5 whitespace-nowrap sticky left-0 bg-ds-navy">{d.dev}</td>
+              {d.porPeriodo.map((lista, i) => (
+                <td key={i} className="px-2 py-1.5 text-right font-mono">{celulaLista(lista.length, `Bugs internos — ${d.dev} — ${painel.labels[i]}`, lista)}</td>
+              ))}
+              <td className="px-2 py-1.5 text-right font-mono font-semibold">{celulaLista(d.total, `Bugs internos — ${d.dev} — período todo`, d.porPeriodo.flat())}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+
+  // Índice do Departamento de Engenharia: Issues abertas pelos times do departamento. Ignora o filtro de times do
+  // topo; tem o próprio seletor (só os 5 times do departamento), salvo neste navegador. Mesma regra de
+  // painel.departamento (issuesDoDepartamento); aqui guarda as listas para o modal.
+  const depto = useMemo(() => periodos.map(b => issuesDoDepartamento(itens, b)), [itens, periodos]);
+  const [deptoFora, setDeptoFora] = useState<Set<string>>(() => {
+    try { return new Set<string>(JSON.parse(localStorage.getItem(DEPTO_KEY) ?? '[]')); } catch { return new Set(); }
+  });
+  useEffect(() => {
+    try { localStorage.setItem(DEPTO_KEY, JSON.stringify([...deptoFora])); } catch { /* sem storage: vale só nesta visita */ }
+  }, [deptoFora]);
+  const alternarDepto = (t: string) => setDeptoFora(prev => {
+    const next = new Set(prev);
+    if (next.has(t)) next.delete(t); else next.add(t);
+    return next;
+  });
+  const timesDepto = TIMES_PADRAO_PAINEL.filter(t => !deptoFora.has(t));
+  const linhasTimesDepto = timesDepto.map(t => ({
+    nome: nomeTime(t), total: false,
+    listas: depto.map(l => l.filter(i => normalizarTime(i.team ?? '') === normalizarTime(t))),
+  }));
+  const totalDepto = depto.map((_, i) => linhasTimesDepto.flatMap(l => l.listas[i]));
+  // Critério da gestão (linha BUGS da planilha de indicadores): mesmas Issues, só as de Correção vindas de cliente
+  const gestaoDepto = totalDepto.map(l => l.filter(bugDeCliente));
+  const linhasDepto: { nome: string; total: boolean; listas: WorkItem[][]; meta?: MetaKey }[] = [
+    ...linhasTimesDepto,
+    { nome: 'Departamento de Engenharia', total: true, listas: totalDepto, meta: 'departamento' },
+    { nome: 'Bugs — critério da gestão', total: true, listas: gestaoDepto, meta: 'departamentoGestao' },
+  ];
+  // Verde/vermelho pela meta do departamento; sem meta (ou linha de time), cor normal
+  const corDepto = (n: number, meta?: MetaKey) =>
+    meta && temMeta(metas[meta]) ? corCelula(dentroDaFaixa(n, metas[meta])) : undefined;
+  const secaoDepto = (
+    <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+        <h3 className="text-ds-light-text font-bold text-base">Índice do Departamento de Engenharia</h3>
+        <span className="text-xs text-ds-text">
+          Meta: todas as Issues {textoFaixa(metas.departamento, '')} · critério da gestão {textoFaixa(metas.departamentoGestao, '')}
+        </span>
+        <ChartInfoLamp info={INFO_DEPTO} />
+      </div>
+      <p className="text-xs text-ds-text/80 mb-2">Como é calculado: {INFO_DEPTO}</p>
+      <fieldset className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-ds-light-text">
+        <legend className="sr-only">Times do departamento</legend>
+        <span className="text-ds-text">Times do departamento:</span>
+        {TIMES_PADRAO_PAINEL.map(t => (
+          <label key={t} className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked={!deptoFora.has(t)} onChange={() => alternarDepto(t)} className="accent-ds-green w-4 h-4" />
+            {nomeTime(t)}
+          </label>
+        ))}
+      </fieldset>
+      <div className="mt-3 overflow-x-auto">
+        <table className="w-full text-xs text-left text-ds-text">
+          <thead className="text-ds-light-text border-b border-ds-border">
+            <tr>
+              <th className="px-2 py-2 sticky left-0 bg-ds-navy">Time</th>
+              {periodos.map(b => <th key={b.label} className="px-2 py-2 text-right whitespace-nowrap">{b.label}</th>)}
+              <th className="px-2 py-2 text-right">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {linhasDepto.map(l => (
+              <tr key={l.nome} className={`border-b border-ds-border/50 ${l.total ? 'font-semibold text-ds-light-text' : ''}`}>
+                <td className="px-2 py-1.5 whitespace-nowrap sticky left-0 bg-ds-navy">{l.nome}</td>
+                {l.listas.map((lista, i) => (
+                  <td key={periodos[i].label} className="px-2 py-1.5 text-right font-mono">{celulaLista(lista.length, `Issues — ${l.nome} — ${periodos[i].label}`, lista, corDepto(lista.length, l.meta))}</td>
+                ))}
+                <td className="px-2 py-1.5 text-right font-mono font-semibold">{celulaLista(l.listas.flat().length, `Issues — ${l.nome} — período todo`, l.listas.flat())}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-xs text-ds-text/60 mt-4 mb-1">Clique numa barra para ver as Issues do departamento naquele período.</p>
+      <ResponsiveContainer width="100%" height={220}>
+        <BarChart data={periodos.map((b, i) => ({ periodo: b.label, total: totalDepto[i].length, gestao: gestaoDepto[i].length }))} margin={{ left: 0, right: 16, top: 8, bottom: 4 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
+          <XAxis dataKey="periodo" stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} interval="preserveStartEnd" />
+          <YAxis stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} allowDecimals={false} />
+          <Tooltip contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff' }} />
+          <Legend />
+          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+          <Bar dataKey="total" name="Departamento de Engenharia (todas as Issues)" fill={CHART_COLORS.palette[0]} cursor="pointer"
+            onClick={(_: any, idx: number) => setModal({ titulo: `Issues — Departamento de Engenharia — ${periodos[idx].label}`, itens: totalDepto[idx] })} />
+          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+          <Bar dataKey="gestao" name="Bugs — critério da gestão" fill={CHART_COLORS.palette[1]} cursor="pointer"
+            onClick={(_: any, idx: number) => setModal({ titulo: `Issues — Bugs — critério da gestão — ${periodos[idx].label}`, itens: gestaoDepto[idx] })} />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+
+  const tabelaMetrica = (key: MetricKey) => {
+    const meta = metas[key];
+    return (
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs text-left text-ds-text">
+          <thead className="text-ds-light-text border-b border-ds-border">
+            <tr>
+              <th className="px-2 py-2 sticky left-0 bg-ds-navy">Time</th>
+              {painel.labels.map((lab, i) => <th key={i} className="px-2 py-2 text-right whitespace-nowrap">{lab}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {linhasDaMetrica(key).map(l => (
+              <tr key={l.nome} className={`border-b border-ds-border/50 ${l.media ? 'font-semibold text-ds-light-text' : ''}`}>
+                <td className="px-2 py-1.5 whitespace-nowrap sticky left-0 bg-ds-navy">{l.nome}</td>
+                {l.valores.map((v, i) => {
+                  const faixa = l.team ? faixaDoTime(meta, l.team) : (META_MEDIA[key] ? metas[META_MEDIA[key]] : { min: meta.min, max: meta.max });
+                  return (
+                    <td key={i} className={`px-2 py-1.5 text-right font-mono whitespace-nowrap ${corCelula(dentroDaFaixa(v, faixa))}`}>
+                      {formatar(v, key)}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
+  // Uma linha por período, uma coluna por time — usado pelo gráfico de linha e pelo de barras.
+  const linhasGrafico = (key: MetricKey) => painel.labels.map((lab, i) => {
+    const row: Record<string, string | number | null> = { periodo: lab };
+    timesDaMetrica(key).forEach(t => { row[nomeTime(t)] = painel.porTime[key][t][i]; });
+    return row;
+  });
+
+  const graficoMetrica = (key: MetricKey) => {
+    const meta = metas[key];
+    const rows = linhasGrafico(key);
+    return (
+      <ResponsiveContainer width="100%" height={260}>
+        <LineChart data={rows} margin={{ left: 0, right: 16, top: 8, bottom: 4 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
+          <XAxis dataKey="periodo" stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} interval="preserveStartEnd" />
+          <YAxis stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} />
+          <Tooltip contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff' }} />
+          <Legend />
+          {meta.min !== null && meta.max !== null && (
+            <ReferenceArea y1={meta.min} y2={meta.max} fill="#64FFDA" fillOpacity={0.08} />
+          )}
+          {meta.max !== null && meta.min === null && (
+            <ReferenceLine y={meta.max} stroke="#64FFDA" strokeDasharray="4 4" label={{ value: `limite ${meta.max}${meta.unidade}`, fill: '#64FFDA', fontSize: 10 }} />
+          )}
+          {timesDaMetrica(key).map((t, i) => (
+            <Line key={t} type="monotone" dataKey={nomeTime(t)} stroke={CHART_COLORS.palette[i % CHART_COLORS.palette.length]} strokeWidth={2} dot={{ r: 3 }} connectNulls={false} />
+          ))}
+        </LineChart>
+      </ResponsiveContainer>
+    );
+  };
+
+  // Gráfico de barras: mesmos dados do gráfico de linha, uma barra por time e período. Clicar numa barra abre
+  // o modal com os itens daquele número (itensDaMetrica, mesmos predicados do cálculo em painelMensal.ts).
+  const graficoBarras = (key: MetricKey) => {
+    const meta = metas[key];
+    const rows = linhasGrafico(key);
+    return (
+      <ResponsiveContainer width="100%" height={220}>
+        <BarChart data={rows} margin={{ left: 0, right: 16, top: 8, bottom: 4 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
+          <XAxis dataKey="periodo" stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} interval="preserveStartEnd" />
+          <YAxis stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} />
+          <Tooltip
+            contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #64ffda', borderRadius: '8px', color: '#e6f1ff' }}
+            formatter={(value: number, name: string) => [value, `${name} (clique na barra para ver os itens)`]}
+          />
+          <Legend />
+          {meta.min !== null && meta.max !== null && (
+            <ReferenceArea y1={meta.min} y2={meta.max} fill="#64FFDA" fillOpacity={0.08} />
+          )}
+          {meta.max !== null && meta.min === null && (
+            <ReferenceLine y={meta.max} stroke="#64FFDA" strokeDasharray="4 4" />
+          )}
+          {timesDaMetrica(key).map((t, i) => (
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            <Bar key={t} dataKey={nomeTime(t)} fill={CHART_COLORS.palette[i % CHART_COLORS.palette.length]} cursor="pointer"
+              onClick={(_: any, idx: number) => abrirModal(key, t, idx)} />
+          ))}
+        </BarChart>
+      </ResponsiveContainer>
+    );
+  };
+
+  // Exporta no layout da aba "Validado" da planilha de gestão (uma aba, blocos por time, médias como fórmulas).
+  const exportarXlsx = async () => {
+    const wb = await montarPainelXlsx(painel, metas, timesDepto);
+    const rotulo = MODOS.find(m => m.value === modo)?.label ?? '';
+    await baixarXlsx(wb, `Painel_${rotulo}_${inicio}_a_${fim}.xlsx`);
+  };
+
+  const campoMeta = (valor: number | null, onChange: (v: string) => void, rotulo: string) => (
+    <input type="number" step="any" value={valor ?? ''} onChange={e => onChange(e.target.value)} aria-label={rotulo}
+      className="w-20 bg-ds-dark-blue border border-ds-border rounded px-2 py-1 text-ds-light-text" />
+  );
+  // Uma linha do editor: meta geral (todos os times ou o departamento) e, em destaque, a meta própria de um time
+  const linhaMeta = (key: MetaKey) => {
+    const m = rascunho[key];
+    return (
+      <div key={key} className="flex flex-wrap items-center gap-3 text-xs">
+        <span className="w-64 text-ds-light-text">{m.label}</span>
+        <label className="flex items-center gap-1 text-ds-text">mín {campoMeta(m.min, v => ajustarLimite(key, 'min', v), `${m.label} — mínimo`)}</label>
+        <label className="flex items-center gap-1 text-ds-text">máx {campoMeta(m.max, v => ajustarLimite(key, 'max', v), `${m.label} — máximo`)}</label>
+        {Object.entries(m.porTime ?? {}).map(([teamKey, fx]) => (
+          <span key={teamKey} className="flex items-center gap-2 px-2 py-1 rounded-md border border-sky-400/40 bg-sky-400/10 text-sky-200">
+            <span className="font-semibold">Só {nomeTime(teamKey)}:</span>
+            <label className="flex items-center gap-1">mín {campoMeta(fx.min, v => ajustarLimite(key, 'min', v, teamKey), `${m.label} — ${nomeTime(teamKey)} — mínimo`)}</label>
+            <label className="flex items-center gap-1">máx {campoMeta(fx.max, v => ajustarLimite(key, 'max', v, teamKey), `${m.label} — ${nomeTime(teamKey)} — máximo`)}</label>
+          </span>
+        ))}
+      </div>
+    );
+  };
+
+  const editorMetas = (
+    <div className="bg-ds-navy p-4 rounded-lg border border-ds-border mb-4 space-y-4">
+      <p className="text-xs text-ds-text">Edite as faixas de meta. Quem não é admin só visualiza. Sem valor em um lado = sem limite.</p>
+      <fieldset className="space-y-3 rounded-lg border border-ds-border p-3">
+        <legend className="px-2 text-sm font-semibold text-ds-light-text">Metas por time</legend>
+        <p className="text-xs text-ds-text">A faixa da esquerda vale para todos os times. Em azul, a meta própria de um time, que substitui a geral para ele.</p>
+        {METRICAS.map(linhaMeta)}
+      </fieldset>
+      <fieldset className="space-y-3 rounded-lg border border-ds-green/40 bg-ds-green/5 p-3">
+        <legend className="px-2 text-sm font-semibold text-ds-green">Metas do Departamento de Engenharia</legend>
+        <p className="text-xs text-ds-text">As duas primeiras valem para as linhas de total do Índice do Departamento, no período da tela (mensal, quinzenal ou semanal). As de média pintam as linhas de média das tabelas de Fluxo e Cycle Time.</p>
+        {METAS_DEPTO.map(linhaMeta)}
+      </fieldset>
+      {erro && <p className="text-xs text-red-400">{erro}</p>}
+      <div className="flex gap-2">
+        <button type="button" onClick={salvarMetas} disabled={salvando} className="text-xs px-3 py-2 rounded-md bg-ds-green text-ds-dark-blue font-semibold disabled:opacity-50">
+          {salvando ? 'Salvando...' : 'Salvar metas'}
+        </button>
+        <button type="button" onClick={() => { setRascunho(metas); setEditando(false); setErro(''); }} className="text-xs px-3 py-2 rounded-md border border-ds-border text-ds-text">
+          Cancelar
+        </button>
+      </div>
+    </div>
+  );
+
+  const intervaloInvalido = periodos.length === 0;
+
+  return (
+    <div className="space-y-6">
+      <ItemModal info={modal} onClose={() => setModal(null)} />
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-ds-light-text font-bold text-xl">📅 Painel por Time</h2>
+          <p className="text-xs text-ds-text mt-1">
+            Mesmos campos da planilha de gestão, com os dados desta ferramenta. Escolha os times, o período e a granularidade.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-end gap-2">
+          <details className="relative">
+            <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden select-none px-3 py-2 rounded-lg border border-ds-border text-xs text-ds-light-text hover:bg-ds-border/50 transition-colors">
+              Times: {timesEscolhidos.size} de {todosTimes.length} ▾
+            </summary>
+            <div className="absolute right-0 z-20 mt-2 w-72 max-h-80 overflow-y-auto bg-ds-navy border border-ds-border rounded-lg shadow-xl p-3">
+              <div className="flex gap-4 mb-2 pb-2 border-b border-ds-border text-xs">
+                <button type="button" onClick={() => setTimesEscolhidos(new Set(todosTimes))} className="text-ds-green hover:underline">Marcar todos</button>
+                <button type="button" onClick={() => setTimesEscolhidos(new Set())} className="text-ds-text hover:underline">Desmarcar todos</button>
+              </div>
+              {todosTimes.map(t => (
+                <label key={t} className="flex items-center gap-2 py-1 text-xs text-ds-light-text cursor-pointer">
+                  <input type="checkbox" checked={timesEscolhidos.has(t)} onChange={() => alternarTime(t)} className="accent-ds-green w-4 h-4 shrink-0" />
+                  <span className="truncate">{nomeTime(t)}</span>
+                </label>
+              ))}
+            </div>
+          </details>
+          <div className="flex gap-1">
+            {MODOS.map(opt => (
+              <button key={opt.value} type="button" onClick={() => setModo(opt.value)}
+                className={`px-3 py-1.5 text-xs rounded-md font-medium transition-colors ${modo === opt.value ? 'bg-ds-green text-ds-dark-blue' : 'bg-ds-muted/20 text-ds-text hover:bg-ds-muted/40'}`}>
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          <label className="text-xs text-ds-text">De
+            <input type="date" value={inicio} onChange={e => setInicio(e.target.value)} className="block mt-1 bg-ds-navy border border-ds-border rounded-lg px-2 py-1.5 text-sm text-ds-light-text" />
+          </label>
+          <label className="text-xs text-ds-text">Até
+            <input type="date" value={fim} onChange={e => setFim(e.target.value)} className="block mt-1 bg-ds-navy border border-ds-border rounded-lg px-2 py-1.5 text-sm text-ds-light-text" />
+          </label>
+          <button type="button" onClick={exportarXlsx} disabled={intervaloInvalido || painel.times.length === 0}
+            className="text-xs px-3 py-2 rounded-md bg-ds-green/10 text-ds-green font-semibold hover:bg-ds-green/20 disabled:opacity-50">
+            📥 Exportar .xlsx
+          </button>
+          {isAdmin && (
+            <button type="button" onClick={() => { setRascunho(metas); setEditando(v => !v); }} className="text-xs px-3 py-2 rounded-md border border-ds-border text-ds-light-text hover:bg-ds-border/50">
+              {editando ? 'Fechar metas' : '⚙️ Editar metas'}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {editando && isAdmin && editorMetas}
+
+      <RetroPainelStrip teams={[...timesEscolhidos]} />
+
+      {!intervaloInvalido && secaoDepto}
+
+      {intervaloInvalido ? (
+        <EmptyState message="Escolha um intervalo válido (a data inicial não pode ser depois da final)." />
+      ) : painel.times.length === 0 ? (
+        <EmptyState message="Selecione pelo menos um time com itens no período escolhido." />
+      ) : (
+        METRICAS.map(secao => {
+          const key: MetricKey = secao === 'bugsVersao' && semVersao ? 'bugsSemVersao' : secao;
+          return (
+          <div key={secao} className="bg-ds-navy p-4 rounded-lg border border-ds-border">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+              <h3 className="text-ds-light-text font-bold text-base">{metas[key].label}</h3>
+              {secao === 'bugsVersao' && (
+                <label className="flex items-center gap-2 text-xs text-ds-light-text cursor-pointer">
+                  <input type="checkbox" checked={semVersao} onChange={e => setSemVersao(e.target.checked)} className="accent-ds-green w-4 h-4" />
+                  Mostrar os sem versão
+                </label>
+              )}
+              <span className="text-xs text-ds-text">
+                Meta: {textoFaixa({ min: metas[key].min, max: metas[key].max }, metas[key].unidade)}
+                {META_MEDIA[key] && ` · média dos times: ${textoFaixa(metas[META_MEDIA[key]], metas[META_MEDIA[key]].unidade)}`}
+              </span>
+              <ChartInfoLamp info={INFO[key]} />
+            </div>
+            <p className="text-xs text-ds-text/80 mb-2">Como é calculado: {INFO[key]}</p>
+            <div className="mt-3">{tabelaMetrica(key)}</div>
+            <div className="mt-4">{graficoMetrica(key)}</div>
+            <p className="text-xs text-ds-text/60 mt-4 mb-1">Clique numa barra para ver os itens daquele time e período.</p>
+            <div>{graficoBarras(key)}</div>
+            {secao === 'retrabalho' && (
+              <div className="mt-6">
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+                  <h4 className="text-ds-light-text font-semibold text-sm">Bugs internos por desenvolvedor</h4>
+                  {devsTodos.length > 0 && <div className="flex flex-wrap items-center gap-2">{seletorTimeDev}{seletorDevs}</div>}
+                </div>
+                <p className="text-xs text-ds-text/80 mb-2">Mesma regra da query BUGS_DEV_2026_AVD do Azure DevOps: Bugs fechados (Closed) com responsável (Assigned To), de todas as áreas da USE menos UX - UI, Freelance, Arquitetura, Diretoria, Inovacao_novo e Bateria, sem a tag [ANALISE]/analise e sem &quot;análise&quot; no título, pela data em que o Bug foi aberto. Não depende dos times escolhidos acima; use o filtro Time ao lado para ver só os bugs de um time (o time do Bug). Clique num número para ver os bugs.</p>
+                {tabelaDevs}
+              </div>
+            )}
+          </div>
+          );
+        })
+      )}
+    </div>
+  );
+};
+
+export default PainelMensalDashboard;

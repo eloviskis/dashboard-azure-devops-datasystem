@@ -24,8 +24,7 @@ const AZURE_CONFIG = {
 };
 
 // Database URL - usa a VPS diretamente
-const DATABASE_URL = process.env.DATABASE_URL || 
-  'postgresql://devops_dash:D3v0ps_D4sh_2026_Str0ng@187.77.55.172:5432/devops_dashboard';
+const DATABASE_URL = process.env.DATABASE_URL;
 
 const pool = new Pool({
   connectionString: DATABASE_URL,

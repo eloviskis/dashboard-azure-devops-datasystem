@@ -1,0 +1,20 @@
+/* Overrides de tema escuro para gantt-task-react@0.3.9.
+   A tabela/cabeçalho de tarefas (esquerda) e o tooltip já são substituídos por
+   componentes próprios (DarkTaskListHeader/DarkTaskListTable) em GanttDashboard.tsx.
+   O que resta aqui é só o que a lib NÃO expõe via prop: zebra do grid principal,
+   linhas de grade e cabeçalho do calendário — via classes CSS hasheadas pela lib
+   (estáveis nesta versão pinada, mas precisam ser reconferidas numa atualização
+   futura da dependência, olhando node_modules/gantt-task-react/dist/index.css). */
+
+._2dZTy { fill: #0A1E35 !important; }
+._2dZTy:nth-child(even) { fill: #061526 !important; }
+
+._3rUKi { stroke: #163050 !important; }
+._RuwuK { stroke: #163050 !important; }
+
+._35nLX { fill: #0A1E35 !important; stroke: #163050 !important; }
+._2q1Kt { fill: #7A9EB8 !important; }
+._9w8d5 { fill: #D8EBF5 !important; }
+
+._3T42e { background: #0A1E35 !important; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5) !important; }
+._29NTg { color: #D8EBF5 !important; }

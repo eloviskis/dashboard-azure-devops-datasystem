@@ -4,11 +4,15 @@ interface SummaryCardProps {
   title: string;
   value: string | number;
   unit?: string;
+  onClick?: () => void;
 }
 
-const SummaryCard = ({ title, value, unit }: SummaryCardProps) => {
+const SummaryCard = ({ title, value, unit, onClick }: SummaryCardProps) => {
   return (
-    <div className="bg-ds-navy p-5 rounded-lg border border-ds-border text-center transform hover:-translate-y-1 transition-transform duration-200">
+    <div
+      onClick={onClick}
+      className={`bg-ds-navy p-5 rounded-lg border border-ds-border text-center transform hover:-translate-y-1 transition-transform duration-200 ${onClick ? 'cursor-pointer hover:border-ds-green' : ''}`}
+    >
       <h3 className="text-ds-text text-sm font-normal uppercase tracking-wider mb-2">{title}</h3>
       <p className="text-ds-green text-5xl font-bold">
         {value}

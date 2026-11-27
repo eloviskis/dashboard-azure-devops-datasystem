@@ -17,7 +17,7 @@ const COMPETITOR_DATA = {
 const COMPLETED_STATES = ['Done', 'Concluído', 'Closed', 'Fechado', 'Finished', 'Resolved', 'Pronto'];
 
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || 'postgresql://devops_dash:D3v0ps_D4sh_2026_Str0ng@localhost:5432/devops_dashboard',
+  connectionString: process.env.DATABASE_URL,
   ssl: false,
 });
 

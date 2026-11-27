@@ -14,6 +14,7 @@ interface ModalData {
 }
 
 const COLORS = ['#F6416C', '#FF9800', '#FFD600', '#00B8A9', '#1E88E5', '#8E24AA', '#43A047', '#FDD835', '#00C853', '#FF6F00'];
+const COMPLETED_STATES = ['Done', 'Concluído', 'Closed', 'Fechado', 'Finished', 'Resolved', 'Pronto'];
 
 // URL base do Azure DevOps
 const AZURE_DEVOPS_BASE_URL = 'https://dev.azure.com/datasystemsoftwares/USE/_workitems/edit';
@@ -43,22 +44,23 @@ const ItemListModal: React.FC<{ data: ModalData | null; onClose: () => void }> =
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div 
-          className="p-4 rounded-t-lg flex justify-between items-center bg-red-600"
+        <div
+          className="p-4 rounded-t-lg flex justify-between items-center"
+          style={{ backgroundColor: data.color }}
         >
           <h2 className="text-white font-bold text-lg">{data.title}</h2>
-          <button 
+          <button
             onClick={onClose}
             className="text-white hover:text-gray-200 text-2xl font-bold leading-none"
           >
             ×
           </button>
         </div>
-        
+
         {/* Content */}
         <div className="p-4 overflow-y-auto flex-1">
           <div className="text-ds-text mb-3 text-sm">
-            Total: <span className="font-bold text-white">{data.items.length}</span> itens impedidos
+            Total: <span className="font-bold text-white">{data.items.length}</span> itens
           </div>
           
           {data.items.length === 0 ? (
@@ -70,11 +72,12 @@ const ItemListModal: React.FC<{ data: ModalData | null; onClose: () => void }> =
                 return (
                   <div 
                     key={item.workItemId || idx}
-                    className="bg-ds-dark-blue border border-ds-border rounded-lg p-4 hover:border-red-500 transition-colors"
+                    className="bg-ds-dark-blue border border-ds-border rounded-lg p-4 hover:border-ds-green transition-colors"
                   >
                     <div className="flex items-start gap-3">
-                      <span 
-                        className="text-xs font-mono px-2 py-1 rounded shrink-0 bg-red-600 text-white"
+                      <span
+                        className="text-xs font-mono px-2 py-1 rounded shrink-0 text-white"
+                        style={{ backgroundColor: data.color }}
                       >
                         #{item.workItemId}
                       </span>
@@ -168,9 +171,15 @@ const ItemListModal: React.FC<{ data: ModalData | null; onClose: () => void }> =
 const ImpedimentosDashboard: React.FC<Props> = ({ data }) => {
   const [modalData, setModalData] = useState<ModalData | null>(null);
 
-  // Filtra itens com tag [IMPEDIMENTO]
+  // Filtra itens com tag [IMPEDIMENTO] ou com o campo dedicado item.impedimento marcado
   const impedimentos = useMemo(() => {
     return data.filter(item => {
+      // Item já concluído/fechado não está "atualmente" impedido. O campo Custom.Impedimento do
+      // Azure DevOps pode ficar marcado como true mesmo depois de fechado — inclusive em tipos de
+      // item (ex: "Análise") cujo formulário nem exibe esse campo, então ninguém tem como desmarcar.
+      // Confirmado direto na API do Azure: valor antigo que sobrevive ao fechamento, não um bloqueio real.
+      if (COMPLETED_STATES.includes(item.state)) return false;
+      if (item.impedimento === true) return true;
       if (!item.tags) return false;
       const tagsStr = Array.isArray(item.tags) ? item.tags.join(';') : item.tags;
       return tagsStr.toUpperCase().includes('IMPEDIMENTO');
@@ -253,6 +262,38 @@ const ImpedimentosDashboard: React.FC<Props> = ({ data }) => {
       .slice(0, 10);
   }, [impedimentos]);
 
+  // Itens abertos (não concluídos) — base para os 5 sinais de "parado" abaixo
+  const openItems = useMemo(() => data.filter(item => !COMPLETED_STATES.includes(item.state)), [data]);
+
+  // Parados há mais de 1 dia sem Code Review Nível 1 feito
+  const cr1Pendente = useMemo(() => {
+    return openItems.filter(item => !item.codeReviewLevel1 && calculateDaysStopped((item.changedDate || item.createdDate || '').toString()) > 1);
+  }, [openItems]);
+
+  // CR1 já feito, mas parados há mais de 1 dia sem Code Review Nível 2 feito
+  const cr2Pendente = useMemo(() => {
+    return openItems.filter(item => !!item.codeReviewLevel1 && !item.codeReviewLevel2 && calculateDaysStopped((item.changedDate || item.createdDate || '').toString()) > 1);
+  }, [openItems]);
+
+  // Itens em retrabalho (reincidência > 0) parados há mais de 1 dia
+  const retrabalhoParado = useMemo(() => {
+    return openItems.filter(item => {
+      const r = Number(item.reincidencia);
+      return !isNaN(r) && r > 0 && calculateDaysStopped((item.changedDate || item.createdDate || '').toString()) > 1;
+    });
+  }, [openItems]);
+
+  // Itens abertos com Target Date futura ou vencida
+  const tarefasAVencer = useMemo(() => {
+    const now = Date.now();
+    return openItems.filter(item => item.targetDate && new Date(item.targetDate).getTime() >= now);
+  }, [openItems]);
+
+  const tarefasVencidas = useMemo(() => {
+    const now = Date.now();
+    return openItems.filter(item => item.targetDate && new Date(item.targetDate).getTime() < now);
+  }, [openItems]);
+
   // Handlers de clique
   const handleTimeClick = (data: any, index: number) => {
     const teamData = impedimentosPorTime.find(t => t.team === data.team);
@@ -294,32 +335,76 @@ const ImpedimentosDashboard: React.FC<Props> = ({ data }) => {
 
       {/* Cards de métricas */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-linear-to-br from-red-600 to-red-800 text-white p-6 rounded-lg shadow-lg">
+        <div className="bg-linear-to-br from-red-600 to-red-800 text-white p-6 rounded-lg shadow-lg cursor-pointer hover:brightness-110 transition-all" onClick={() => setModalData({ title: 'Total de Impedimentos', items: impedimentos, color: '#DC2626' })}>
           <div className="text-sm opacity-90 mb-2">🚫 Total de Impedimentos</div>
           <div className="text-4xl font-bold">{impedimentos.length}</div>
           <div className="text-xs opacity-75 mt-2">Itens bloqueados</div>
         </div>
-        <div className="bg-linear-to-br from-orange-600 to-orange-800 text-white p-6 rounded-lg shadow-lg">
+        <div className="bg-linear-to-br from-orange-600 to-orange-800 text-white p-6 rounded-lg shadow-lg cursor-pointer hover:brightness-110 transition-all" onClick={() => setModalData({ title: 'Itens usados no Tempo Médio Parado', items: impedimentos, color: '#EA580C' })}>
           <div className="text-sm opacity-90 mb-2">⏱️ Tempo Médio Parado</div>
           <div className="text-4xl font-bold">
-            {impedimentos.length > 0 
+            {impedimentos.length > 0
               ? (impedimentos.reduce((sum, i) => sum + i.daysStopped, 0) / impedimentos.length).toFixed(1)
               : 0
             }
           </div>
           <div className="text-xs opacity-75 mt-2">dias</div>
         </div>
-        <div className="bg-linear-to-br from-yellow-600 to-yellow-800 text-white p-6 rounded-lg shadow-lg">
+        <div className="bg-linear-to-br from-yellow-600 to-yellow-800 text-white p-6 rounded-lg shadow-lg cursor-pointer hover:brightness-110 transition-all" onClick={() => setModalData({ title: 'Impedimentos — Times Afetados', items: impedimentos, color: '#CA8A04' })}>
           <div className="text-sm opacity-90 mb-2">👥 Times Afetados</div>
           <div className="text-4xl font-bold">{impedimentosPorTime.length}</div>
           <div className="text-xs opacity-75 mt-2">equipes com impedimentos</div>
         </div>
-        <div className="bg-linear-to-br from-purple-600 to-purple-800 text-white p-6 rounded-lg shadow-lg">
+        <div className="bg-linear-to-br from-purple-600 to-purple-800 text-white p-6 rounded-lg shadow-lg cursor-pointer hover:brightness-110 transition-all" onClick={() => setModalData({ title: 'Impedimento Mais Crítico', items: top10MaisAntigos.slice(0, 1), color: '#9333EA' })}>
           <div className="text-sm opacity-90 mb-2">🔥 Mais Crítico</div>
           <div className="text-4xl font-bold">
             {top10MaisAntigos.length > 0 ? top10MaisAntigos[0].daysStopped : 0}
           </div>
           <div className="text-xs opacity-75 mt-2">dias parado</div>
+        </div>
+      </div>
+
+      {/* Outros sinais de item parado */}
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+        <div
+          className="bg-linear-to-br from-blue-600 to-blue-800 text-white p-5 rounded-lg shadow-lg cursor-pointer hover:brightness-110 transition-all"
+          onClick={() => setModalData({ title: 'Parados > 1 dia sem Code Review N1', items: cr1Pendente, color: '#1E88E5' })}
+        >
+          <div className="text-xs opacity-90 mb-2">🔍 CR1 Pendente</div>
+          <div className="text-3xl font-bold">{cr1Pendente.length}</div>
+          <div className="text-xs opacity-75 mt-2">&gt;1 dia sem Code Review N1</div>
+        </div>
+        <div
+          className="bg-linear-to-br from-cyan-600 to-cyan-800 text-white p-5 rounded-lg shadow-lg cursor-pointer hover:brightness-110 transition-all"
+          onClick={() => setModalData({ title: 'Parados > 1 dia sem Code Review N2', items: cr2Pendente, color: '#00B8A9' })}
+        >
+          <div className="text-xs opacity-90 mb-2">🔎 CR2 Pendente</div>
+          <div className="text-3xl font-bold">{cr2Pendente.length}</div>
+          <div className="text-xs opacity-75 mt-2">&gt;1 dia sem Code Review N2</div>
+        </div>
+        <div
+          className="bg-linear-to-br from-fuchsia-600 to-fuchsia-800 text-white p-5 rounded-lg shadow-lg cursor-pointer hover:brightness-110 transition-all"
+          onClick={() => setModalData({ title: 'Retrabalho parado > 1 dia', items: retrabalhoParado, color: '#8E24AA' })}
+        >
+          <div className="text-xs opacity-90 mb-2">🔁 Retrabalho Parado</div>
+          <div className="text-3xl font-bold">{retrabalhoParado.length}</div>
+          <div className="text-xs opacity-75 mt-2">&gt;1 dia em reincidência</div>
+        </div>
+        <div
+          className="bg-linear-to-br from-amber-600 to-amber-800 text-white p-5 rounded-lg shadow-lg cursor-pointer hover:brightness-110 transition-all"
+          onClick={() => setModalData({ title: 'Tarefas a Vencer', items: tarefasAVencer, color: '#FFD600' })}
+        >
+          <div className="text-xs opacity-90 mb-2">📅 A Vencer</div>
+          <div className="text-3xl font-bold">{tarefasAVencer.length}</div>
+          <div className="text-xs opacity-75 mt-2">Target Date futura</div>
+        </div>
+        <div
+          className="bg-linear-to-br from-rose-700 to-rose-900 text-white p-5 rounded-lg shadow-lg cursor-pointer hover:brightness-110 transition-all"
+          onClick={() => setModalData({ title: 'Tarefas Vencidas', items: tarefasVencidas, color: '#F6416C' })}
+        >
+          <div className="text-xs opacity-90 mb-2">⚠️ Vencidas</div>
+          <div className="text-3xl font-bold">{tarefasVencidas.length}</div>
+          <div className="text-xs opacity-75 mt-2">Target Date no passado</div>
         </div>
       </div>
 

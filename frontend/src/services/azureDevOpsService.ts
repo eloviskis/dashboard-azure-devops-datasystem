@@ -13,81 +13,14 @@ const getAuthHeaders = (): HeadersInit => {
 
 // Função para transformar os dados brutos da API no tipo WorkItem
 const transformApiDataToWorkItem = (apiItem: any): WorkItem => {
-  const COMPLETED_STATES = ['Done', 'Concluído', 'Closed', 'Fechado', 'Finished', 'Resolved', 'Pronto'];
-  let timeInStatusDays: Record<string, number> | undefined = undefined;
-
-  // Improved time-in-status estimation based on item type, priority, and state
-  const WORKFLOW_COLUMNS = ['New', 'Para Desenvolver', 'Active', 'Aguardando Code Review', 'Fazendo Code Review', 'Aguardando QA', 'Testando QA'];
-  
-  // Weight profiles per item type (how time is typically distributed across workflow phases)
-  const TYPE_PROFILES: Record<string, number[]> = {
-    'Bug':                    [0.02, 0.03, 0.50, 0.10, 0.10, 0.10, 0.15],
-    'Product Backlog Item':   [0.03, 0.05, 0.35, 0.15, 0.12, 0.12, 0.18],
-    'Task':                   [0.02, 0.03, 0.55, 0.10, 0.10, 0.08, 0.12],
-    'User Story':             [0.03, 0.05, 0.35, 0.15, 0.12, 0.12, 0.18],
-    'Feature':                [0.05, 0.08, 0.30, 0.15, 0.12, 0.12, 0.18],
-    'default':                [0.03, 0.05, 0.40, 0.12, 0.12, 0.12, 0.16],
-  };
-
-  // Usa cycleTime para itens fechados ou age para itens abertos como base de tempo
-  const timeBasis = (apiItem.cycleTime && apiItem.cycleTime > 0)
-    ? apiItem.cycleTime
-    : (!COMPLETED_STATES.includes(apiItem.state) && apiItem.age && apiItem.age > 0)
-      ? apiItem.age
-      : 0;
-
-  if (timeBasis > 0) {
-    const ct = timeBasis;
-    const profile = TYPE_PROFILES[apiItem.type] || TYPE_PROFILES['default'];
-    const currentState = apiItem.state;
-    
-    if (COMPLETED_STATES.includes(currentState)) {
-      // Completed items: distribute full cycle time across all phases using type profile
-      timeInStatusDays = {};
-      let remaining = ct;
-      WORKFLOW_COLUMNS.forEach((col, i) => {
-        if (i < WORKFLOW_COLUMNS.length - 1) {
-          const allocated = Math.max(0.1, ct * profile[i]);
-          timeInStatusDays![col] = parseFloat(allocated.toFixed(1));
-          remaining -= allocated;
-        } else {
-          timeInStatusDays![col] = Math.max(0, parseFloat(remaining.toFixed(1)));
-        }
-      });
-    } else {
-      // In-progress items: only distribute time up to (and including) current state
-      const stateIndex = WORKFLOW_COLUMNS.indexOf(currentState);
-      if (stateIndex >= 0) {
-        timeInStatusDays = {};
-        // Normalize weights for completed phases only
-        const completedWeights = profile.slice(0, stateIndex + 1);
-        const totalWeight = completedWeights.reduce((a, b) => a + b, 0);
-        let remaining = ct;
-        completedWeights.forEach((w, i) => {
-          if (i < completedWeights.length - 1) {
-            const normalized = (w / totalWeight) * ct;
-            const allocated = Math.max(0.1, normalized);
-            timeInStatusDays![WORKFLOW_COLUMNS[i]] = parseFloat(allocated.toFixed(1));
-            remaining -= allocated;
-          } else {
-            // Current state gets the remainder (most of the time)
-            timeInStatusDays![WORKFLOW_COLUMNS[i]] = Math.max(0, parseFloat(remaining.toFixed(1)));
-          }
-        });
-      } else if (currentState) {
-        // Estado não está na lista de WORKFLOW_COLUMNS: registra o age inteiro no estado atual
-        timeInStatusDays = { [currentState]: parseFloat(ct.toFixed(1)) };
-      }
-    }
-  }
-  
   return {
     ...apiItem,
     createdDate: new Date(apiItem.createdDate),
     changedDate: new Date(apiItem.changedDate),
     closedDate: apiItem.closedDate ? new Date(apiItem.closedDate) : null,
     tags: apiItem.tags ? apiItem.tags.split(',').map((t: string) => t.trim()) : [],
-    timeInStatusDays,
+    // timeInStatusDays vem pronto da API (histórico real de transição de status), não é mais estimado aqui.
+    timeInStatusDays: apiItem.timeInStatusDays || undefined,
     codeReviewLevel1: apiItem.codeReviewLevel1 || null,
     codeReviewLevel2: apiItem.codeReviewLevel2 || null,
   };
@@ -158,6 +91,23 @@ export const getPullRequests = async (): Promise<PullRequest[]> => {
     return await response.json();
   } catch (error) {
     console.error("Error fetching pull requests:", error);
+    return [];
+  }
+};
+
+export const getPullRequestFiles = async (pullRequestId: number): Promise<{ path: string; changeType: string }[]> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/pull-requests/${pullRequestId}/files`, { headers: getAuthHeaders() });
+    if (response.status === 401) {
+      handleUnauthorized();
+      return [];
+    }
+    if (!response.ok) {
+      throw new Error(`Failed to fetch pull request files: ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error("Error fetching pull request files:", error);
     return [];
   }
 };

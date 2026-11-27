@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell, PieChart, Pie, LineChart, Line } from 'recharts';
 import { WorkItem } from '../types';
 import { CHART_COLORS } from '../constants';
+import { getPeriodBuckets, PeriodGroupMode, PERIOD_GROUP_MODE_OPTIONS } from '../utils/periodGrouping';
 
 interface ReworkAnalysisChartProps {
   data: WorkItem[];
@@ -148,6 +149,7 @@ const ItemListModal: React.FC<{ data: ModalData | null; onClose: () => void }> =
 
 const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data: rawData }) => {
   const [modalData, setModalData] = useState<ModalData | null>(null);
+  const [trendMode, setTrendMode] = useState<PeriodGroupMode>('monthly');
 
   // Sanitizar dados de entrada para remover referências circulares ou objetos complexos
   const data = useMemo(() => {
@@ -188,37 +190,41 @@ const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data: rawData
       ? Math.round((closedIssuesWithCT.reduce((s, i) => s + i.cycleTime!, 0) / closedIssuesWithCT.length) * 10) / 10
       : 0;
 
-    // Tendência mensal (últimos 12 meses ou período do filtro)
-    const monthMap: Record<string, { bugs: number; issues: number }> = {};
-    data.forEach(item => {
-      if (!item.createdDate) return;
-      const d = new Date(item.createdDate);
-      if (isNaN(d.getTime())) return;
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      if (!monthMap[key]) monthMap[key] = { bugs: 0, issues: 0 };
-      if (item.type === 'Bug') monthMap[key].bugs++;
-      else if (item.type === 'Issue') monthMap[key].issues++;
-    });
-    const monthlyTrend = Object.entries(monthMap)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .slice(-18)
-      .map(([month, counts]) => {
-        const [year, m] = month.split('-');
-        return { month: `${m}/${year.slice(2)}`, ...counts };
+    // Tendência (granularidade escolhida pelo usuário) dos últimos 18 períodos
+    const trendDates = data
+      .map(i => i.createdDate ? new Date(i.createdDate) : null)
+      .filter((d): d is Date => !!d && !isNaN(d.getTime()));
+    const monthlyTrend = trendDates.length === 0 ? [] : getPeriodBuckets(
+      new Date(Math.min(...trendDates.map(d => d.getTime()))),
+      new Date(Math.max(...trendDates.map(d => d.getTime()))),
+      trendMode
+    ).slice(-18).map(({ label, start, end }) => {
+      const bugsItems = data.filter(i => {
+        if (i.type !== 'Bug' || !i.createdDate) return false;
+        const d = new Date(i.createdDate);
+        return d >= start && d <= end;
       });
+      const issuesItems = data.filter(i => {
+        if (i.type !== 'Issue' || !i.createdDate) return false;
+        const d = new Date(i.createdDate);
+        return d >= start && d <= end;
+      });
+      return { month: label, bugs: bugsItems.length, issues: issuesItems.length, bugsItems, issuesItems };
+    });
 
     // MTTR por time (Mean Time To Resolve — apenas Issues fechadas com cycleTime)
-    const issueCTByTeam: Record<string, number[]> = {};
+    const issueCTByTeam: Record<string, WorkItem[]> = {};
     issues.filter(i => COMPLETED_STATES.includes(i.state) && i.cycleTime != null).forEach(i => {
       const team = i.team || 'Sem Time';
       if (!issueCTByTeam[team]) issueCTByTeam[team] = [];
-      issueCTByTeam[team].push(i.cycleTime!);
+      issueCTByTeam[team].push(i);
     });
     const mttrByTeam = Object.entries(issueCTByTeam)
-      .map(([team, cts]) => ({
+      .map(([team, items]) => ({
         team,
-        mttr: Math.round((cts.reduce((a, b) => a + b, 0) / cts.length) * 10) / 10,
-        count: cts.length,
+        mttr: Math.round((items.reduce((a, b) => a + (b.cycleTime as number), 0) / items.length) * 10) / 10,
+        count: items.length,
+        items,
       }))
       .sort((a, b) => b.mttr - a.mttr)
       .slice(0, 12);
@@ -239,14 +245,15 @@ const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data: rawData
       .sort((a, b) => b.value - a.value);
 
     // Distribuição de falha do processo
-    const falhaMap: Record<string, number> = {};
+    const falhaMap: Record<string, WorkItem[]> = {};
     data.forEach(i => {
       const k = i.falhaDoProcesso?.trim() || 'Não informado';
-      falhaMap[k] = (falhaMap[k] || 0) + 1;
+      if (!falhaMap[k]) falhaMap[k] = [];
+      falhaMap[k].push(i);
     });
     const falhaDistribution = Object.entries(falhaMap)
       .filter(([k]) => k !== 'Não informado')
-      .map(([name, value]) => ({ name, value }))
+      .map(([name, items]) => ({ name, value: items.length, items }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 10);
 
@@ -262,6 +269,7 @@ const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data: rawData
       avgBugCT,
       avgIssueCT,
       openIssues: openIssues.length,
+      openIssuesList: openIssues,
       bugVsIssueComparison,
       bugs,
       issues,
@@ -270,7 +278,7 @@ const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data: rawData
       identPieData,
       falhaDistribution,
     };
-  }, [data]);
+  }, [data, trendMode]);
 
   // Funções para abrir modal com filtros
   const handleShowBugs = () => {
@@ -305,6 +313,36 @@ const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data: rawData
     }
   };
 
+  const handleShowDetectionBase = () => {
+    setModalData({
+      title: 'Bugs + Issues (base da Taxa de Detecção)',
+      items: [...analysis.bugs, ...analysis.issues],
+      color: '#48bb78'
+    });
+  };
+
+  const handleShowOpenIssues = () => {
+    setModalData({
+      title: 'Issues Abertas (backlog em produção)',
+      items: analysis.openIssuesList,
+      color: '#f56565'
+    });
+  };
+
+  const handleMonthlyTrendClick = (e: any) => {
+    const p = e?.activePayload?.[0]?.payload;
+    if (!p) return;
+    setModalData({ title: `Bugs + Issues criados — ${p.month}`, items: [...p.bugsItems, ...p.issuesItems], color: '#f6ad55' });
+  };
+
+  const handleMttrClick = (entry: any) => {
+    setModalData({ title: `Issues resolvidas — ${entry.team}`, items: entry.items, color: '#f56565' });
+  };
+
+  const handleFalhaClick = (entry: any) => {
+    setModalData({ title: `Falha do Processo — ${entry.name}`, items: entry.items, color: '#9f7aea' });
+  };
+
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -326,14 +364,22 @@ const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data: rawData
           <p className="text-2xl font-bold text-red-400">{String(analysis.totalIssues)}</p>
           <p className="text-xs text-ds-text mt-1">Escaparam para prod</p>
         </div>
-        <div className="bg-ds-navy p-4 rounded-lg border border-ds-border text-center">
+        <div
+          className="bg-ds-navy p-4 rounded-lg border border-ds-border text-center cursor-pointer hover:border-green-400 transition-colors"
+          onClick={handleShowDetectionBase}
+          title="Clique para ver detalhes"
+        >
           <p className="text-ds-text text-xs">Taxa de Detecção</p>
           <p className={`text-2xl font-bold ${analysis.detectionRate > 70 ? 'text-green-400' : analysis.detectionRate > 50 ? 'text-yellow-400' : 'text-red-400'}`}>
             {String(analysis.detectionRate)}%
           </p>
           <p className="text-xs text-ds-text mt-1">Pegos em Dev</p>
         </div>
-        <div className="bg-ds-navy p-4 rounded-lg border border-ds-border text-center">
+        <div
+          className="bg-ds-navy p-4 rounded-lg border border-ds-border text-center cursor-pointer hover:border-red-400 transition-colors"
+          onClick={handleShowOpenIssues}
+          title="Clique para ver detalhes"
+        >
           <p className="text-ds-text text-xs">Issues Abertas</p>
           <p className={`text-2xl font-bold ${analysis.openIssues > 20 ? 'text-red-400' : analysis.openIssues > 10 ? 'text-yellow-400' : 'text-green-400'}`}>
             {String(analysis.openIssues)}
@@ -371,15 +417,28 @@ const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data: rawData
         </ResponsiveContainer>
       </div>
 
-      {/* Tendência Mensal — Bugs vs Issues */}
+      {/* Tendência — Bugs vs Issues */}
       <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
-        <h3 className="text-ds-light-text font-bold text-lg mb-1">Tendência Mensal — Bugs vs Issues</h3>
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-1">
+          <h3 className="text-ds-light-text font-bold text-lg">Tendência — Bugs vs Issues</h3>
+          <div className="flex gap-1">
+            {PERIOD_GROUP_MODE_OPTIONS.map(opt => (
+              <button
+                key={opt.value}
+                onClick={() => setTrendMode(opt.value)}
+                className={`px-3 py-1.5 text-xs rounded-md font-medium transition-colors ${trendMode === opt.value ? 'bg-ds-green text-ds-dark-blue' : 'bg-ds-muted/20 text-ds-text hover:bg-ds-muted/40'}`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
         <p className="text-ds-text text-xs mb-3">
-          Evolução mês a mês de erros criados. Queda nas <strong className="text-red-400">Issues</strong> indica melhoria de qualidade de entrega.
+          Evolução por período de erros criados. Queda nas <strong className="text-red-400">Issues</strong> indica melhoria de qualidade de entrega.
         </p>
         {analysis.monthlyTrend.length > 0 ? (
           <ResponsiveContainer width="100%" height={260}>
-            <LineChart data={analysis.monthlyTrend} margin={{ top: 10, right: 30, bottom: 10, left: 0 }}>
+            <LineChart data={analysis.monthlyTrend} margin={{ top: 10, right: 30, bottom: 10, left: 0 }} className="cursor-pointer" onClick={handleMonthlyTrendClick}>
               <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
               <XAxis dataKey="month" stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} />
               <YAxis stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} />
@@ -390,7 +449,7 @@ const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data: rawData
             </LineChart>
           </ResponsiveContainer>
         ) : (
-          <p className="text-ds-text text-center py-8">Sem dados suficientes para tendência mensal.</p>
+          <p className="text-ds-text text-center py-8">Sem dados suficientes para tendência no período.</p>
         )}
       </div>
 
@@ -422,7 +481,7 @@ const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data: rawData
                     );
                   }}
                 />
-                <Bar dataKey="mttr" name="MTTR (dias)" radius={[0, 4, 4, 0]} label={{ position: 'right', fill: '#e6f1ff', fontSize: 11, fontWeight: 'bold', formatter: (v: number) => `${v}d` }}>
+                <Bar dataKey="mttr" name="MTTR (dias)" radius={[0, 4, 4, 0]} cursor="pointer" onClick={handleMttrClick} label={{ position: 'right', fill: '#e6f1ff', fontSize: 11, fontWeight: 'bold', formatter: (v: number) => `${v}d` }}>
                   {analysis.mttrByTeam.map((entry, index) => (
                     <Cell key={index} fill={entry.mttr > 14 ? '#f56565' : entry.mttr > 7 ? '#f6ad55' : '#48bb78'} />
                   ))}
@@ -520,7 +579,7 @@ const ReworkAnalysisChart: React.FC<ReworkAnalysisChartProps> = ({ data: rawData
               <XAxis type="number" stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} />
               <YAxis type="category" dataKey="name" stroke={CHART_COLORS.text} tick={{ fontSize: 10 }} width={175} />
               <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="value" name="Ocorrências" fill="#9f7aea" radius={[0, 4, 4, 0]} label={{ position: 'right', fill: '#e6f1ff', fontSize: 11 }} />
+              <Bar dataKey="value" name="Ocorrências" fill="#9f7aea" radius={[0, 4, 4, 0]} cursor="pointer" onClick={handleFalhaClick} label={{ position: 'right', fill: '#e6f1ff', fontSize: 11 }} />
             </BarChart>
           </ResponsiveContainer>
         </div>

@@ -546,32 +546,32 @@ export const RootCauseDashboard: React.FC<Props> = ({ data, allData, periodStart
 
       {/* Cards de métricas */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-        <div className="bg-purple-700 text-white p-4 rounded-lg">
+        <div className="bg-purple-700 text-white p-4 rounded-lg cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setModalData({ title: 'Issues Criadas', items: issuesCriadas, color: '#7C3AED' })}>
           <div className="text-lg font-bold">Issues Criadas</div>
           <div className="text-3xl">{issuesCriadas.length}</div>
           <div>Work items</div>
         </div>
-        <div className="bg-green-700 text-white p-4 rounded-lg">
+        <div className="bg-green-700 text-white p-4 rounded-lg cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setModalData({ title: 'Issues Fechadas', items: issuesFechadas, color: '#15803D' })}>
           <div className="text-lg font-bold">Issues Fechadas</div>
           <div className="text-3xl">{issuesFechadas.length}</div>
           <div>Work items</div>
         </div>
-        <div className="bg-orange-700 text-white p-4 rounded-lg">
+        <div className="bg-orange-700 text-white p-4 rounded-lg cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setModalData({ title: 'Issues de Correção', items: issuesCorrecao, color: '#C2410C' })}>
           <div className="text-lg font-bold">Issues de Correção</div>
           <div className="text-3xl">{issuesCorrecao.length}</div>
           <div>Work items</div>
         </div>
-        <div className="bg-blue-700 text-white p-4 rounded-lg">
+        <div className="bg-blue-700 text-white p-4 rounded-lg cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setModalData({ title: 'Outras Issues', items: issuesOutrosType, color: '#1D4ED8' })}>
           <div className="text-lg font-bold">Outras Issues</div>
           <div className="text-3xl">{issuesOutrosType.length}</div>
           <div>Work items</div>
         </div>
-        <div className="bg-gray-700 text-white p-4 rounded-lg">
+        <div className="bg-gray-700 text-white p-4 rounded-lg cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setModalData({ title: 'Correções sem Causa Raiz', items: issuesSemCausaRaiz, color: '#4B5563' })}>
           <div className="text-lg font-bold">Correções sem Causa Raíz</div>
           <div className="text-3xl">{issuesSemCausaRaiz.length}</div>
           <div>Work items</div>
         </div>
-        <div className="bg-red-700 text-white p-4 rounded-lg">
+        <div className="bg-red-700 text-white p-4 rounded-lg cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setModalData({ title: 'P0 do mês', items: issuesP0, color: '#B91C1C' })}>
           <div className="text-lg font-bold">P0 do mês</div>
           <div className="text-3xl">{issuesP0.length}</div>
           <div>Work items</div>

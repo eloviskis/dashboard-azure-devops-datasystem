@@ -154,7 +154,7 @@ const TeamBugChart: React.FC<TeamBugChartProps> = ({ data }) => {
           <Legend />
           <Bar dataKey="bugs" name="Bugs" stackId="a" fill={CHART_COLORS.bug} cursor="pointer" label={{ position: 'inside', fill: '#fff', fontSize: 10, fontWeight: 'bold' }}>
             {chartData.map((entry, index) => (
-              <Cell key={`cell-bugs-${index}`} onClick={() => handleBarClick(entry.name, 'Bug')} />
+              <Cell key={`cell-bugs-${index}`} onClick={() => handleBugsClick(entry)} />
             ))}
           </Bar>
           <Bar dataKey="issues" name="Issues" stackId="a" fill={CHART_COLORS.issue} cursor="pointer" label={{ position: 'inside', fill: '#fff', fontSize: 10, fontWeight: 'bold' }}>

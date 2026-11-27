@@ -1,22 +1,81 @@
 import React, { useState, useMemo } from 'react';
 import { WorkItem } from '../types';
 import { CHART_COLORS } from '../constants';
+import { COMPLETED_STATES } from '../utils/metrics';
 import ChartInfoLamp from './ChartInfoLamp';
 import {
   ResponsiveContainer, LineChart, Line, BarChart, Bar,
   XAxis, YAxis, Tooltip, CartesianGrid, Legend, ReferenceLine
 } from 'recharts';
-import { eachMonthOfInterval, endOfMonth, isWithinInterval, format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import { isWithinInterval } from 'date-fns';
+import { getPeriodBuckets, PeriodGroupMode, PERIOD_GROUP_MODE_OPTIONS } from '../utils/periodGrouping';
 
 interface PercentilP85ChartProps {
   data: WorkItem[];
   dateRange: { start: Date; end: Date };
 }
 
+interface ModalData {
+  title: string;
+  items: WorkItem[];
+  color: string;
+}
+
+const AZURE_DEVOPS_BASE_URL = 'https://dev.azure.com/datasystemsoftwares/USE/_workitems/edit';
+
+const ItemListModal: React.FC<{ data: ModalData | null; onClose: () => void }> = ({ data, onClose }) => {
+  if (!data) return null;
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50" onClick={onClose}>
+      <div className="bg-ds-navy border border-ds-border rounded-lg shadow-2xl max-w-4xl w-full mx-4 max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="p-4 rounded-t-lg flex justify-between items-center" style={{ backgroundColor: data.color }}>
+          <h2 className="text-white font-bold text-lg">{data.title}</h2>
+          <button onClick={onClose} className="text-white hover:text-gray-200 text-2xl font-bold leading-none">×</button>
+        </div>
+        <div className="p-4 overflow-y-auto flex-1">
+          <div className="text-ds-text mb-3 text-sm">
+            Total: <span className="font-bold text-white">{data.items.length}</span> itens
+          </div>
+          {data.items.length === 0 ? (
+            <div className="text-ds-text text-center py-8">Nenhum item encontrado</div>
+          ) : (
+            <ul className="space-y-2">
+              {data.items.map((item, idx) => (
+                <li key={item.workItemId || idx} className="bg-ds-dark-blue border border-ds-border rounded-lg p-3 hover:border-ds-green transition-colors">
+                  <div className="flex items-start gap-3">
+                    <span className="text-xs font-mono px-2 py-1 rounded shrink-0 text-white" style={{ backgroundColor: data.color }}>
+                      #{item.workItemId}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <a href={`${AZURE_DEVOPS_BASE_URL}/${item.workItemId}`} target="_blank" rel="noopener noreferrer" className="text-white hover:text-ds-green font-medium block truncate mb-1" title={item.title}>
+                        {item.title}
+                      </a>
+                      <div className="grid grid-cols-2 gap-1 text-xs text-ds-text">
+                        <div>👤 {item.assignedTo || 'Não atribuído'}</div>
+                        <div>👥 {item.team || 'Sem time'}</div>
+                        <div>🏷️ {item.type}</div>
+                        {item.cycleTime != null && <div>⏱️ {item.cycleTime.toFixed(1)}d</div>}
+                      </div>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <div className="p-4 border-t border-ds-border">
+          <button onClick={onClose} className="w-full bg-ds-border hover:bg-ds-green text-white py-2 px-4 rounded-lg transition-colors">Fechar</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const PercentilP85Chart: React.FC<PercentilP85ChartProps> = ({ data, dateRange }) => {
   const [excludeBugFeatureTask, setExcludeBugFeatureTask] = useState(true);
   const [chartMode, setChartMode] = useState<'line' | 'bar'>('line');
+  const [modalData, setModalData] = useState<ModalData | null>(null);
+  const [periodMode, setPeriodMode] = useState<PeriodGroupMode>('monthly');
 
   const percentile = (arr: number[], p: number): number => {
     if (arr.length === 0) return 0;
@@ -31,9 +90,8 @@ const PercentilP85Chart: React.FC<PercentilP85ChartProps> = ({ data, dateRange }
   };
 
   const monthlyData = useMemo(() => {
-    // Bundle original filtrava apenas state === "Closed" (não todos os COMPLETED_STATES)
     const completed = data.filter(item =>
-      item.state === 'Closed' &&
+      COMPLETED_STATES.includes(item.state) &&
       item.cycleTime !== null &&
       item.cycleTime !== undefined
     );
@@ -43,18 +101,16 @@ const PercentilP85Chart: React.FC<PercentilP85ChartProps> = ({ data, dateRange }
       : completed;
 
     try {
-      return eachMonthOfInterval({ start: dateRange.start, end: dateRange.end }).map(monthStart => {
-        const monthEnd = endOfMonth(monthStart);
-        const cycleTimes = filtered
-          .filter(item => {
-            const closed = new Date(item.closedDate!);
-            return isWithinInterval(closed, { start: monthStart, end: monthEnd });
-          })
-          .map(item => item.cycleTime as number);
+      return getPeriodBuckets(dateRange.start, dateRange.end, periodMode).map(({ label, start, end }) => {
+        const itemsInMonth = filtered.filter(item => {
+          const closed = new Date(item.closedDate!);
+          return isWithinInterval(closed, { start, end });
+        });
+        const cycleTimes = itemsInMonth.map(item => item.cycleTime as number);
 
         if (cycleTimes.length === 0) {
           return {
-            label: format(monthStart, 'MMM/yy', { locale: ptBR }),
+            label,
             p85: null,
             mean: null,
             p50: null,
@@ -62,11 +118,12 @@ const PercentilP85Chart: React.FC<PercentilP85ChartProps> = ({ data, dateRange }
             p90: null,
             p95: null,
             count: 0,
+            items: itemsInMonth,
           };
         }
 
         return {
-          label: format(monthStart, 'MMM/yy', { locale: ptBR }),
+          label,
           p85: Math.round(percentile(cycleTimes, 85) * 10) / 10,
           mean: Math.round(mean(cycleTimes) * 10) / 10,
           p50: Math.round(percentile(cycleTimes, 50) * 10) / 10,
@@ -74,12 +131,13 @@ const PercentilP85Chart: React.FC<PercentilP85ChartProps> = ({ data, dateRange }
           p90: Math.round(percentile(cycleTimes, 90) * 10) / 10,
           p95: Math.round(percentile(cycleTimes, 95) * 10) / 10,
           count: cycleTimes.length,
+          items: itemsInMonth,
         };
       }).filter(d => d.count > 0);
     } catch {
       return [];
     }
-  }, [data, dateRange, excludeBugFeatureTask]);
+  }, [data, dateRange, excludeBugFeatureTask, periodMode]);
 
   const summary = useMemo(() => {
     const withData = monthlyData.filter(d => d.p85 !== null);
@@ -123,8 +181,14 @@ const PercentilP85Chart: React.FC<PercentilP85ChartProps> = ({ data, dateRange }
     );
   };
 
+  const handlePeriodClick = (e: any) => {
+    const p = e?.activePayload?.[0]?.payload;
+    if (p?.items?.length) setModalData({ title: `Itens concluídos — ${p.label}`, items: p.items, color: '#FFB86C' });
+  };
+
   return (
     <div className="bg-ds-navy p-4 rounded-lg border border-ds-border">
+      <ItemListModal data={modalData} onClose={() => setModalData(null)} />
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-4 gap-3">
         <div>
@@ -132,6 +196,17 @@ const PercentilP85Chart: React.FC<PercentilP85ChartProps> = ({ data, dateRange }
           <ChartInfoLamp info="P85 = 85% dos itens foram concluídos neste tempo ou menos. Métrica usada pela GetNaves e recomendada para SLAs (mais realista que média)." />
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          <div className="flex gap-1">
+            {PERIOD_GROUP_MODE_OPTIONS.map(opt => (
+              <button
+                key={opt.value}
+                onClick={() => setPeriodMode(opt.value)}
+                className={`px-3 py-1.5 text-xs rounded-md font-medium transition-colors ${periodMode === opt.value ? 'bg-ds-green text-ds-dark-blue' : 'bg-ds-muted/20 text-ds-text hover:bg-ds-muted/40'}`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
           <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
@@ -184,7 +259,7 @@ const PercentilP85Chart: React.FC<PercentilP85ChartProps> = ({ data, dateRange }
       {/* Chart */}
       <ResponsiveContainer width="100%" height={350}>
         {chartMode === 'line' ? (
-          <LineChart data={monthlyData} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
+          <LineChart data={monthlyData} margin={{ top: 5, right: 30, left: 0, bottom: 5 }} className="cursor-pointer" onClick={handlePeriodClick}>
             <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
             <XAxis dataKey="label" stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} angle={-45} textAnchor="end" height={60} />
             <YAxis stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} />
@@ -201,7 +276,7 @@ const PercentilP85Chart: React.FC<PercentilP85ChartProps> = ({ data, dateRange }
             <Line type="monotone" dataKey="p50" name="P50" stroke="#47C5FB" strokeWidth={1.5} dot={{ fill: '#47C5FB', r: 3 }} strokeDasharray="3 3" />
           </LineChart>
         ) : (
-          <BarChart data={monthlyData} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
+          <BarChart data={monthlyData} margin={{ top: 5, right: 30, left: 0, bottom: 5 }} className="cursor-pointer" onClick={handlePeriodClick}>
             <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
             <XAxis dataKey="label" stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} angle={-45} textAnchor="end" height={60} />
             <YAxis stroke={CHART_COLORS.text} tick={{ fontSize: 11 }} />
@@ -249,7 +324,11 @@ const PercentilP85Chart: React.FC<PercentilP85ChartProps> = ({ data, dateRange }
           </thead>
           <tbody className="text-ds-text">
             {monthlyData.map((row, idx) => (
-              <tr key={idx} className="border-b border-ds-border/50 hover:bg-ds-bg/50">
+              <tr
+                key={idx}
+                className="border-b border-ds-border/50 hover:bg-ds-bg/50 cursor-pointer"
+                onClick={() => setModalData({ title: `Itens concluídos — ${row.label}`, items: row.items, color: '#FFB86C' })}
+              >
                 <td className="px-3 py-2 font-medium">{row.label}</td>
                 <td className="px-3 py-2 text-right text-yellow-400 font-semibold">{row.p85}d</td>
                 <td className="px-3 py-2 text-right text-ds-green">{row.mean}d</td>

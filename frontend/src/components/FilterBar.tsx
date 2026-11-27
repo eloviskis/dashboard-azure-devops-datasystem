@@ -3,12 +3,15 @@ import './FilterBar.css';
 import { WorkItem, WorkItemFilters, WorkItemTypes, WorkItemStates } from '../types.ts';
 import { format, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import html2canvas from 'html2canvas';
+import { exportItemsXlsx, getWorkItemColumns } from '../utils/exportXlsx';
 
 interface FilterBarProps {
   activeTab: string;
   workItems: WorkItem[];
   filteredWorkItems: WorkItem[];
+  // Itens efetivamente exibidos na aba atual (filtro global + filtro rápido) — usado pro export XLSX
+  // pra bater exatamente com o que está na tela, não só o filtro global.
+  visibleWorkItems: WorkItem[];
   workItemFilters: WorkItemFilters;
   onWorkItemFiltersChange: (filters: WorkItemFilters) => void;
   onClearFilters: () => void;
@@ -42,6 +45,7 @@ const FilterSelect: React.FC<{
 const FilterBar: React.FC<FilterBarProps> = ({
   workItems,
   filteredWorkItems,
+  visibleWorkItems,
   workItemFilters, onWorkItemFiltersChange,
   onClearFilters
 }) => {
@@ -49,6 +53,17 @@ const FilterBar: React.FC<FilterBarProps> = ({
   const [selectedMonth, setSelectedMonth] = useState<string>('');
   const [customStart, setCustomStart] = useState<string>('');
   const [customEnd, setCustomEnd] = useState<string>('');
+  const [exportingXlsx, setExportingXlsx] = useState(false);
+
+  const handleExportXlsx = async () => {
+    if (visibleWorkItems.length === 0) return;
+    setExportingXlsx(true);
+    try {
+      await exportItemsXlsx(visibleWorkItems, getWorkItemColumns(), `work_items_${format(new Date(), 'yyyy-MM-dd_HHmm')}.xlsx`);
+    } finally {
+      setExportingXlsx(false);
+    }
+  };
 
   const lastMonths = useMemo(() => {
     const months: { value: string; label: string }[] = [];
@@ -241,16 +256,7 @@ const FilterBar: React.FC<FilterBarProps> = ({
            </button>
          </div>
          <div className="flex items-center gap-4">
-           <button onClick={() => {
-             const mainEl = document.querySelector('main');
-             if (!mainEl) return;
-             html2canvas(mainEl as HTMLElement, { backgroundColor: '#0a192f', scale: 2, useCORS: true }).then(canvas => {
-               const link = document.createElement('a');
-               link.download = `dashboard_${format(new Date(), 'yyyy-MM-dd_HHmm')}.png`;
-               link.href = canvas.toDataURL('image/png');
-               link.click();
-             });
-           }} className="bg-blue-500/10 text-blue-400 font-semibold py-2 px-4 rounded-md hover:bg-blue-500/20 transition-colors text-sm">Exportar PNG</button>
+           <button onClick={handleExportXlsx} disabled={exportingXlsx} className="bg-ds-green/10 text-ds-green font-semibold py-2 px-4 rounded-md hover:bg-ds-green/20 transition-colors text-sm disabled:opacity-50">{exportingXlsx ? 'Exportando…' : 'Exportar XLSX'}</button>
            <button onClick={handleExport} className="bg-ds-green/10 text-ds-green font-semibold py-2 px-4 rounded-md hover:bg-ds-green/20 transition-colors text-sm">Exportar CSV</button>
            <button onClick={onClearFilters} className="bg-ds-muted/20 text-ds-light-text font-semibold py-2 px-4 rounded-md hover:bg-ds-muted/40 transition-colors text-sm">Limpar Filtros</button>
          </div>
